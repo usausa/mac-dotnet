@@ -1,26 +1,17 @@
-#pragma warning disable CA1416
-// ReSharper disable UseObjectOrCollectionInitializer
-using System.CommandLine;
-using System.CommandLine.NamingConventionBinder;
+using Example.SystemInfo.ConsoleApp;
 
-using MacDotNet.SystemInfo;
+using Smart.CommandLine.Hosting;
 
-var rootCommand = new RootCommand("Platform info");
-
-//--------------------------------------------------------------------------------
-// Uptime
-//--------------------------------------------------------------------------------
-var uptimeCommand = new Command("uptime", "Get uptime");
-uptimeCommand.Handler = CommandHandler.Create(static (IConsole console) =>
+var builder = CommandHost.CreateBuilder(args);
+builder.ConfigureCommands(commands =>
 {
-    var uptime = PlatformProvider.GetUptime();
-    console.WriteLine($"Uptime: {uptime.Uptime}");
+    commands.ConfigureRootCommand(root =>
+    {
+        root.WithDescription("Platform info");
+    });
+
+    commands.AddCommands();
 });
-rootCommand.Add(uptimeCommand);
 
-// TODO
-
-//--------------------------------------------------------------------------------
-// Run
-//--------------------------------------------------------------------------------
-rootCommand.Invoke(args);
+var host = builder.Build();
+return await host.RunAsync();
