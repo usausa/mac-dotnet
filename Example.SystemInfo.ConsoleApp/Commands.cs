@@ -17,7 +17,7 @@ public static class CommandBuilderExtensions
 }
 
 // Uptime
-[Command("uptime", Description = "Uptime")]
+[Command("uptime", "Uptime")]
 public sealed class UptimeCommand : ICommandHandler
 {
    public ValueTask ExecuteAsync(CommandContext context)
