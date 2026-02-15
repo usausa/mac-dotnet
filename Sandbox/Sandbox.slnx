@@ -10,6 +10,4 @@
   <Project Path="WorkPower/WorkPower.csproj" Id="37f48baa-0b24-47d1-8bc2-597c1a1e01c9" />
   <Project Path="WorkProcess/WorkProcess.csproj" Id="93de5101-4690-4613-8f09-67446310b692" />
   <Project Path="WorkSmart/WorkSmart.csproj" Id="195c6051-7275-4537-8ed9-dd808006a08f" />
-  <Project Path="MacDotNet.Disk/MacDotNet.Disk.csproj" />
-  <Project Path="Example.MacDotNet.Disk/Example.MacDotNet.Disk.csproj" />
 </Solution>
