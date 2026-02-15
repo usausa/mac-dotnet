@@ -4,6 +4,7 @@
   <Project Path="WorkFileSystem/WorkFileSystem.csproj" Id="9dd8d081-3d97-4e64-a693-e22d3c3ca9d0" />
   <Project Path="WorkGpu/WorkGpu.csproj" Id="3f0e3b32-99e8-4b9d-8646-eacdb256bcb7" />
   <Project Path="WorkHardware/WorkHardware.csproj" Id="846a767b-6391-402f-8bb7-f8894e6b6d8e" />
+  <Project Path="WorkLab/WorkLab.csproj" />
   <Project Path="WorkMemory/WorkMemory.csproj" Id="06767b75-b953-4645-baca-4ed2d0fafdd9" />
   <Project Path="WorkNetwork/WorkNetwork.csproj" Id="ebe0f674-ccae-4513-9310-45866ca62a85" />
   <Project Path="WorkPower/WorkPower.csproj" Id="37f48baa-0b24-47d1-8bc2-597c1a1e01c9" />
