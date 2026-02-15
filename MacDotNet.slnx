@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/Example/">
+    <Project Path="Example.Disk.ConsoleApp/Example.Disk.ConsoleApp.csproj" />
     <Project Path="Example.SystemInfo.ConsoleApp/Example.SystemInfo.ConsoleApp.csproj" Id="8972d9fe-c816-496c-9c18-9e46010861c8" />
   </Folder>
   <Folder Name="/Library/">
+    <Project Path="MacDotNet.Disk/MacDotNet.Disk.csproj" />
     <Project Path="MacDotNet.SystemInfo/MacDotNet.SystemInfo.csproj" Id="1a5f12bd-fe8b-47e0-86c9-9ecfc5032760" />
   </Folder>
   <Folder Name="/Solution Items/">
