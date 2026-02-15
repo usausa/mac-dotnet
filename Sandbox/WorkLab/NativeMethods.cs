@@ -199,6 +199,9 @@ internal static partial class NativeMethods
     [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
     public static partial int IORegistryEntryGetParentEntry(uint entry, nint plane, out uint parent);
 
+    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    public static partial int IORegistryEntryGetChildIterator(uint entry, nint plane, out nint iterator);
+
     [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit", CharSet = CharSet.Ansi)]
     public static extern int IOObjectConformsTo(uint obj, string className);
 
@@ -228,28 +231,30 @@ internal static partial class NativeMethods
     // IOReport (Apple Silicon Power)
     // ========================================
 
-    [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit", CharSet = CharSet.Ansi)]
-    public static extern nint IOReportCopyChannelsInGroup(string? group, string? subgroup, ulong a, ulong b, ulong c);
+    private const string LibIOReport = "/usr/lib/libIOReport.dylib";
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
+    public static partial nint IOReportCopyChannelsInGroup(nint group, nint subgroup, ulong a, ulong b, ulong c);
+
+    [LibraryImport(LibIOReport)]
     public static partial int IOReportMergeChannels(nint a, nint b, nint c);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial nint IOReportCreateSubscription(nint a, nint channels, out nint b, ulong c, nint d);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial nint IOReportCreateSamples(nint subscription, nint channels, nint a);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial nint IOReportChannelGetGroup(nint channel);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial nint IOReportChannelGetChannelName(nint channel);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial nint IOReportChannelGetUnitLabel(nint channel);
 
-    [LibraryImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    [LibraryImport(LibIOReport)]
     public static partial long IOReportSimpleGetIntegerValue(nint channel, int idx);
 
     // ========================================

@@ -171,14 +171,26 @@ public sealed class AppleSiliconPowerInfo
 
     private static nint GetEnergyModelChannels()
     {
-        var channel = IOReportCopyChannelsInGroup("Energy Model", null, 0, 0, 0);
-        if (channel == nint.Zero)
+        var groupStr = CFStringCreateWithCString(nint.Zero, "Energy Model", kCFStringEncodingUTF8);
+        if (groupStr == nint.Zero)
         {
             return nint.Zero;
         }
 
-        var count = 1; // 簡易実装
-        return CFDictionaryCreateMutableCopy(nint.Zero, count, channel);
+        try
+        {
+            var channel = IOReportCopyChannelsInGroup(groupStr, nint.Zero, 0, 0, 0);
+            if (channel == nint.Zero)
+            {
+                return nint.Zero;
+            }
+
+            return CFDictionaryCreateMutableCopy(nint.Zero, 0, channel);
+        }
+        finally
+        {
+            CFRelease(groupStr);
+        }
     }
 
     private static double ConvertToPower(double value, string? unit)

@@ -178,7 +178,10 @@ Console.WriteLine("### 7. Disk Detail Info ###");
 var diskIo = DiskDetailInfo.GetDiskIoStats();
 foreach (var disk in diskIo)
 {
-    Console.WriteLine($"  [{disk.BsdName}]");
+    var deviceLabel = disk.ProductName ?? "Unknown";
+    var locationLabel = disk.Location is not null ? $", {disk.Location}" : string.Empty;
+    var interconnectLabel = disk.Interconnect is not null ? $" ({disk.Interconnect}{locationLabel})" : string.Empty;
+    Console.WriteLine($"  [{disk.BsdName}] {deviceLabel}{interconnectLabel}");
     Console.WriteLine($"    Read:  {disk.ReadBytes / (1024.0 * 1024.0):F2} MB ({disk.ReadOperations} ops)");
     Console.WriteLine($"    Write: {disk.WriteBytes / (1024.0 * 1024.0):F2} MB ({disk.WriteOperations} ops)");
 }
@@ -190,13 +193,13 @@ var model = SystemDetailInfo.GetModelInfo();
 Console.WriteLine($"  Model ID:      {model.ModelId}");
 Console.WriteLine($"  Serial Number: {model.SerialNumber}");
 
-var coreFreqs = SystemDetailInfo.GetCoreFrequencies();
-if (coreFreqs.Length > 0)
+var clusters = SystemDetailInfo.GetCoreClusterInfo();
+if (clusters.Length > 0)
 {
-    Console.WriteLine($"  Core Frequencies (Apple Silicon):");
-    foreach (var freq in coreFreqs)
+    Console.WriteLine($"  Core Clusters (Apple Silicon):");
+    foreach (var cluster in clusters)
     {
-        Console.WriteLine($"    [{freq.PerfLevel}] {freq.Name}: {freq.MaxFrequency / 1_000_000}MHz");
+        Console.WriteLine($"    [{cluster.PerfLevel}] {cluster.Name}: {cluster.PhysicalCpu}C/{cluster.LogicalCpu}T, L2={cluster.L2CacheSize / (1024 * 1024)}MB");
     }
 }
 

@@ -80,12 +80,11 @@ public sealed class BatteryDetailInfo
         if (matching != nint.Zero)
         {
             batteryService = IOServiceGetMatchingService(0, matching);
-            Supported = batteryService != 0;
-        }
-
-        if (Supported)
-        {
-            Update();
+            if (batteryService != 0)
+            {
+                Update();
+                Supported = DesignCapacity > 0;
+            }
         }
     }
 

@@ -12,13 +12,17 @@ public sealed record ModelInfo
 }
 
 /// <summary>
-/// コア周波数情報 (Apple Silicon)
+/// コアクラスタ情報 (Apple Silicon)
 /// </summary>
-public sealed record CoreFrequencyInfo
+public sealed record CoreClusterInfo
 {
     public int PerfLevel { get; init; }
     public string? Name { get; init; }
-    public int MaxFrequency { get; init; }
+    public int LogicalCpu { get; init; }
+    public int PhysicalCpu { get; init; }
+    public long L1ICacheSize { get; init; }
+    public long L1DCacheSize { get; init; }
+    public long L2CacheSize { get; init; }
 }
 
 /// <summary>
@@ -68,11 +72,11 @@ public static class SystemDetailInfo
     }
 
     /// <summary>
-    /// E-Core/P-Core周波数情報を取得 (Apple Silicon)
+    /// E-Core/P-Coreクラスタ情報を取得 (Apple Silicon)
     /// </summary>
-    public static CoreFrequencyInfo[] GetCoreFrequencies()
+    public static CoreClusterInfo[] GetCoreClusterInfo()
     {
-        var results = new List<CoreFrequencyInfo>();
+        var results = new List<CoreClusterInfo>();
 
         var nperflevels = GetSysctlInt("hw.nperflevels");
         if (nperflevels <= 0)
@@ -82,14 +86,17 @@ public static class SystemDetailInfo
 
         for (var level = 0; level < nperflevels; level++)
         {
-            var name = GetSysctlString($"hw.perflevel{level}.name");
-            var maxFreq = GetSysctlInt($"hw.perflevel{level}.cpufreq_max");
+            var prefix = $"hw.perflevel{level}";
 
-            results.Add(new CoreFrequencyInfo
+            results.Add(new CoreClusterInfo
             {
                 PerfLevel = level,
-                Name = name,
-                MaxFrequency = maxFreq,
+                Name = GetSysctlString($"{prefix}.name"),
+                LogicalCpu = GetSysctlInt($"{prefix}.logicalcpu"),
+                PhysicalCpu = GetSysctlInt($"{prefix}.physicalcpu"),
+                L1ICacheSize = GetSysctlLong($"{prefix}.l1icachesize"),
+                L1DCacheSize = GetSysctlLong($"{prefix}.l1dcachesize"),
+                L2CacheSize = GetSysctlLong($"{prefix}.l2cachesize"),
             });
         }
 
