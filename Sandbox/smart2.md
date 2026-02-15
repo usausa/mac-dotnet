@@ -1,0 +1,8 @@
+SandBox/WorkSmartプロジェクトはMacでSMART情報取得を行なう検証プログラムです。
+
+以下は、それぞれWindowsとLinuxでSMART情報取得を行なうライブラリです。
+
+- LinuxDotNet.Disk : LinuxでSMART情報を取得するライブラリ
+- HardwareInfo.Disk : WindowsでSMART情報を取得するライブラリ
+
+SandBox/WorkSmartプロジェクトの検証結果を基に、LinuxDotNet.Diskライブラリ、HardwareInfo.Diskライブラリの構造を参考にして、Mac用のディスク・スマート情報を扱うMacDotNet.Diskライブラリとその検証を行なうExampleプロジェクトをSandbox下に作製してください。
