@@ -1,14 +1,12 @@
 namespace MacDotNet.Disk;
 
 using System.Runtime.InteropServices;
-using System.Runtime.Versioning;
 
 using static MacDotNet.Disk.NativeMethods;
 
 // ディスク情報取得処理
 // IOBlockStorageDeviceをマッチングキーとして使用し、
 // IOKitレジストリからディスクの各種プロパティを取得する。
-[SupportedOSPlatform("macos")]
 #pragma warning disable CA1806
 public static class DiskInfo
 {
@@ -227,6 +225,7 @@ public static class DiskInfo
         return model ?? vendor ?? string.Empty;
     }
 
+    // ReSharper disable StringLiteralTypo
     private static BusType ParseBusType(string? physInterconnect) => physInterconnect switch
     {
         "NVMe" => BusType.Nvme,
@@ -242,6 +241,7 @@ public static class DiskInfo
         "Virtual Interface" => BusType.Virtual,
         _ => BusType.Unknown,
     };
+    // ReSharper restore StringLiteralTypo
 
     //------------------------------------------------------------------------
     // IORegistry ヘルパー
