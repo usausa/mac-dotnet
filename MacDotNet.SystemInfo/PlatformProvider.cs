@@ -3,46 +3,79 @@ namespace MacDotNet.SystemInfo;
 #pragma warning disable CA1024
 public static class PlatformProvider
 {
-    public static UptimeInfo GetUptime() => new();
+    //--------------------------------------------------------------------------------
+    // System
+    //--------------------------------------------------------------------------------
 
-    public static LoadAverageInfo GetLoadAverage() => new();
+    //public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
-    public static MemoryInfo GetMemory() => new();
+    //public static KernelInfo GetKernel() => KernelInfo.Create();
 
-    public static SwapInfo GetSwap() => new();
+    public static Uptime GetUptime() => new();
 
-    public static CpuUsageInfo GetCpuUsage() => new();
+    //public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
 
-    public static CpuLoadInfo GetCpuLoad() => CpuLoadInfo.Create();
+    //--------------------------------------------------------------------------------
+    // Load
+    //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
+    public static LoadAverage GetLoadAverage() => new();
 
-    public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces() => NetworkInfo.GetNetworkInterfaces();
+    //public static CpuUsage GetCpuUsageStat() => CpuUsage.Create();
 
-    public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
+    //--------------------------------------------------------------------------------
+    // Memory
+    //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
+    //public static MemoryStat GetMemoryStat() => new();
 
-    public static HardwareInfo GetHardware() => HardwareInfo.Create();
+    //public static SwapUsage GetSwapStat() => new();
 
-    public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
+    //--------------------------------------------------------------------------------
+    // Storage
+    //--------------------------------------------------------------------------------
 
-    public static KernelInfo GetKernel() => KernelInfo.Create();
+    //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
-    public static BatteryInfo GetBattery() => new();
+    //--------------------------------------------------------------------------------
+    // Network
+    //--------------------------------------------------------------------------------
 
-    public static BatteryDetailInfo GetBatteryDetail() => BatteryDetailInfo.Create();
+    //public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces() => NetworkInfo.GetNetworkInterfaces();
 
-    public static AppleSiliconPowerInfo GetAppleSiliconPower() => AppleSiliconPowerInfo.Create();
+    //--------------------------------------------------------------------------------
+    // Process
+    //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
+    //public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
 
-    public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
+    //--------------------------------------------------------------------------------
+    // GPU
+    //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
+    //public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
 
-    public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
+    //--------------------------------------------------------------------------------
+    // Power
+    //--------------------------------------------------------------------------------
 
-    public static double? GetTotalSystemPower() => SmcInfo.GetTotalSystemPower();
+    //public static Battery GetBattery() => new();
+
+    //public static BatteryDetail GetBatteryDetail() => BatteryDetail.Create();
+
+    //public static AppleSiliconPower GetAppleSiliconPower() => AppleSiliconPower.Create();
+
+    //--------------------------------------------------------------------------------
+    // Sensor
+    //--------------------------------------------------------------------------------
+
+    //public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
+
+    //public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
+
+    //public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
+
+    //public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
+
+    //public static double? GetTotalSystemPower() => SmcInfo.GetTotalSystemPower();
 }
-
