@@ -1,8 +1,8 @@
-namespace Example.MacDotNet.Disk;
-
-using global::MacDotNet.Disk;
+namespace Example.Disk.ConsoleApp;
 
 using System.Runtime.Versioning;
+
+using global::MacDotNet.Disk;
 
 [SupportedOSPlatform("macos")]
 internal static class Program
@@ -174,6 +174,6 @@ internal static class Program
         >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
         >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
         >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B",
+        _ => $"{bytes} B"
     };
 }
