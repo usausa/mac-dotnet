@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 using static MacDotNet.Disk.NativeMethods;
 
-public static partial class DiskInfoExtensions
+public static class DiskInfoExtensions
 {
     // パーティション情報を取得
     public static IEnumerable<PartitionInfo> GetPartitions(this IDiskInfo disk)
@@ -36,8 +36,10 @@ public static partial class DiskInfoExtensions
         }
     }
 
+/*
     [GeneratedRegex(@"^(disk\d+)s(\d+)$")]
     private static partial Regex PartitionRegex();
+*/
 
     private static string GetPartitionPattern(string bsdName) =>
         $"^{Regex.Escape(bsdName)}s\\d+$";

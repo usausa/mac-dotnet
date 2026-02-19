@@ -43,5 +43,7 @@ public interface IDiskInfo : IDisposable
     public ISmart Smart { get; }
 
     // I/O統計情報
+    // TODO
+    // ReSharper disable once InconsistentNaming
     public DiskIOStatistics? IOStatistics { get; }
 }

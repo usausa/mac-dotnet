@@ -1,6 +1,8 @@
 namespace MacDotNet.Disk;
 
 // I/O統計情報 (IOBlockStorageDriverのStatistics辞書から取得)
+// TODO
+// ReSharper disable once InconsistentNaming
 public sealed class DiskIOStatistics
 {
     // 読み取りバイト数
