@@ -123,13 +123,13 @@ internal static class NativeMethods
     [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     public static extern nint CFDictionaryGetValue(nint theDict, nint key);
 
-    [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
-        EntryPoint = "CFDictionarySetValue")]
+    [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation", EntryPoint = "CFDictionarySetValue")]
     public static extern void CoreFoundationSetDictionaryValue(nint theDict, nint key, nint value);
 
     [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     public static extern void CFRelease(nint cf);
 
+#pragma warning disable SA1117
     [DllImport("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")]
     public static extern nint CFUUIDGetConstantUUIDWithBytes(
         nint alloc,
@@ -137,6 +137,7 @@ internal static class NativeMethods
         byte byte4, byte byte5, byte byte6, byte byte7,
         byte byte8, byte byte9, byte byte10, byte byte11,
         byte byte12, byte byte13, byte byte14, byte byte15);
+#pragma warning restore SA1117
 }
 
 // COM-like QueryInterfaceで使用するUUID構造体 (CoreFoundation CFUUIDBytes互換)

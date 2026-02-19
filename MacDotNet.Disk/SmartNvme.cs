@@ -81,16 +81,20 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
     public static unsafe SmartNvme? Open(uint service)
     {
         // NVMeSMARTLib plugin UUID (kIONVMeSMARTUserClientTypeID)
+#pragma warning disable SA1117
         var pluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
             nint.Zero,
             0xAA, 0x0F, 0xA6, 0xF9, 0xC2, 0xD6, 0x45, 0x7F,
             0xB1, 0x0B, 0x59, 0xA1, 0x32, 0x53, 0x29, 0x2F);
+#pragma warning restore SA1117
 
         // IOCFPlugInInterface UUID
+#pragma warning disable SA1117
         var cfPluginUuid = CFUUIDGetConstantUUIDWithBytes(
             nint.Zero,
             0xC2, 0x44, 0xE8, 0x58, 0x10, 0x9C, 0x11, 0xD4,
             0x91, 0xD4, 0x00, 0x50, 0xE4, 0xC6, 0x42, 0x6F);
+#pragma warning restore SA1117
 
         if (pluginTypeUuid == nint.Zero || cfPluginUuid == nint.Zero)
         {
@@ -116,10 +120,10 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             byte0 = 0xCC, byte1 = 0xD1, byte2 = 0xDB, byte3 = 0x19,
             byte4 = 0xFD, byte5 = 0x9A, byte6 = 0x4D, byte7 = 0xAF,
             byte8 = 0xBF, byte9 = 0x95, byte10 = 0x12, byte11 = 0x45,
-            byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6,
+            byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6
         };
 
-        nint pSmartInterface = nint.Zero;
+        var pSmartInterface = nint.Zero;
         var hr = qiFn(ppPlugin, smartUuid, &pSmartInterface);
         if (hr != S_OK || pSmartInterface == nint.Zero)
         {

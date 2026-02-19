@@ -31,7 +31,7 @@ public static partial class DiskInfoExtensions
                 Index = index++,
                 DeviceName = devicePath,
                 Name = name,
-                Size = size,
+                Size = size
             };
         }
     }
@@ -134,7 +134,7 @@ public static partial class DiskInfoExtensions
         }
         finally
         {
-            IOObjectRelease(service);
+            _ = IOObjectRelease(service);
         }
     }
 }

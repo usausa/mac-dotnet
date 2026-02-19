@@ -19,7 +19,7 @@ public static class DiskInfo
         }
 
         // IOServiceGetMatchingServicesはmatchingを消費する (CFRelease不要)
-        nint iter = nint.Zero;
+        var iter = nint.Zero;
         if (IOServiceGetMatchingServices(0, matching, ref iter) != KERN_SUCCESS || iter == nint.Zero)
         {
             return [];
@@ -53,7 +53,7 @@ public static class DiskInfo
     private static unsafe DiskInfoGeneric ReadDiskEntry(uint entry, uint index)
     {
         // IORegistryエントリ名を取得
-        byte* nameBuf = stackalloc byte[128];
+        var nameBuf = stackalloc byte[128];
         IORegistryEntryGetName(entry, nameBuf);
         var deviceName = Marshal.PtrToStringUTF8((nint)nameBuf);
 
@@ -128,7 +128,7 @@ public static class DiskInfo
                     ErrorsRead = GetDictNumber(statsDict, "Errors (Read)"),
                     ErrorsWritten = GetDictNumber(statsDict, "Errors (Write)"),
                     LatencyTimeRead = GetDictNumber(statsDict, "Latency Time (Read)"),
-                    LatencyTimeWritten = GetDictNumber(statsDict, "Latency Time (Write)"),
+                    LatencyTimeWritten = GetDictNumber(statsDict, "Latency Time (Write)")
                 };
             }
             finally
@@ -208,7 +208,7 @@ public static class DiskInfo
             ContentType = contentType,
             SmartType = smartType,
             Smart = smart,
-            IOStatistics = ioStats,
+            IOStatistics = ioStats
         };
     }
 
@@ -239,7 +239,7 @@ public static class DiskInfo
         "Thunderbolt" => BusType.Thunderbolt,
         "Secure Digital" => BusType.SdCard,
         "Virtual Interface" => BusType.Virtual,
-        _ => BusType.Unknown,
+        _ => BusType.Unknown
     };
     // ReSharper restore StringLiteralTypo
 
