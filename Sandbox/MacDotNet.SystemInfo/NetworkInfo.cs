@@ -4,12 +4,6 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public enum InterfaceState
-{
-    Down,
-    NoCarrier,
-    Up,
-}
 
 /// <summary>
 /// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
@@ -35,117 +29,62 @@ public enum ScNetworkInterfaceType
     Vpn,
 }
 
-public sealed record InterfaceAddress
-{
-    /// <summary>IP アドレス文字列。例: "192.168.1.1"、"fe80::1%lo0"</summary>
-    public required string Address { get; init; }
 
-    /// <summary>サブネットプレフィックス長。例: IPv4 の /24 は 24、IPv6 の /64 は 64</summary>
-    public required int PrefixLength { get; init; }
-}
-
+/// <summary>
+/// macOS ネットワークインターフェースの設定情報エントリ。
+/// <para>
+/// <see cref="System.Net.NetworkInformation.NetworkInterface"/> と相互補完的に使用する設計。
+/// Name (BSD 名) を突合キーとして、標準 API では取得できない macOS 固有情報を提供する:
+/// SC サービス名・種別・有効状態。
+/// </para>
+/// <para>
+/// 以下は <see cref="System.Net.NetworkInformation.NetworkInterface"/> で取得可能なため本クラスでは提供しない:
+/// OperationalStatus (State)、PhysicalAddress (MAC)、UnicastAddresses (IP)、
+/// NetworkInterfaceType、Speed、Mtu、SupportsMulticast。
+/// </para>
+/// <para>
+/// トラフィック統計 (Rx/Tx バイト数・パケット数・デルタ) は <see cref="NetworkStats"/> を使用する。
+/// </para>
+/// </summary>
 public sealed record NetworkInterfaceEntry
 {
-    /// <summary>インターフェース名。例: "en0"、"lo0"、"utun0"</summary>
+    /// <summary>
+    /// BSD インターフェース名。例: "en0"、"lo0"。
+    /// <see cref="System.Net.NetworkInformation.NetworkInterface.Name"/> と同一の値で、両者の突合キーになる。
+    /// </summary>
     public required string Name { get; init; }
 
-    /// <summary>インターフェースのリンク状態 (Up / Down / NoCarrier)</summary>
-    public required InterfaceState State { get; init; }
-
-    /// <summary>インターフェースフラグのビットフィールド (IFF_UP、IFF_LOOPBACK など)</summary>
+    /// <summary>
+    /// macOS カーネルのインターフェースフラグ (IFF_*)。
+    /// <see cref="System.Net.NetworkInformation"/> では公開されない macOS 固有の raw フラグ。
+    /// </summary>
     public required uint Flags { get; init; }
 
-    /// <summary>ループバックインターフェースかどうか</summary>
-    public bool IsLoopback => (Flags & IFF_LOOPBACK) != 0;
-
-    /// <summary>ブロードキャストをサポートするかどうか</summary>
+    /// <summary>ブロードキャストをサポートするかどうか (IFF_BROADCAST)</summary>
     public bool SupportsBroadcast => (Flags & IFF_BROADCAST) != 0;
 
-    /// <summary>マルチキャストをサポートするかどうか</summary>
-    public bool SupportsMulticast => (Flags & IFF_MULTICAST) != 0;
-
-    /// <summary>ポイント・ツー・ポイント接続かどうか (VPN トンネルなど)</summary>
+    /// <summary>ポイント・ツー・ポイント接続かどうか (IFF_POINTOPOINT)。VPN トンネルなど</summary>
     public bool IsPointToPoint => (Flags & IFF_POINTOPOINT) != 0;
 
-    /// <summary>MAC アドレス文字列。例: "20:a5:cb:d1:da:a0"。物理インターフェース以外では null</summary>
-    public string? MacAddress { get; init; }
-
-    /// <summary>IPv4 アドレスの一覧</summary>
-    public required IReadOnlyList<InterfaceAddress> IPv4Addresses { get; init; }
-
-    /// <summary>IPv6 アドレスの一覧</summary>
-    public required IReadOnlyList<InterfaceAddress> IPv6Addresses { get; init; }
-
-    /// <summary>インターフェースタイプの数値コード (if_data.ifi_type)</summary>
-    public byte InterfaceType { get; init; }
-
-    /// <summary>インターフェースタイプの表示名。例: "Ethernet"、"Wi-Fi"、"Loopback"</summary>
-    public string InterfaceTypeName => InterfaceType switch
-    {
-        IFT_ETHER => "Ethernet",
-        IFT_LOOP => "Loopback",
-        IFT_IEEE80211 => "Wi-Fi",
-        IFT_GIF => "GIF Tunnel",
-        IFT_STF => "6to4 Tunnel",
-        IFT_CELLULAR => "Cellular",
-        IFT_BRIDGE => "Bridge",
-        _ => $"Other(0x{InterfaceType:X2})",
-    };
-
-    /// <summary>最大転送単位 (バイト)</summary>
-    public uint Mtu { get; init; }
-
-    /// <summary>リンク速度 (bps)。0 の場合は取得不可</summary>
-    public uint LinkSpeed { get; init; }
-
-    /// <summary>受信バイト数の累積値</summary>
-    public uint RxBytes { get; init; }
-
-    /// <summary>受信パケット数の累積値</summary>
-    public uint RxPackets { get; init; }
-
-    /// <summary>受信エラー数の累積値</summary>
-    public uint RxErrors { get; init; }
-
-    /// <summary>受信ドロップ数の累積値</summary>
-    public uint RxDrops { get; init; }
-
-    /// <summary>受信マルチキャストパケット数の累積値</summary>
-    public uint RxMulticast { get; init; }
-
-    /// <summary>送信バイト数の累積値</summary>
-    public uint TxBytes { get; init; }
-
-    /// <summary>送信パケット数の累積値</summary>
-    public uint TxPackets { get; init; }
-
-    /// <summary>送信エラー数の累積値</summary>
-    public uint TxErrors { get; init; }
-
-    /// <summary>送信マルチキャストパケット数の累積値</summary>
-    public uint TxMulticast { get; init; }
-
-    /// <summary>コリジョン数の累積値</summary>
-    public uint Collisions { get; init; }
-
-    /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
-    public uint NoProto { get; init; }
-
-    /// <summary>macOS System Settings で表示されるサービス名。例: "Ethernet"、"Wi-Fi"。SCNetworkServiceCopyAll に含まれないインターフェースは null</summary>
+    /// <summary>
+    /// macOS System Settings のネットワーク設定に表示されるサービス名。
+    /// 例: "Ethernet"、"Wi-Fi"。SCNetworkServiceCopyAll に含まれないインターフェースは null。
+    /// </summary>
     public string? DisplayName { get; init; }
 
-    /// <summary>macOS System Settings (ネットワーク設定) に表示されるサービスかどうか</summary>
+    /// <summary>macOS System Settings のネットワーク設定に登録されたサービスかどうか</summary>
     public bool IsHardwareInterface => DisplayName is not null;
 
     /// <summary>
     /// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
-    /// カーネルの InterfaceType とは異なり、Wi-Fi を IEEE80211 として正しく識別できる。
+    /// <see cref="System.Net.NetworkInformation.NetworkInterface.NetworkInterfaceType"/> より正確で、
+    /// Wi-Fi を <see cref="ScNetworkInterfaceType.WiFi"/> として識別できる。
     /// SCNetworkServiceCopyAll に含まれないインターフェースは Unknown。
     /// </summary>
     public ScNetworkInterfaceType ScNetworkInterfaceType { get; init; }
 
     /// <summary>
-    /// macOS System Settings でサービスが有効かどうか。
+    /// macOS System Settings でサービスが有効かどうか (SCNetworkServiceGetEnabled)。
     /// SCNetworkServiceCopyAll に含まれないインターフェース (includeAll = true 時) は null。
     /// </summary>
     public bool? IsServiceEnabled { get; init; }
@@ -309,6 +248,10 @@ public static class NetworkInfo
         _ => ScNetworkInterfaceType.Unknown,
     };
 
+    /// <summary>
+    /// getifaddrs(3) から全インターフェースの名前と Flags のみを収集して返す。
+    /// IP アドレス・MAC・統計等は System.Net.NetworkInformation.NetworkInterface / NetworkStats を使用する。
+    /// </summary>
     private static unsafe NetworkInterfaceEntry[] GetNetworkInterfacesAll()
     {
         if (getifaddrs(out var ifap) != 0)
@@ -318,7 +261,8 @@ public static class NetworkInfo
 
         try
         {
-            var map = new Dictionary<string, InterfaceBuilder>(StringComparer.Ordinal);
+            // インターフェース名 → Flags のマップ (同名エントリが複数出るので最初のもので確定)
+            var map = new Dictionary<string, uint>(StringComparer.Ordinal);
 
             for (var ptr = ifap; ptr != IntPtr.Zero;)
             {
@@ -327,28 +271,7 @@ public static class NetworkInfo
 
                 if (name is not null)
                 {
-                    if (!map.TryGetValue(name, out var builder))
-                    {
-                        builder = new InterfaceBuilder { Name = name, Flags = ifa.ifa_flags };
-                        map[name] = builder;
-                    }
-
-                    if (ifa.ifa_addr != IntPtr.Zero)
-                    {
-                        var family = ((sockaddr*)ifa.ifa_addr)->sa_family;
-                        switch (family)
-                        {
-                            case AF_LINK:
-                                ProcessLinkAddress(ifa, builder);
-                                break;
-                            case AF_INET:
-                                ProcessIPv4Address(ifa, builder);
-                                break;
-                            case AF_INET6:
-                                ProcessIPv6Address(ifa, builder);
-                                break;
-                        }
-                    }
+                    map.TryAdd(name, ifa.ifa_flags);
                 }
 
                 ptr = ifa.ifa_next;
@@ -356,10 +279,18 @@ public static class NetworkInfo
 
             var entries = new NetworkInterfaceEntry[map.Count];
             var idx = 0;
-            foreach (var builder in map.Values)
+            foreach (var (name, flags) in map)
             {
-                entries[idx++] = builder.Build();
+                entries[idx++] = new NetworkInterfaceEntry
+                {
+                    Name = name,
+                    Flags = flags,
+                    DisplayName = null,
+                    ScNetworkInterfaceType = ScNetworkInterfaceType.Unknown,
+                    IsServiceEnabled = null,
+                };
             }
+
             Array.Sort(entries, static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
             return entries;
         }
@@ -367,206 +298,5 @@ public static class NetworkInfo
         {
             freeifaddrs(ifap);
         }
-    }
-
-    private static unsafe void ProcessLinkAddress(ifaddrs ifa, InterfaceBuilder builder)
-    {
-        if (ifa.ifa_data != IntPtr.Zero)
-        {
-            var data = (if_data*)ifa.ifa_data;
-            builder.InterfaceType = data->ifi_type;
-            builder.Mtu = data->ifi_mtu;
-            builder.LinkSpeed = data->ifi_baudrate;
-            builder.RxBytes = data->ifi_ibytes;
-            builder.RxPackets = data->ifi_ipackets;
-            builder.RxErrors = data->ifi_ierrors;
-            builder.RxDrops = data->ifi_iqdrops;
-            builder.RxMulticast = data->ifi_imcasts;
-            builder.TxBytes = data->ifi_obytes;
-            builder.TxPackets = data->ifi_opackets;
-            builder.TxErrors = data->ifi_oerrors;
-            builder.TxMulticast = data->ifi_omcasts;
-            builder.Collisions = data->ifi_collisions;
-            builder.NoProto = data->ifi_noproto;
-        }
-
-        var sdl = (sockaddr_dl*)ifa.ifa_addr;
-        if (sdl->sdl_alen > 0 && sdl->sdl_alen <= 8)
-        {
-            var macPtr = (byte*)sdl + sockaddr_dl.DataOffset + sdl->sdl_nlen;
-            Span<char> buf = stackalloc char[(sdl->sdl_alen * 3) - 1];
-            var pos = 0;
-            for (var i = 0; i < sdl->sdl_alen; i++)
-            {
-                if (i > 0)
-                {
-                    buf[pos++] = ':';
-                }
-
-                var b = macPtr[i];
-                var hi = b >> 4;
-                var lo = b & 0x0F;
-                buf[pos++] = ToHexChar(hi);
-                buf[pos++] = ToHexChar(lo);
-            }
-
-            builder.MacAddress = new string(buf[..pos]);
-        }
-    }
-
-    private static char ToHexChar(int value) => (char)(value < 10 ? '0' + value : 'a' + value - 10);
-
-    private static unsafe void ProcessIPv4Address(ifaddrs ifa, InterfaceBuilder builder)
-    {
-        var sinAddr = (byte*)ifa.ifa_addr + sockaddr_in.AddrOffset;
-        var buf = stackalloc byte[(int)INET_ADDRSTRLEN];
-
-        if (inet_ntop(AF_INET, sinAddr, buf, INET_ADDRSTRLEN) == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var address = Marshal.PtrToStringUTF8((IntPtr)buf);
-        if (address is null)
-        {
-            return;
-        }
-
-        var prefix = 0;
-        if (ifa.ifa_netmask != IntPtr.Zero)
-        {
-            var maskAddr = (byte*)ifa.ifa_netmask + sockaddr_in.AddrOffset;
-            prefix = CountPrefixBits(maskAddr, 4);
-        }
-
-        builder.IPv4Addresses.Add(new InterfaceAddress { Address = address, PrefixLength = prefix });
-    }
-
-    private static unsafe void ProcessIPv6Address(ifaddrs ifa, InterfaceBuilder builder)
-    {
-        var sin6Addr = (byte*)ifa.ifa_addr + sockaddr_in6.AddrOffset;
-        var buf = stackalloc byte[(int)INET6_ADDRSTRLEN];
-
-        if (inet_ntop(AF_INET6, sin6Addr, buf, INET6_ADDRSTRLEN) == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var address = Marshal.PtrToStringUTF8((IntPtr)buf);
-        if (address is null)
-        {
-            return;
-        }
-
-        var scopeId = *(uint*)((byte*)ifa.ifa_addr + sockaddr_in6.ScopeIdOffset);
-        if (scopeId != 0)
-        {
-            address = $"{address}%{scopeId}";
-        }
-
-        var prefix = 0;
-        if (ifa.ifa_netmask != IntPtr.Zero)
-        {
-            var maskAddr = (byte*)ifa.ifa_netmask + sockaddr_in6.AddrOffset;
-            prefix = CountPrefixBits(maskAddr, 16);
-        }
-
-        builder.IPv6Addresses.Add(new InterfaceAddress { Address = address, PrefixLength = prefix });
-    }
-
-    private static unsafe int CountPrefixBits(byte* mask, int length)
-    {
-        var bits = 0;
-        for (var i = 0; i < length; i++)
-        {
-            if (mask[i] == 0xFF)
-            {
-                bits += 8;
-                continue;
-            }
-
-            var b = mask[i];
-            while ((b & 0x80) != 0)
-            {
-                bits++;
-                b <<= 1;
-            }
-
-            break;
-        }
-
-        return bits;
-    }
-
-    private sealed class InterfaceBuilder
-    {
-        public required string Name { get; init; }
-
-        public uint Flags { get; init; }
-
-        public byte InterfaceType { get; set; }
-
-        public string? MacAddress { get; set; }
-
-        public uint Mtu { get; set; }
-
-        public uint LinkSpeed { get; set; }
-
-        public uint RxBytes { get; set; }
-
-        public uint RxPackets { get; set; }
-
-        public uint RxErrors { get; set; }
-
-        public uint RxDrops { get; set; }
-
-        public uint RxMulticast { get; set; }
-
-        public uint TxBytes { get; set; }
-
-        public uint TxPackets { get; set; }
-
-        public uint TxErrors { get; set; }
-
-        public uint TxMulticast { get; set; }
-
-        public uint Collisions { get; set; }
-
-        public uint NoProto { get; set; }
-
-        public List<InterfaceAddress> IPv4Addresses { get; } = [];
-
-        public List<InterfaceAddress> IPv6Addresses { get; } = [];
-
-        public NetworkInterfaceEntry Build() => new()
-        {
-            Name = Name,
-            State = (Flags & IFF_UP) == 0
-                ? InterfaceState.Down
-                : (Flags & IFF_RUNNING) != 0
-                    ? InterfaceState.Up
-                    : InterfaceState.NoCarrier,
-            Flags = Flags,
-            MacAddress = MacAddress,
-            InterfaceType = InterfaceType,
-            Mtu = Mtu,
-            LinkSpeed = LinkSpeed,
-            IPv4Addresses = IPv4Addresses,
-            IPv6Addresses = IPv6Addresses,
-            RxBytes = RxBytes,
-            RxPackets = RxPackets,
-            RxErrors = RxErrors,
-            RxDrops = RxDrops,
-            RxMulticast = RxMulticast,
-            TxBytes = TxBytes,
-            TxPackets = TxPackets,
-            TxErrors = TxErrors,
-            TxMulticast = TxMulticast,
-            Collisions = Collisions,
-            NoProto = NoProto,
-            DisplayName = null,
-            ScNetworkInterfaceType = ScNetworkInterfaceType.Unknown,
-            IsServiceEnabled = null,
-        };
     }
 }

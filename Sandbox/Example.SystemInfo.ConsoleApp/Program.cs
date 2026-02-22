@@ -145,28 +145,57 @@ foreach (var vol in volumes)
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 6. Network Interfaces (デフォルト: macOS System Settings で有効なサービスのみ)
-// 無効化されたサービスは除外。全インターフェースを取得したい場合は GetNetworkInterfaces(includeAll: true)
+// 6. Network Interfaces (macOS SC 固有情報)
+// System.Net.NetworkInformation.NetworkInterface と Name (BSD 名) で突合して使用する。
+// デフォルト: macOS System Settings で有効なサービスのみ。全取得は GetNetworkInterfaces(includeAll: true)
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6. Network Interfaces ###");
 var interfaces = PlatformProvider.GetNetworkInterfaces();
+// System.Net.NetworkInformation から補完情報を取得
+var dotnetIfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+    .ToDictionary(ni => ni.Name, StringComparer.Ordinal);
 foreach (var iface in interfaces)
 {
-    Console.WriteLine($"  [{iface.Name}] {iface.DisplayName} ({iface.ScNetworkInterfaceType}) - {iface.State}");
-    if (!string.IsNullOrEmpty(iface.MacAddress))
+    dotnetIfaces.TryGetValue(iface.Name, out var ni);
+    var state = ni?.OperationalStatus.ToString() ?? "Unknown";
+    Console.WriteLine($"  [{iface.Name}] {iface.DisplayName} ({iface.ScNetworkInterfaceType}) - {state}");
+    if (ni is not null)
     {
-        Console.WriteLine($"    MAC:    {iface.MacAddress}");
+        var mac = ni.GetPhysicalAddress().ToString();
+        if (!string.IsNullOrEmpty(mac))
+        {
+            Console.WriteLine($"    MAC:    {string.Join(":", Enumerable.Range(0, mac.Length / 2).Select(i => mac.Substring(i * 2, 2)))}");
+        }
+        foreach (var ua in ni.GetIPProperties().UnicastAddresses)
+        {
+            var family = ua.Address.AddressFamily;
+            if (family == System.Net.Sockets.AddressFamily.InterNetwork)
+            {
+                Console.WriteLine($"    IPv4:   {ua.Address}/{ua.PrefixLength}");
+            }
+            else if (family == System.Net.Sockets.AddressFamily.InterNetworkV6)
+            {
+                Console.WriteLine($"    IPv6:   {ua.Address}/{ua.PrefixLength}");
+            }
+        }
     }
-    foreach (var addr in iface.IPv4Addresses)
-    {
-        Console.WriteLine($"    IPv4:   {addr.Address}/{addr.PrefixLength}");
-    }
-    foreach (var addr in iface.IPv6Addresses)
-    {
-        Console.WriteLine($"    IPv6:   {addr.Address}/{addr.PrefixLength}");
-    }
-    Console.WriteLine($"    RX:     {FormatBytes((ulong)iface.RxBytes)} ({iface.RxPackets} pkts, {iface.RxErrors} err)");
-    Console.WriteLine($"    TX:     {FormatBytes((ulong)iface.TxBytes)} ({iface.TxPackets} pkts, {iface.TxErrors} err)");
+}
+Console.WriteLine();
+
+// ---------------------------------------------------------------------------
+// 6a. Network Stats (トラフィック統計 / 500ms デルタ計測)
+// System.Net の GetIPv4Statistics() に加え、デルタ値・Collisions 等 macOS 固有カウンタを提供
+// ---------------------------------------------------------------------------
+Console.WriteLine("### 6a. Network Stats (500ms delta) ###");
+var netStats = PlatformProvider.GetNetworkStats();
+Thread.Sleep(500);
+netStats.Update();
+var serviceNames = interfaces.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
+foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
+{
+    Console.WriteLine($"  [{s.Name}]");
+    Console.WriteLine($"    RX: {FormatBytes(s.RxBytes),10} total  delta: {FormatBytes(s.DeltaRxBytes),8} ({s.DeltaRxPackets} pkts, {s.DeltaRxErrors} err)");
+    Console.WriteLine($"    TX: {FormatBytes(s.TxBytes),10} total  delta: {FormatBytes(s.DeltaTxBytes),8} ({s.DeltaTxPackets} pkts, {s.DeltaTxErrors} err)");
 }
 Console.WriteLine();
 
