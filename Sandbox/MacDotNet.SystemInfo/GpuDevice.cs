@@ -228,11 +228,11 @@ public sealed class GpuDevice
         {
             if (Name.Contains("intel", StringComparison.OrdinalIgnoreCase))
             {
-                temperature = SmcInfo.ReadSmcTemperature("TCGC");
+                temperature = HardwareMonitor.ReadTemperatureOnce("TCGC");
             }
             else if (Name.Contains("amd", StringComparison.OrdinalIgnoreCase))
             {
-                temperature = SmcInfo.ReadSmcTemperature("TGDD");
+                temperature = HardwareMonitor.ReadTemperatureOnce("TGDD");
             }
         }
 

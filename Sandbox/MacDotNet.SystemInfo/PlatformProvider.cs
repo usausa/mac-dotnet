@@ -94,14 +94,11 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
-
-    public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
-
-    public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
-
-    public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
-
-    public static double? GetTotalSystemPower() => SmcInfo.GetTotalSystemPower();
+    /// <summary>
+    /// SMC センサーモニターを生成する。温度・電圧・電力・ファンをまとめて管理し、
+    /// Update() で一括更新できる。使用後は Dispose() を呼び出すこと。
+    /// AppleSMC サービスが見つからない場合は null を返す。
+    /// </summary>
+    public static HardwareMonitor? GetHardwareMonitor() => HardwareMonitor.Create();
 }
 

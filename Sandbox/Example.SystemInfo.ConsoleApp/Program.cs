@@ -400,65 +400,73 @@ else
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 11. Sensors (SMC)
+// 11. Sensors (HardwareMonitor)
+// HardwareMonitor.Create() で SMC 接続を確立し、センサーを一括管理する。
+// Update() を呼ぶたびに温度・電圧・電力・ファンをまとめて更新する。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 11. Temperature Sensors ###");
-var temps = PlatformProvider.GetTemperatureSensors();
-var tempsLimit = Math.Min(10, temps.Count);
-for (var i = 0; i < tempsLimit; i++)
+Console.WriteLine("### 11. Sensors (HardwareMonitor) ###");
+using var monitor = PlatformProvider.GetHardwareMonitor();
+if (monitor is null)
 {
-    var s = temps[i];
-    Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F1}");
+    Console.WriteLine("  HardwareMonitor not available (AppleSMC not found).");
 }
-if (temps.Count > 10)
+else
 {
-    Console.WriteLine($"  ... and {temps.Count - 10} more sensors.");
-}
-Console.WriteLine();
+    Console.WriteLine($"  Detected at: {monitor.UpdateAt:HH:mm:ss.fff}");
+    Console.WriteLine();
 
-Console.WriteLine("### 11a. Power Readings ###");
-var powers = PlatformProvider.GetPowerReadings();
-var powersLimit = Math.Min(10, powers.Count);
-for (var i = 0; i < powersLimit; i++)
-{
-    var s = powers[i];
-    Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F2}");
-}
-if (powers.Count > 10)
-{
-    Console.WriteLine($"  ... and {powers.Count - 10} more readings.");
-}
-Console.WriteLine();
+    Console.WriteLine("### 11a. Temperature Sensors ###");
+    var tempsLimit = Math.Min(10, monitor.Temperatures.Count);
+    for (var i = 0; i < tempsLimit; i++)
+    {
+        var s = monitor.Temperatures[i];
+        Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F1} °C");
+    }
+    if (monitor.Temperatures.Count > 10)
+    {
+        Console.WriteLine($"  ... and {monitor.Temperatures.Count - 10} more sensors.");
+    }
+    Console.WriteLine();
 
-Console.WriteLine("### 11b. Voltage Readings ###");
-var voltages = PlatformProvider.GetVoltageReadings();
-var voltagesLimit = Math.Min(10, voltages.Count);
-for (var i = 0; i < voltagesLimit; i++)
-{
-    var s = voltages[i];
-    Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F3}");
-}
-if (voltages.Count > 10)
-{
-    Console.WriteLine($"  ... and {voltages.Count - 10} more readings.");
-}
-Console.WriteLine();
+    Console.WriteLine("### 11b. Power Readings ###");
+    var powersLimit = Math.Min(10, monitor.Powers.Count);
+    for (var i = 0; i < powersLimit; i++)
+    {
+        var s = monitor.Powers[i];
+        Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F2} W");
+    }
+    if (monitor.Powers.Count > 10)
+    {
+        Console.WriteLine($"  ... and {monitor.Powers.Count - 10} more readings.");
+    }
+    if (monitor.TotalSystemPower is not null)
+    {
+        Console.WriteLine($"  Total System Power (PSTR): {monitor.TotalSystemPower:F2} W");
+    }
+    Console.WriteLine();
 
-Console.WriteLine("### 11c. Fans ###");
-var fans = PlatformProvider.GetFans();
-if (fans.Count == 0)
-{
-    Console.WriteLine("  No fans detected.");
-}
-foreach (var fan in fans)
-{
-    Console.WriteLine($"  Fan {fan.Index}: {fan.ActualRpm:F0} RPM (min={fan.MinRpm:F0}, max={fan.MaxRpm:F0}, target={fan.TargetRpm:F0})");
-}
+    Console.WriteLine("### 11c. Voltage Readings ###");
+    var voltagesLimit = Math.Min(10, monitor.Voltages.Count);
+    for (var i = 0; i < voltagesLimit; i++)
+    {
+        var s = monitor.Voltages[i];
+        Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F3} V");
+    }
+    if (monitor.Voltages.Count > 10)
+    {
+        Console.WriteLine($"  ... and {monitor.Voltages.Count - 10} more readings.");
+    }
+    Console.WriteLine();
 
-var totalPower = PlatformProvider.GetTotalSystemPower();
-if (totalPower is not null)
-{
-    Console.WriteLine($"  Total System Power (PSTR): {totalPower:F2} W");
+    Console.WriteLine("### 11d. Fans ###");
+    if (monitor.Fans.Count == 0)
+    {
+        Console.WriteLine("  No fans detected.");
+    }
+    foreach (var fan in monitor.Fans)
+    {
+        Console.WriteLine($"  Fan {fan.Index}: {fan.ActualRpm:F0} RPM  (min={fan.MinRpm:F0}, max={fan.MaxRpm:F0}, target={fan.TargetRpm:F0})");
+    }
 }
 Console.WriteLine();
 
