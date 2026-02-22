@@ -88,7 +88,7 @@ public static class PlatformProvider
 
     public static BatteryGeneric GetBatteryGeneric() => BatteryGeneric.Create();
 
-    public static AppleSiliconPower GetAppleSiliconPower() => AppleSiliconPower.Create();
+    public static AppleSiliconEnergyCounter GetAppleSiliconEnergyCounter() => AppleSiliconEnergyCounter.Create();
 
     //--------------------------------------------------------------------------------
     // Sensor

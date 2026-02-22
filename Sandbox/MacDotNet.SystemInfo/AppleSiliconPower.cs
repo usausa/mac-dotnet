@@ -4,30 +4,25 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public sealed class AppleSiliconPower
+public sealed class AppleSiliconEnergyCounter
 {
     private IntPtr channels;
     private IntPtr subscription;
 
-    private double prevCpuEnergy;
-    private double prevGpuEnergy;
-    private double prevAneEnergy;
-    private double prevRamEnergy;
+    /// <summary>CPU の累積エネルギー消費量 (J)</summary>
+    public double Cpu { get; private set; }
 
-    /// <summary>CPU が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
-    public double CpuPower { get; private set; }
+    /// <summary>GPU の累積エネルギー消費量 (J)</summary>
+    public double Gpu { get; private set; }
 
-    /// <summary>GPU が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
-    public double GpuPower { get; private set; }
+    /// <summary>ANE (Apple Neural Engine) の累積エネルギー消費量 (J)</summary>
+    public double Ane { get; private set; }
 
-    /// <summary>ANE (Apple Neural Engine) が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
-    public double AnePower { get; private set; }
+    /// <summary>RAM の累積エネルギー消費量 (J)</summary>
+    public double Ram { get; private set; }
 
-    /// <summary>RAM が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
-    public double RamPower { get; private set; }
-
-    /// <summary>CPU + GPU + ANE + RAM の合計消費電力 (W)</summary>
-    public double TotalPower => CpuPower + GpuPower + AnePower + RamPower;
+    /// <summary>CPU + GPU + ANE + RAM の累積エネルギー消費量合計 (J)</summary>
+    public double Total => Cpu + Gpu + Ane + Ram;
 
     /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか</summary>
     public bool Supported { get; }
@@ -36,7 +31,7 @@ public sealed class AppleSiliconPower
     // Constructor
     //--------------------------------------------------------------------------------
 
-    private AppleSiliconPower()
+    private AppleSiliconEnergyCounter()
     {
         Supported = InitializeReporting();
         Update();
@@ -46,7 +41,7 @@ public sealed class AppleSiliconPower
     // Factory
     //--------------------------------------------------------------------------------
 
-    public static AppleSiliconPower Create() => new();
+    public static AppleSiliconEnergyCounter Create() => new();
 
     //--------------------------------------------------------------------------------
     // Update
@@ -105,38 +100,30 @@ public sealed class AppleSiliconPower
                 var unit = unitPtr != IntPtr.Zero ? CfStringToManaged(unitPtr) : null;
 
                 var value = (double)IOReportSimpleGetIntegerValue(item, 0);
-                var power = ConvertToPower(value, unit);
+                var joules = ConvertToJoules(value, unit);
 
                 if (channelName.EndsWith("CPU Energy", StringComparison.Ordinal))
                 {
-                    cpuEnergy = power;
+                    cpuEnergy = joules;
                 }
                 else if (channelName.EndsWith("GPU Energy", StringComparison.Ordinal))
                 {
-                    gpuEnergy = power;
+                    gpuEnergy = joules;
                 }
                 else if (channelName.StartsWith("ANE", StringComparison.Ordinal))
                 {
-                    aneEnergy = power;
+                    aneEnergy = joules;
                 }
                 else if (channelName.StartsWith("DRAM", StringComparison.Ordinal))
                 {
-                    ramEnergy = power;
+                    ramEnergy = joules;
                 }
             }
 
-            if (prevCpuEnergy > 0)
-            {
-                CpuPower = cpuEnergy - prevCpuEnergy;
-                GpuPower = gpuEnergy - prevGpuEnergy;
-                AnePower = aneEnergy - prevAneEnergy;
-                RamPower = ramEnergy - prevRamEnergy;
-            }
-
-            prevCpuEnergy = cpuEnergy;
-            prevGpuEnergy = gpuEnergy;
-            prevAneEnergy = aneEnergy;
-            prevRamEnergy = ramEnergy;
+            Cpu = cpuEnergy;
+            Gpu = gpuEnergy;
+            Ane = aneEnergy;
+            Ram = ramEnergy;
 
             return true;
         }
@@ -185,7 +172,7 @@ public sealed class AppleSiliconPower
         }
     }
 
-    private static double ConvertToPower(double value, string? unit)
+    private static double ConvertToJoules(double value, string? unit)
     {
         return unit switch
         {

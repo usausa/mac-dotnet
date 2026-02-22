@@ -380,19 +380,18 @@ else
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 10. Apple Silicon Power  (constructor takes first snapshot; Update() after interval computes delta)
+// 10. Apple Silicon Energy Counter
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 10. Apple Silicon Power ###");
-var asPower = PlatformProvider.GetAppleSiliconPower();
+Console.WriteLine("### 10. Apple Silicon Energy Counter ###");
+var asPower = PlatformProvider.GetAppleSiliconEnergyCounter();
 if (asPower.Supported)
 {
-    Thread.Sleep(500);
     asPower.Update();
-    Console.WriteLine($"  CPU Power:  {asPower.CpuPower:F2} W");
-    Console.WriteLine($"  GPU Power:  {asPower.GpuPower:F2} W");
-    Console.WriteLine($"  ANE Power:  {asPower.AnePower:F2} W");
-    Console.WriteLine($"  RAM Power:  {asPower.RamPower:F2} W");
-    Console.WriteLine($"  Total:      {asPower.TotalPower:F2} W");
+    Console.WriteLine($"  CPU Energy: {asPower.Cpu:F6} J");
+    Console.WriteLine($"  GPU Energy: {asPower.Gpu:F6} J");
+    Console.WriteLine($"  ANE Energy: {asPower.Ane:F6} J");
+    Console.WriteLine($"  RAM Energy: {asPower.Ram:F6} J");
+    Console.WriteLine($"  Total:      {asPower.Total:F6} J");
 }
 else
 {
