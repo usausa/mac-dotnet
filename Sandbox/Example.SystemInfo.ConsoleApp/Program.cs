@@ -204,17 +204,15 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 7. Processes (Top 10 by RSS) ###");
 var processes = PlatformProvider.GetProcesses();
-var processArray = new MacDotNet.SystemInfo.ProcessEntry[processes.Count];
-for (var i = 0; i < processes.Count; i++) processArray[i] = processes[i];
-Array.Sort(processArray, static (a, b) => b.ResidentSize.CompareTo(a.ResidentSize));
-var top10Count = Math.Min(10, processArray.Length);
+Array.Sort(processes, static (a, b) => b.ResidentSize.CompareTo(a.ResidentSize));
+var top10Count = Math.Min(10, processes.Length);
 Console.WriteLine($"  {"PID",6} {"Name",-30} {"RSS",10} {"VSZ",12} {"Threads",8}");
 for (var i = 0; i < top10Count; i++)
 {
-    var p = processArray[i];
-    Console.WriteLine($"  {p.Pid,6} {Truncate(p.Name, 30),-30} {FormatBytes((ulong)p.ResidentSize),10} {FormatBytes((ulong)p.VirtualSize),12} {p.ThreadCount,8}");
+    var p = processes[i];
+    Console.WriteLine($"  {p.ProcessId,6} {Truncate(p.Name, 30),-30} {FormatBytes(p.ResidentSize),10} {FormatBytes(p.VirtualSize),12} {p.ThreadCount,8}");
 }
-Console.WriteLine($"  Total processes: {processes.Count}");
+Console.WriteLine($"  Total processes: {processes.Length}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------

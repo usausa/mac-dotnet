@@ -64,7 +64,11 @@ public static class PlatformProvider
     // Process
     //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
+    public static ProcessInfo[] GetProcesses() => ProcessInfo.GetProcesses();
+
+    public static ProcessInfo? GetProcess(int processId) => ProcessInfo.GetProcess(processId);
+
+    public static ProcessSummary GetProcessSummary() => new();
 
     //--------------------------------------------------------------------------------
     // GPU
