@@ -66,13 +66,13 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
     {
         if (smartInterface != nint.Zero)
         {
-            ReleaseInterface(smartInterface);
+            ReleasePlugInInterface(smartInterface);
             smartInterface = nint.Zero;
         }
 
         if (pluginInterface != nint.Zero)
         {
-            ReleaseInterface(pluginInterface);
+            ReleasePlugInInterface(pluginInterface);
             pluginInterface = nint.Zero;
         }
     }
@@ -127,7 +127,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         var hr = qiFn(ppPlugin, smartUuid, &pSmartInterface);
         if (hr != S_OK || pSmartInterface == nint.Zero)
         {
-            ReleaseInterface(ppPlugin);
+            ReleasePlugInInterface(ppPlugin);
             return null;
         }
 
@@ -183,18 +183,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
         LastUpdate = true;
         return true;
-    }
-
-    internal static unsafe void ReleaseInterface(nint ppInterface)
-    {
-        if (ppInterface == nint.Zero)
-        {
-            return;
-        }
-
-        var vtable = *(nint*)ppInterface;
-        var releaseFn = (delegate* unmanaged<nint, uint>)(*((nint*)vtable + 3));
-        releaseFn(ppInterface);
     }
 
     private static unsafe ulong Le128ToUInt64(byte* p)

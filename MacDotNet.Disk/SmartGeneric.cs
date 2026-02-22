@@ -1,5 +1,6 @@
 namespace MacDotNet.Disk;
 
+using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
 // ATA SMARTセッション
@@ -34,13 +35,13 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
     {
         if (smartInterface != nint.Zero)
         {
-            SmartNvme.ReleaseInterface(smartInterface);
+            ReleasePlugInInterface(smartInterface);
             smartInterface = nint.Zero;
         }
 
         if (pluginInterface != nint.Zero)
         {
-            SmartNvme.ReleaseInterface(pluginInterface);
+            ReleasePlugInInterface(pluginInterface);
             pluginInterface = nint.Zero;
         }
     }
@@ -95,7 +96,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         var hr = qiFn(ppPlugin, smartUuid, &pSmartInterface);
         if (hr != S_OK || pSmartInterface == nint.Zero)
         {
-            SmartNvme.ReleaseInterface(ppPlugin);
+            ReleasePlugInInterface(ppPlugin);
             return null;
         }
 
@@ -109,8 +110,8 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         kr = enableFn(pSmartInterface, 1);
         if (kr != KERN_SUCCESS)
         {
-            SmartNvme.ReleaseInterface(pSmartInterface);
-            SmartNvme.ReleaseInterface(ppPlugin);
+            ReleasePlugInInterface(pSmartInterface);
+            ReleasePlugInInterface(ppPlugin);
             return null;
         }
 

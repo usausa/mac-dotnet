@@ -156,14 +156,14 @@ public static class DiskInfo
         if (busType is BusType.Nvme or BusType.AppleFabric)
         {
             var session = SmartNvme.Open(entry);
-            if (session is not null)
+            if (session is not null && session.Update())
             {
-                session.Update();
                 smartType = SmartType.Nvme;
                 smart = session;
             }
             else
             {
+                session?.Dispose();
                 smartType = SmartType.Unsupported;
                 smart = SmartUnsupported.Default;
             }
@@ -189,27 +189,35 @@ public static class DiskInfo
             smart = SmartUnsupported.Default;
         }
 
-        return new DiskInfoGeneric
+        try
         {
-            Index = index,
-            BsdName = bsdName,
-            DeviceName = deviceName,
-            Model = model,
-            SerialNumber = serialNumber?.Trim() ?? string.Empty,
-            FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
-            MediumType = mediumType?.Trim(),
-            Removable = removable,
-            Ejectable = ejectable,
-            PhysicalBlockSize = physicalBlockSize > 0 ? (uint)physicalBlockSize : 0,
-            LogicalBlockSize = logicalBlockSize > 0 ? (uint)logicalBlockSize : 0,
-            Size = diskSize > 0 ? (ulong)diskSize : 0,
-            BusType = busType,
-            BusLocation = physInterconnectLocation,
-            ContentType = contentType,
-            SmartType = smartType,
-            Smart = smart,
-            IOStatistics = ioStats
-        };
+            return new DiskInfoGeneric
+            {
+                Index = index,
+                BsdName = bsdName,
+                DeviceName = deviceName,
+                Model = model,
+                SerialNumber = serialNumber?.Trim() ?? string.Empty,
+                FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
+                MediumType = mediumType?.Trim(),
+                Removable = removable,
+                Ejectable = ejectable,
+                PhysicalBlockSize = physicalBlockSize > 0 ? (uint)physicalBlockSize : 0,
+                LogicalBlockSize = logicalBlockSize > 0 ? (uint)logicalBlockSize : 0,
+                Size = diskSize > 0 ? (ulong)diskSize : 0,
+                BusType = busType,
+                BusLocation = physInterconnectLocation,
+                ContentType = contentType,
+                SmartType = smartType,
+                Smart = smart,
+                IOStatistics = ioStats
+            };
+        }
+        catch
+        {
+            (smart as IDisposable)?.Dispose();
+            throw;
+        }
     }
 
     private static string BuildModelString(string? modelName, string? vendorName)
@@ -490,11 +498,31 @@ public static class DiskInfo
         }
 
         // CFStringGetCStringPtrが失敗した場合のフォールバック
-        var bufSize = (length * 4) + 1;
-        var buf = stackalloc byte[(int)bufSize];
-        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-            ? Marshal.PtrToStringUTF8((nint)buf)
-            : null;
+        const int stackAllocThreshold = 1024;
+        var bufSize = (int)((length * 4) + 1);
+
+        if (bufSize <= stackAllocThreshold)
+        {
+            var buf = stackalloc byte[bufSize];
+            return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
+                ? Marshal.PtrToStringUTF8((nint)buf)
+                : null;
+        }
+
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(bufSize);
+        try
+        {
+            fixed (byte* buf = rented)
+            {
+                return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
+                    ? Marshal.PtrToStringUTF8((nint)buf)
+                    : null;
+            }
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 }
 #pragma warning restore CA1806
