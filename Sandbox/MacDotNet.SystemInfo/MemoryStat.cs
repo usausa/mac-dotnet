@@ -6,6 +6,8 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class MemoryStat
 {
+    private readonly uint _host;
+
     /// <summary>最後に Update() を呼び出した日時</summary>
     public DateTime UpdateAt { get; private set; }
 
@@ -128,6 +130,9 @@ public sealed class MemoryStat
     internal MemoryStat()
     {
         PhysicalMemory = GetSystemControlUInt64("hw.memsize");
+        _host = mach_host_self();
+        host_page_size(_host, out var pageSize);
+        PageSize = pageSize;
         Update();
     }
 
@@ -137,22 +142,14 @@ public sealed class MemoryStat
 
     public unsafe bool Update()
     {
-        var host = mach_host_self();
-        var ret = host_page_size(host, out var pageSize);
-        if (ret != KERN_SUCCESS)
-        {
-            return false;
-        }
-
+        var host = _host;
         var count = HOST_VM_INFO64_COUNT;
         vm_statistics64 vmStat;
-        ret = host_statistics64(host, HOST_VM_INFO64, &vmStat, ref count);
+        var ret = host_statistics64(host, HOST_VM_INFO64, &vmStat, ref count);
         if (ret != KERN_SUCCESS)
         {
             return false;
         }
-
-        PageSize = pageSize;
         ActiveCount = vmStat.active_count;
         InactiveCount = vmStat.inactive_count;
         WireCount = vmStat.wire_count;
@@ -178,7 +175,6 @@ public sealed class MemoryStat
         InternalPageCount = vmStat.internal_page_count;
         TotalUncompressedPagesInCompressor = vmStat.total_uncompressed_pages_in_compressor;
         SwappedCount = vmStat.swapped_count;
-
         UpdateAt = DateTime.Now;
 
         return true;
