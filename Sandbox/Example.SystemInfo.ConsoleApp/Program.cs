@@ -125,7 +125,10 @@ foreach (var fs in fileSystems)
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5a. Disk Volumes (physical local volumes with updatable usage)
+// 5a. Disk Volumes (macOS ストレージ設定に表示されるユーザー可視ボリューム)
+// Linux の GetPartitions() + GetFileSystemUsage() に相当する機能。
+// "/" (Macintosh HD) および "/Volumes/*" のみを表示し、
+// "/System/Volumes/*" 等のAPFS内部システムボリュームは除外する。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 5a. Disk Volumes ###");
 var volumes = PlatformProvider.GetDiskVolumes();
@@ -135,7 +138,8 @@ foreach (var vol in volumes)
     Console.WriteLine($"  {vol.MountPoint} ({vol.TypeName})");
     Console.WriteLine($"    Device:    {vol.DeviceName}");
     Console.WriteLine($"    Total:     {FormatBytes(usage.TotalSize)}");
-    Console.WriteLine($"    Available: {FormatBytes(usage.AvailableSize)}  ({usage.UsagePercent:P1} used)");
+    Console.WriteLine($"    Used:      {FormatBytes(usage.TotalSize - usage.AvailableSize)}  ({usage.UsagePercent:P1} used)");
+    Console.WriteLine($"    Available: {FormatBytes(usage.AvailableSize)}");
     Console.WriteLine($"    ReadOnly:  {vol.IsReadOnly}");
 }
 Console.WriteLine();

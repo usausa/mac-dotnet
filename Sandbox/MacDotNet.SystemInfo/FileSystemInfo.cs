@@ -108,9 +108,24 @@ public static class FileSystemInfo
                     continue;
                 }
 
+                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty;
+
+                // ユーザーが見えるボリュームのみを返す:
+                // - "/" (ルート/ブートボリューム = Macintosh HD)
+                // - "/Volumes/Name" (追加ボリューム。"." で始まる隠しディレクトリは除外)
+                // "/System/Volumes/*" 等のAPFS内部システムボリュームは除外する
+                // "/Volumes/.timemachine/*" 等のTimeMachineバックアップボリュームは除外する
+                var isRoot = mountPoint == "/";
+                var isUserVolume = mountPoint.StartsWith("/Volumes/", StringComparison.Ordinal)
+                    && !mountPoint["/Volumes/".Length..].StartsWith(".", StringComparison.Ordinal);
+                if (!isRoot && !isUserVolume)
+                {
+                    continue;
+                }
+
                 result.Add(new DiskVolume
                 {
-                    MountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty,
+                    MountPoint = mountPoint,
                     TypeName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
                     DeviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty,
                     IsReadOnly = (ptr[i].f_flags & MNT_RDONLY) != 0,
