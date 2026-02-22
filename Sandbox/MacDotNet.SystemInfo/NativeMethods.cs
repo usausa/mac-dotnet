@@ -548,6 +548,40 @@ internal static class NativeMethods
     [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
 
+    //------------------------------------------------------------------------
+    // SystemConfiguration
+    //------------------------------------------------------------------------
+
+    private const string SystemConfigurationLib = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
+
+    /// <summary>ユーザーが設定可能なハードウェアネットワークインターフェースの一覧を CFArrayRef で返す。呼び出し元が CFRelease する必要がある</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceCopyAll();
+
+    /// <summary>インターフェースの BSD 名 (例: "en0") を CFStringRef で返す。所有権は呼び出し元に移らないため CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
+
+    /// <summary>インターフェースのローカライズされた表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetLocalizedDisplayName(IntPtr networkInterface);
+
+    /// <summary>SystemConfiguration の設定ファイルを開く。戻り値は CFRelease が必要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
+
+    /// <summary>System Settings のネットワーク設定に登録されているネットワークサービスの一覧を CFArrayRef で返す。CFRelease が必要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
+
+    /// <summary>ネットワークサービスのユーザー表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetName(IntPtr service);
+
+    /// <summary>ネットワークサービスに紐付くハードウェアインターフェースを返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
+
     [DllImport(IOKitLib)]
     public static extern IntPtr IOReportCopyChannelsInGroup([MarshalAs(UnmanagedType.LPUTF8Str)] string? group, [MarshalAs(UnmanagedType.LPUTF8Str)] string? subgroup, ulong a, ulong b, ulong c);
 

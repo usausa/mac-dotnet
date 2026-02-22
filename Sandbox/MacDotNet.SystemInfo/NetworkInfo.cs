@@ -106,11 +106,114 @@ public sealed record NetworkInterfaceEntry
 
     /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
     public uint NoProto { get; init; }
+
+    /// <summary>macOS System Settings で表示されるインターフェース名。例: "Ethernet"、"Wi-Fi"。SCNetworkInterfaceCopyAll に含まれないインターフェースは null</summary>
+    public string? DisplayName { get; init; }
+
+    /// <summary>macOS System Settings (ネットワーク設定) に表示されるハードウェアインターフェースかどうか</summary>
+    public bool IsHardwareInterface => DisplayName is not null;
 }
 
 public static class NetworkInfo
 {
-    public static unsafe NetworkInterfaceEntry[] GetNetworkInterfaces()
+    /// <summary>
+    /// ネットワークインターフェースの一覧を返す。
+    /// デフォルト (includeAll = false) では macOS System Settings のネットワーク設定に表示される
+    /// サービスのみを返す。DisplayName にサービス名 ("Ethernet"、"Wi-Fi" 等) が設定される。
+    /// includeAll = true にすると getifaddrs が返すすべてのインターフェースを返す。
+    /// </summary>
+    public static NetworkInterfaceEntry[] GetNetworkInterfaces(bool includeAll = false)
+    {
+        var all = GetNetworkInterfacesAll();
+
+        if (includeAll)
+        {
+            return all;
+        }
+
+        // SCNetworkServiceCopyAll で System Settings に表示されるサービスの BSD名→サービス名マップを取得
+        var serviceNames = GetNetworkServiceNames();
+        var result = new List<NetworkInterfaceEntry>(serviceNames.Count);
+        foreach (var entry in all)
+        {
+            if (serviceNames.TryGetValue(entry.Name, out var serviceName))
+            {
+                result.Add(entry with { DisplayName = serviceName });
+            }
+        }
+
+        return [.. result];
+    }
+
+    /// <summary>
+    /// SCNetworkServiceCopyAll() から BSD名 → サービス名のマップを構築する。
+    /// これが macOS System Settings のネットワーク設定に表示されるサービス一覧に相当する。
+    /// </summary>
+    private static Dictionary<string, string> GetNetworkServiceNames()
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var appName = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
+        var prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero);
+        NativeMethods.CFRelease(appName);
+
+        if (prefs == IntPtr.Zero)
+        {
+            return result;
+        }
+
+        try
+        {
+            var services = NativeMethods.SCNetworkServiceCopyAll(prefs);
+            if (services == IntPtr.Zero)
+            {
+                return result;
+            }
+
+            try
+            {
+                var count = NativeMethods.CFArrayGetCount(services);
+                for (var i = 0L; i < count; i++)
+                {
+                    var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
+                    if (service == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    // GetInterface / GetName の戻り値は所有権が移らないため CFRelease 不要
+                    var iface = NativeMethods.SCNetworkServiceGetInterface(service);
+                    if (iface == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
+                    var serviceNameRef = NativeMethods.SCNetworkServiceGetName(service);
+
+                    var bsdName = NativeMethods.CfStringToManaged(bsdNameRef);
+                    var serviceName = NativeMethods.CfStringToManaged(serviceNameRef);
+
+                    if (bsdName is not null && serviceName is not null)
+                    {
+                        result.TryAdd(bsdName, serviceName);
+                    }
+                }
+            }
+            finally
+            {
+                NativeMethods.CFRelease(services);
+            }
+        }
+        finally
+        {
+            NativeMethods.CFRelease(prefs);
+        }
+
+        return result;
+    }
+
+    private static unsafe NetworkInterfaceEntry[] GetNetworkInterfacesAll()
     {
         if (getifaddrs(out var ifap) != 0)
         {
@@ -365,6 +468,7 @@ public static class NetworkInfo
             TxMulticast = TxMulticast,
             Collisions = Collisions,
             NoProto = NoProto,
+            DisplayName = null,
         };
     }
 }

@@ -41,7 +41,12 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces() => NetworkInfo.GetNetworkInterfaces();
+    /// <summary>
+    /// ネットワークインターフェースの一覧を返す。
+    /// デフォルト (includeAll = false) では macOS System Settings のネットワーク設定と同じサービスのみを返す。
+    /// includeAll = true にするとすべてのインターフェースを返す。
+    /// </summary>
+    public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces(bool includeAll = false) => NetworkInfo.GetNetworkInterfaces(includeAll);
 
     //--------------------------------------------------------------------------------
     // Process
