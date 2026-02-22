@@ -128,7 +128,14 @@ public static class NetworkInfo
                 ptr = ifa.ifa_next;
             }
 
-            return [.. map.Values.Select(b => b.Build()).OrderBy(static i => i.Name, StringComparer.Ordinal)];
+            var entries = new NetworkInterfaceEntry[map.Count];
+            var idx = 0;
+            foreach (var builder in map.Values)
+            {
+                entries[idx++] = builder.Build();
+            }
+            Array.Sort(entries, static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+            return entries;
         }
         finally
         {

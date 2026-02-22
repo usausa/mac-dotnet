@@ -28,7 +28,7 @@ public sealed record FileSystemEntry
 
     public ulong AvailableSize => AvailableBlocks * BlockSize;
 
-    public double UsagePercent => TotalBlocks > 0 ? 100.0 * (TotalBlocks - AvailableBlocks) / TotalBlocks : 0;
+    public double UsagePercent => TotalBlocks > 0 ? (double)(TotalBlocks - AvailableBlocks) / TotalBlocks : 0;
 
     public required ulong TotalFiles { get; init; }
 

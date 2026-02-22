@@ -9,8 +9,6 @@ public static class PlatformProvider
 
     public static KernelInfo GetKernel() => KernelInfo.Create();
 
-    public static Uptime GetUptime() => new();
-
     public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
     public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
@@ -18,8 +16,6 @@ public static class PlatformProvider
     //--------------------------------------------------------------------------------
     // Load
     //--------------------------------------------------------------------------------
-
-    public static LoadAverage GetLoadAverage() => new();
 
     public static CpuUsage GetCpuUsageStat() => CpuUsage.Create();
 

@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="MacDotNet.SystemInfo/MacDotNet.SystemInfo.csproj" />
+  <Project Path="Example.SystemInfo.ConsoleApp/Example.SystemInfo.ConsoleApp.csproj" />
   <Project Path="WorkBattery/WorkBattery.csproj" Id="6a044676-6af9-42f5-abc4-7b8ba6de9f2d" />
   <Project Path="WorkCpu/WorkCpu.csproj" />
   <Project Path="WorkFileSystem/WorkFileSystem.csproj" Id="9dd8d081-3d97-4e64-a693-e22d3c3ca9d0" />

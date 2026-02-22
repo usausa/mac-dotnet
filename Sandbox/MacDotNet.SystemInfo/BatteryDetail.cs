@@ -48,6 +48,10 @@ public sealed class BatteryDetail
         if (Supported)
         {
             Update();
+            if (DesignCapacity == 0)
+            {
+                Supported = false;
+            }
         }
     }
 

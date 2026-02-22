@@ -31,6 +31,15 @@ public sealed class CpuUsage
     public double? PCoreUsage { get; private set; }
 
     //--------------------------------------------------------------------------------
+    // Constructor
+    //--------------------------------------------------------------------------------
+
+    private CpuUsage()
+    {
+        Update();
+    }
+
+    //--------------------------------------------------------------------------------
     // Factory
     //--------------------------------------------------------------------------------
 
@@ -140,17 +149,27 @@ public sealed class CpuUsage
             return;
         }
 
-        var eCoreCount = GetSystemControlInt32("hw.perflevel0.logicalcpu");
-        var pCoreCount = GetSystemControlInt32("hw.perflevel1.logicalcpu");
+        var pCoreCount = GetSystemControlInt32("hw.perflevel0.logicalcpu");
+        var eCoreCount = GetSystemControlInt32("hw.perflevel1.logicalcpu");
 
-        if (eCoreCount > 0 && UsagePerCore.Length >= eCoreCount)
+        if (pCoreCount > 0 && UsagePerCore.Length >= pCoreCount)
         {
-            ECoreUsage = UsagePerCore.Take(eCoreCount).Average();
+            var sum = 0.0;
+            for (var i = 0; i < pCoreCount; i++)
+            {
+                sum += UsagePerCore[i];
+            }
+            PCoreUsage = sum / pCoreCount;
         }
 
-        if (pCoreCount > 0 && UsagePerCore.Length >= eCoreCount + pCoreCount)
+        if (eCoreCount > 0 && UsagePerCore.Length >= pCoreCount + eCoreCount)
         {
-            PCoreUsage = UsagePerCore.Skip(eCoreCount).Take(pCoreCount).Average();
+            var sum = 0.0;
+            for (var i = pCoreCount; i < pCoreCount + eCoreCount; i++)
+            {
+                sum += UsagePerCore[i];
+            }
+            ECoreUsage = sum / eCoreCount;
         }
     }
 }

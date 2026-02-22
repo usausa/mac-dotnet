@@ -78,7 +78,7 @@ public sealed class MemoryStat
         ? ((ulong)InternalPageCount - PurgeableCount) * PageSize
         : 0;
 
-    public double UsagePercent => PhysicalMemory > 0 ? 100.0 * UsedBytes / PhysicalMemory : 0;
+    public double UsagePercent => PhysicalMemory > 0 ? (double)UsedBytes / PhysicalMemory : 0;
 
     public double CompressionRatio => CompressorPageCount > 0
         ? (double)TotalUncompressedPagesInCompressor / CompressorPageCount

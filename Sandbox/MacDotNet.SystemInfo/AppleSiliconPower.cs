@@ -33,6 +33,7 @@ public sealed class AppleSiliconPower
     private AppleSiliconPower()
     {
         Supported = InitializeReporting();
+        Update();
     }
 
     //--------------------------------------------------------------------------------
@@ -162,13 +163,20 @@ public sealed class AppleSiliconPower
 
     private static IntPtr GetEnergyModelChannels()
     {
-        var channel = IOReportCopyChannelsInGroup("Energy Model", null, 0, 0, 0);
-        if (channel == IntPtr.Zero)
+        try
+        {
+            var channel = IOReportCopyChannelsInGroup("Energy Model", null, 0, 0, 0);
+            if (channel == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            return CFDictionaryCreateMutableCopy(IntPtr.Zero, 1, channel);
+        }
+        catch (EntryPointNotFoundException)
         {
             return IntPtr.Zero;
         }
-
-        return CFDictionaryCreateMutableCopy(IntPtr.Zero, 1, channel);
     }
 
     private static double ConvertToPower(double value, string? unit)
