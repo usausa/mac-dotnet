@@ -4,30 +4,43 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class BatteryDetail
 {
+    /// <summary>バッテリー詳細情報の取得に成功したかどうか</summary>
     public bool Supported { get; private set; }
 
+    /// <summary>現在のバッテリー電圧 (V)</summary>
     public double Voltage { get; private set; }
 
+    /// <summary>現在の電流 (mA)。負の値は放電を示す</summary>
     public int Amperage { get; private set; }
 
+    /// <summary>バッテリー温度 (°C)</summary>
     public double Temperature { get; private set; }
 
+    /// <summary>充放電サイクル数</summary>
     public int CycleCount { get; private set; }
 
+    /// <summary>現在のバッテリー容量 (mAh)。AppleRawCurrentCapacity</summary>
     public int CurrentCapacity { get; private set; }
 
+    /// <summary>設計上のバッテリー容量 (mAh)</summary>
     public int DesignCapacity { get; private set; }
 
+    /// <summary>現在の最大バッテリー容量 (mAh)。Apple Silicon では AppleRawMaxCapacity</summary>
     public int MaxCapacity { get; private set; }
 
+    /// <summary>バッテリー健全性 (%)。MaxCapacity / DesignCapacity × 100</summary>
     public int Health { get; private set; }
 
+    /// <summary>接続されている AC アダプタの定格電力 (W)。接続されていない場合は 0</summary>
     public int AcWatts { get; private set; }
 
+    /// <summary>充電器が供給している電流 (mA)</summary>
     public int ChargingCurrent { get; private set; }
 
+    /// <summary>充電器が供給している電圧 (mV)</summary>
     public int ChargingVoltage { get; private set; }
 
+    /// <summary>最適化充電 (Optimized Battery Charging) が有効かどうか</summary>
     public bool OptimizedChargingEngaged { get; private set; }
 
     private readonly uint batteryService;

@@ -14,16 +14,22 @@ public sealed class AppleSiliconPower
     private double prevAneEnergy;
     private double prevRamEnergy;
 
+    /// <summary>CPU が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
     public double CpuPower { get; private set; }
 
+    /// <summary>GPU が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
     public double GpuPower { get; private set; }
 
+    /// <summary>ANE (Apple Neural Engine) が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
     public double AnePower { get; private set; }
 
+    /// <summary>RAM が消費した電力 (W)。2 回以上 Update() を呼んだ後に有効</summary>
     public double RamPower { get; private set; }
 
+    /// <summary>CPU + GPU + ANE + RAM の合計消費電力 (W)</summary>
     public double TotalPower => CpuPower + GpuPower + AnePower + RamPower;
 
+    /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか</summary>
     public bool Supported { get; }
 
     //--------------------------------------------------------------------------------

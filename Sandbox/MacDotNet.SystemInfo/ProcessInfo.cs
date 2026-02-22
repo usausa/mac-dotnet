@@ -6,48 +6,70 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed record ProcessEntry
 {
+    /// <summary>プロセス ID</summary>
     public required int Pid { get; init; }
 
+    /// <summary>親プロセス ID</summary>
     public required int ParentPid { get; init; }
 
+    /// <summary>プロセス名。最大 16 文字 (proc_bsdinfo.pbi_name)</summary>
     public required string Name { get; init; }
 
+    /// <summary>実行ファイルのフルパス。取得できない場合は空文字列</summary>
     public string Path { get; init; } = string.Empty;
 
+    /// <summary>プロセスの実行ユーザー ID</summary>
     public required uint Uid { get; init; }
 
+    /// <summary>プロセスの実行グループ ID</summary>
     public required uint Gid { get; init; }
 
+    /// <summary>スケジューリング優先度のオフセット。負の値ほど優先度が高い</summary>
     public required int Nice { get; init; }
 
+    /// <summary>プロセスが開いているファイルディスクリプタの数</summary>
     public required uint OpenFiles { get; init; }
 
+    /// <summary>プロセスの開始日時</summary>
     public required DateTimeOffset StartTime { get; init; }
 
+    /// <summary>スレッドの総数</summary>
     public required int ThreadCount { get; init; }
 
+    /// <summary>実行中のスレッド数</summary>
     public required int RunningThreadCount { get; init; }
 
+    /// <summary>仮想アドレス空間のサイズ (バイト)</summary>
     public required ulong VirtualSize { get; init; }
 
+    /// <summary>実際に使用している物理メモリ量 (バイト。RSS)</summary>
     public required ulong ResidentSize { get; init; }
 
+    /// <summary>ユーザーモードで消費した CPU 時間の累積値 (ナノ秒)</summary>
     public required ulong TotalUserTime { get; init; }
 
+    /// <summary>カーネルモードで消費した CPU 時間の累積値 (ナノ秒)</summary>
     public required ulong TotalSystemTime { get; init; }
 
+    /// <summary>ページフォルト数の累積値</summary>
     public required int Faults { get; init; }
 
+    /// <summary>ページイン数の累積値</summary>
     public required int PageIns { get; init; }
 
+    /// <summary>Copy-on-Write フォルト数の累積値</summary>
     public required int CowFaults { get; init; }
 
+    /// <summary>コンテキストスイッチ数の累積値</summary>
     public required int ContextSwitches { get; init; }
 
+    /// <summary>Mach システムコール数の累積値</summary>
     public required int SyscallsMach { get; init; }
 
+    /// <summary>Unix システムコール数の累積値</summary>
     public required int SyscallsUnix { get; init; }
 
+    /// <summary>スケジューリング優先度。値が大きいほど優先度が高い</summary>
     public required int Priority { get; init; }
 }
 

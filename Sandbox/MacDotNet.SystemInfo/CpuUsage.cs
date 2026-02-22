@@ -2,7 +2,18 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public readonly record struct CpuLoadTicks(int CpuNumber, uint User, uint System, uint Idle, uint Nice);
+/// <summary>CPU コアごとの累積ティック数のスナップショット</summary>
+public readonly record struct CpuLoadTicks(
+    /// <summary>コア番号 (0 始まり)</summary>
+    int CpuNumber,
+    /// <summary>ユーザーモードで消費したティック数</summary>
+    uint User,
+    /// <summary>カーネルモードで消費したティック数</summary>
+    uint System,
+    /// <summary>アイドル状態のティック数</summary>
+    uint Idle,
+    /// <summary>nice 値で実行されたユーザーモードのティック数</summary>
+    uint Nice);
 
 public sealed class CpuUsage
 {
@@ -12,22 +23,31 @@ public sealed class CpuUsage
     private uint previousIdleTicks;
     private uint previousNiceTicks;
 
+    /// <summary>最後に Update() を呼び出した日時</summary>
     public DateTime UpdateAt { get; private set; }
 
+    /// <summary>ユーザーモードの CPU 使用率 (0.0〜1.0)。2 回以上 Update() を呼んだ後に有効</summary>
     public double UserLoad { get; private set; }
 
+    /// <summary>カーネルモードの CPU 使用率 (0.0〜1.0)。2 回以上 Update() を呼んだ後に有効</summary>
     public double SystemLoad { get; private set; }
 
+    /// <summary>アイドル率 (0.0〜1.0)。2 回以上 Update() を呼んだ後に有効</summary>
     public double IdleLoad { get; private set; }
 
+    /// <summary>全体の CPU 使用率 (UserLoad + SystemLoad)。0.0〜1.0</summary>
     public double TotalLoad => UserLoad + SystemLoad;
 
+    /// <summary>前回の Update() 時点でのコアごとの累積ティック数</summary>
     public CpuLoadTicks[] Ticks { get; private set; } = [];
 
+    /// <summary>コアごとの CPU 使用率 (0.0〜1.0)。インデックスはコア番号に対応</summary>
     public double[] UsagePerCore { get; private set; } = [];
 
+    /// <summary>E-core (Efficiency コア) の平均使用率 (0.0〜1.0)。Apple Silicon 以外では null</summary>
     public double? ECoreUsage { get; private set; }
 
+    /// <summary>P-core (Performance コア) の平均使用率 (0.0〜1.0)。Apple Silicon 以外では null</summary>
     public double? PCoreUsage { get; private set; }
 
     //--------------------------------------------------------------------------------

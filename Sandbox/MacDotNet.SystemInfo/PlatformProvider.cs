@@ -33,6 +33,10 @@ public static class PlatformProvider
 
     public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
+    public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();
+
+    public static FileSystemUsage GetFileSystemUsage(string mountPoint) => new(mountPoint);
+
     //--------------------------------------------------------------------------------
     // Network
     //--------------------------------------------------------------------------------
@@ -58,6 +62,8 @@ public static class PlatformProvider
     public static Battery GetBattery() => new();
 
     public static BatteryDetail GetBatteryDetail() => BatteryDetail.Create();
+
+    public static BatteryGeneric GetBatteryGeneric() => BatteryGeneric.Create();
 
     public static AppleSiliconPower GetAppleSiliconPower() => AppleSiliconPower.Create();
 

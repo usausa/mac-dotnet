@@ -409,6 +409,9 @@ internal static class NativeMethods
     [DllImport("libc")]
     public static extern unsafe int getfsstat(statfs* buf, int bufsize, int mode);
 
+    [DllImport("libc", EntryPoint = "statfs")]
+    public static extern unsafe int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
+
     [DllImport("libc")]
     public static extern int getifaddrs(out IntPtr ifap);
 

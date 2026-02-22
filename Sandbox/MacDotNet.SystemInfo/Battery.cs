@@ -6,42 +6,61 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class Battery
 {
+    /// <summary>最後に Update() を呼び出した日時</summary>
     public DateTime UpdateAt { get; private set; }
 
+    /// <summary>バッテリー情報の取得に成功したかどうか</summary>
     public bool Supported { get; private set; }
 
+    /// <summary>電源の名前。例: "InternalBattery-0"</summary>
     public string Name { get; private set; } = string.Empty;
 
+    /// <summary>電源の種類。例: "InternalBattery"</summary>
     public string Type { get; private set; } = string.Empty;
 
+    /// <summary>電源の接続方式。例: "Internal"。取得できない場合は null</summary>
     public string? TransportType { get; private set; }
 
+    /// <summary>バッテリーのハードウェアシリアル番号。取得できない場合は null</summary>
     public string? HardwareSerialNumber { get; private set; }
 
+    /// <summary>バッテリーが物理的に接続されているかどうか</summary>
     public bool IsPresent { get; private set; }
 
+    /// <summary>現在の電源状態。例: "AC Power"、"Battery Power"</summary>
     public string PowerSourceState { get; private set; } = string.Empty;
 
+    /// <summary>AC 電源に接続されているかどうか</summary>
     public bool IsACConnected => string.Equals(PowerSourceState, kIOPSACPowerValue, StringComparison.Ordinal);
 
+    /// <summary>充電中かどうか</summary>
     public bool IsCharging { get; private set; }
 
+    /// <summary>満充電かどうか</summary>
     public bool IsCharged { get; private set; }
 
+    /// <summary>現在のバッテリー容量 (mAh)</summary>
     public int CurrentCapacity { get; private set; }
 
+    /// <summary>現在の最大バッテリー容量 (mAh)</summary>
     public int MaxCapacity { get; private set; }
 
+    /// <summary>バッテリー残量 (%)。CurrentCapacity / MaxCapacity × 100</summary>
     public int BatteryPercent => MaxCapacity > 0 ? (int)(100.0 * CurrentCapacity / MaxCapacity) : 0;
 
+    /// <summary>放電完了までの推定時間 (分)。不明の場合は -1</summary>
     public int TimeToEmpty { get; private set; } = -1;
 
+    /// <summary>満充電までの推定時間 (分)。不明の場合は -1</summary>
     public int TimeToFullCharge { get; private set; } = -1;
 
+    /// <summary>バッテリー健全性の評価。例: "Good"</summary>
     public string? BatteryHealth { get; private set; }
 
+    /// <summary>バッテリー健全性の詳細条件。例: "Check Battery"</summary>
     public string? BatteryHealthCondition { get; private set; }
 
+    /// <summary>設計上のサイクル数上限。取得できない場合は -1</summary>
     public int DesignCycleCount { get; private set; } = -1;
 
     //--------------------------------------------------------------------------------

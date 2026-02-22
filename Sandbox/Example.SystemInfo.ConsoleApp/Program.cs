@@ -125,6 +125,22 @@ foreach (var fs in fileSystems)
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
+// 5a. Disk Volumes (physical local volumes with updatable usage)
+// ---------------------------------------------------------------------------
+Console.WriteLine("### 5a. Disk Volumes ###");
+var volumes = PlatformProvider.GetDiskVolumes();
+foreach (var vol in volumes)
+{
+    var usage = PlatformProvider.GetFileSystemUsage(vol.MountPoint);
+    Console.WriteLine($"  {vol.MountPoint} ({vol.TypeName})");
+    Console.WriteLine($"    Device:    {vol.DeviceName}");
+    Console.WriteLine($"    Total:     {FormatBytes(usage.TotalSize)}");
+    Console.WriteLine($"    Available: {FormatBytes(usage.AvailableSize)}  ({usage.UsagePercent:P1} used)");
+    Console.WriteLine($"    ReadOnly:  {vol.IsReadOnly}");
+}
+Console.WriteLine();
+
+// ---------------------------------------------------------------------------
 // 6. Network Interfaces
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6. Network Interfaces ###");
@@ -242,6 +258,43 @@ if (batteryDetail.Supported)
 else
 {
     Console.WriteLine("  Battery detail not supported.");
+}
+Console.WriteLine();
+
+Console.WriteLine("### 9b. Battery Generic (IOPowerSources + IORegistry 統合) ###");
+var bg = PlatformProvider.GetBatteryGeneric();
+if (!bg.Supported)
+{
+    Console.WriteLine("  Battery not supported.");
+}
+else
+{
+    // ユーザー表示向けサマリ
+    Console.WriteLine($"  [Summary]");
+    Console.WriteLine($"  Name:             {bg.Name}");
+    Console.WriteLine($"  State:            {bg.PowerSourceState}");
+    Console.WriteLine($"  Charging:         {bg.IsCharging} / Charged: {bg.IsCharged}");
+    Console.WriteLine($"  Percent:          {bg.BatteryPercent}%");
+    Console.WriteLine($"  Capacity:         {bg.CurrentCapacity} / {bg.MaxCapacity} mAh");
+    Console.WriteLine($"  Health:           {bg.BatteryHealth ?? "N/A"}");
+    if (bg.TimeToEmpty >= 0) Console.WriteLine($"  Time to Empty:    {bg.TimeToEmpty} min");
+    if (bg.TimeToFullCharge >= 0) Console.WriteLine($"  Time to Full:     {bg.TimeToFullCharge} min");
+
+    if (bg.DetailSupported)
+    {
+        // 診断監視向け詳細情報
+        Console.WriteLine($"  [Detail]");
+        Console.WriteLine($"  Voltage:          {bg.Voltage:F3} V");
+        Console.WriteLine($"  Amperage:         {bg.Amperage} mA");
+        Console.WriteLine($"  Temperature:      {bg.Temperature:F1}°C");
+        Console.WriteLine($"  Cycle Count:      {bg.CycleCount}");
+        Console.WriteLine($"  Design Capacity:  {bg.DesignCapacity} mAh");
+        Console.WriteLine($"  Health:           {bg.Health}%");
+        Console.WriteLine($"  AC Watts:         {bg.AcWatts} W");
+        Console.WriteLine($"  Charging Current: {bg.ChargingCurrent} mA");
+        Console.WriteLine($"  Charging Voltage: {bg.ChargingVoltage} mV");
+        Console.WriteLine($"  Optimized Charge: {bg.OptimizedChargingEngaged}");
+    }
 }
 Console.WriteLine();
 

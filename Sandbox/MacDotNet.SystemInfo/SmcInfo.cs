@@ -6,25 +6,34 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed record SmcSensorReading
 {
+    /// <summary>SMC キー文字列。例: "TC0P"、"PSTR"</summary>
     public required string Key { get; init; }
 
+    /// <summary>センサーの説明文。例: "CPU Proximity"</summary>
     public required string Description { get; init; }
 
+    /// <summary>センサーの値。温度なら °C、電力なら W、電圧なら V</summary>
     public required double Value { get; init; }
 
+    /// <summary>SMC データ型文字列。例: "sp78"、"flt "、"fpe2"</summary>
     public required string DataType { get; init; }
 }
 
 public sealed record SmcFanEntry
 {
+    /// <summary>ファンのインデックス (0 始まり)</summary>
     public required int Index { get; init; }
 
+    /// <summary>現在の実際の回転数 (RPM)</summary>
     public required double ActualRpm { get; init; }
 
+    /// <summary>最小回転数 (RPM)</summary>
     public required double MinRpm { get; init; }
 
+    /// <summary>最大回転数 (RPM)</summary>
     public required double MaxRpm { get; init; }
 
+    /// <summary>目標回転数 (RPM)</summary>
     public required double TargetRpm { get; init; }
 }
 

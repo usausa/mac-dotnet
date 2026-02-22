@@ -13,35 +13,49 @@ public enum InterfaceState
 
 public sealed record InterfaceAddress
 {
+    /// <summary>IP アドレス文字列。例: "192.168.1.1"、"fe80::1%lo0"</summary>
     public required string Address { get; init; }
 
+    /// <summary>サブネットプレフィックス長。例: IPv4 の /24 は 24、IPv6 の /64 は 64</summary>
     public required int PrefixLength { get; init; }
 }
 
 public sealed record NetworkInterfaceEntry
 {
+    /// <summary>インターフェース名。例: "en0"、"lo0"、"utun0"</summary>
     public required string Name { get; init; }
 
+    /// <summary>インターフェースのリンク状態 (Up / Down / NoCarrier)</summary>
     public required InterfaceState State { get; init; }
 
+    /// <summary>インターフェースフラグのビットフィールド (IFF_UP、IFF_LOOPBACK など)</summary>
     public required uint Flags { get; init; }
 
+    /// <summary>ループバックインターフェースかどうか</summary>
     public bool IsLoopback => (Flags & IFF_LOOPBACK) != 0;
 
+    /// <summary>ブロードキャストをサポートするかどうか</summary>
     public bool SupportsBroadcast => (Flags & IFF_BROADCAST) != 0;
 
+    /// <summary>マルチキャストをサポートするかどうか</summary>
     public bool SupportsMulticast => (Flags & IFF_MULTICAST) != 0;
 
+    /// <summary>ポイント・ツー・ポイント接続かどうか (VPN トンネルなど)</summary>
     public bool IsPointToPoint => (Flags & IFF_POINTOPOINT) != 0;
 
+    /// <summary>MAC アドレス文字列。例: "20:a5:cb:d1:da:a0"。物理インターフェース以外では null</summary>
     public string? MacAddress { get; init; }
 
+    /// <summary>IPv4 アドレスの一覧</summary>
     public required IReadOnlyList<InterfaceAddress> IPv4Addresses { get; init; }
 
+    /// <summary>IPv6 アドレスの一覧</summary>
     public required IReadOnlyList<InterfaceAddress> IPv6Addresses { get; init; }
 
+    /// <summary>インターフェースタイプの数値コード (if_data.ifi_type)</summary>
     public byte InterfaceType { get; init; }
 
+    /// <summary>インターフェースタイプの表示名。例: "Ethernet"、"Wi-Fi"、"Loopback"</summary>
     public string InterfaceTypeName => InterfaceType switch
     {
         IFT_ETHER => "Ethernet",
@@ -54,30 +68,43 @@ public sealed record NetworkInterfaceEntry
         _ => $"Other(0x{InterfaceType:X2})",
     };
 
+    /// <summary>最大転送単位 (バイト)</summary>
     public uint Mtu { get; init; }
 
+    /// <summary>リンク速度 (bps)。0 の場合は取得不可</summary>
     public uint LinkSpeed { get; init; }
 
+    /// <summary>受信バイト数の累積値</summary>
     public uint RxBytes { get; init; }
 
+    /// <summary>受信パケット数の累積値</summary>
     public uint RxPackets { get; init; }
 
+    /// <summary>受信エラー数の累積値</summary>
     public uint RxErrors { get; init; }
 
+    /// <summary>受信ドロップ数の累積値</summary>
     public uint RxDrops { get; init; }
 
+    /// <summary>受信マルチキャストパケット数の累積値</summary>
     public uint RxMulticast { get; init; }
 
+    /// <summary>送信バイト数の累積値</summary>
     public uint TxBytes { get; init; }
 
+    /// <summary>送信パケット数の累積値</summary>
     public uint TxPackets { get; init; }
 
+    /// <summary>送信エラー数の累積値</summary>
     public uint TxErrors { get; init; }
 
+    /// <summary>送信マルチキャストパケット数の累積値</summary>
     public uint TxMulticast { get; init; }
 
+    /// <summary>コリジョン数の累積値</summary>
     public uint Collisions { get; init; }
 
+    /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
     public uint NoProto { get; init; }
 }
 

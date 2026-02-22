@@ -6,74 +6,106 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed record GpuPerformanceStatistics
 {
+    /// <summary>GPU 全体の使用率 (%)</summary>
     public required long DeviceUtilization { get; init; }
 
+    /// <summary>レンダリングパイプラインの使用率 (%)</summary>
     public required long RendererUtilization { get; init; }
 
+    /// <summary>タイラー (ジオメトリ処理) の使用率 (%)</summary>
     public required long TilerUtilization { get; init; }
 
+    /// <summary>GPU がシステムメモリに確保した総メモリ量 (バイト)</summary>
     public required long AllocSystemMemory { get; init; }
 
+    /// <summary>GPU が現在使用中のシステムメモリ量 (バイト)</summary>
     public required long InUseSystemMemory { get; init; }
 
+    /// <summary>ドライバが使用中のシステムメモリ量 (バイト)</summary>
     public required long InUseSystemMemoryDriver { get; init; }
 
+    /// <summary>タイル描画に使用されたシーンデータの総バイト数</summary>
     public required long TiledSceneBytes { get; init; }
 
+    /// <summary>パラメータバッファ (PB) に割り当てられたサイズ (バイト)</summary>
     public required long AllocatedPBSize { get; init; }
 
+    /// <summary>GPU リセット (リカバリー) の発生回数</summary>
     public required long RecoveryCount { get; init; }
 
+    /// <summary>シーン分割処理が発生した回数</summary>
     public required long SplitSceneCount { get; init; }
 
+    /// <summary>GPU 温度 (°C)。取得できない場合は 0</summary>
     public long Temperature { get; init; }
 
+    /// <summary>ファン速度 (%)。取得できない場合は 0</summary>
     public long FanSpeed { get; init; }
 
+    /// <summary>コアクロック周波数 (MHz)。取得できない場合は 0</summary>
     public long CoreClock { get; init; }
 
+    /// <summary>メモリクロック周波数 (MHz)。取得できない場合は 0</summary>
     public long MemoryClock { get; init; }
 }
 
 public sealed record GpuConfiguration
 {
+    /// <summary>GPU アーキテクチャ世代番号</summary>
     public required int GpuGeneration { get; init; }
 
+    /// <summary>GPU コア (Execution Unit) の数</summary>
     public required int NumCores { get; init; }
 
+    /// <summary>ジオメトリプロセッサ (GP) の数</summary>
     public required int NumGPs { get; init; }
 
+    /// <summary>フラグメントシェーダーユニットの数</summary>
     public required int NumFragments { get; init; }
 
+    /// <summary>マルチ GPU の数 (通常は 1)</summary>
     public required int NumMGpus { get; init; }
 
+    /// <summary>USC (Unified Shader Core) のアーキテクチャ世代番号</summary>
     public required int UscGeneration { get; init; }
 }
 
 public sealed record GpuEntry
 {
+    /// <summary>GPU モデル名。例: "Apple M2 Pro"</summary>
     public required string Model { get; init; }
 
+    /// <summary>IOKit のクラス名。例: "AGXAcceleratorG14X"</summary>
     public required string ClassName { get; init; }
 
+    /// <summary>Metal プラグイン名。例: "AGXMetalG14X"。取得できない場合は null</summary>
     public string? MetalPluginName { get; init; }
 
+    /// <summary>GPU コア数</summary>
     public required int CoreCount { get; init; }
 
+    /// <summary>GPU ベンダー ID。例: Apple Silicon の場合は 0x106B</summary>
     public required uint VendorId { get; init; }
 
+    /// <summary>GPU 温度 (°C)。取得できない場合は null</summary>
     public int? Temperature { get; init; }
 
+    /// <summary>ファン速度 (%)。取得できない場合は null</summary>
     public int? FanSpeed { get; init; }
 
+    /// <summary>コアクロック周波数 (MHz)。取得できない場合は null</summary>
     public int? CoreClock { get; init; }
 
+    /// <summary>メモリクロック周波数 (MHz)。取得できない場合は null</summary>
     public int? MemoryClock { get; init; }
 
+    /// <summary>GPU の電源状態。true = オン、false = AGC によりオフ、null = 不明</summary>
     public bool? PowerState { get; init; }
 
+    /// <summary>GPU パフォーマンス統計情報。IOAccelerator から取得できない場合は null</summary>
     public GpuPerformanceStatistics? Performance { get; init; }
 
+    /// <summary>GPU 構成情報。GPUConfigurationVariable が存在する場合のみ非 null</summary>
     public GpuConfiguration? Configuration { get; init; }
 }
 
