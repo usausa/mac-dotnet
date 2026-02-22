@@ -582,6 +582,23 @@ internal static class NativeMethods
     [DllImport(SystemConfigurationLib)]
     public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
 
+    /// <summary>インターフェースの SC レベルの種別を CFStringRef で返す。例: "Ethernet"、"IEEE80211"、"Bridge"。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
+
+    /// <summary>ネットワークサービスが有効かどうかを返す (System Settings で有効/無効切り替え可能)</summary>
+    [DllImport(SystemConfigurationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool SCNetworkServiceGetEnabled(IntPtr service);
+
+    /// <summary>ネットワークサービスの UUID 文字列を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetServiceID(IntPtr service);
+
+    /// <summary>SC preferences の指定パスの値 (CFPropertyListRef) を返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
+
     [DllImport(IOKitLib)]
     public static extern IntPtr IOReportCopyChannelsInGroup([MarshalAs(UnmanagedType.LPUTF8Str)] string? group, [MarshalAs(UnmanagedType.LPUTF8Str)] string? subgroup, ulong a, ulong b, ulong c);
 

@@ -11,6 +11,30 @@ public enum InterfaceState
     Up,
 }
 
+/// <summary>
+/// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
+/// カーネルの InterfaceType (if_data.ifi_type) とは異なり、Wi-Fi を正しく識別できる。
+/// </summary>
+public enum ScNetworkInterfaceType
+{
+    /// <summary>不明または SCNetworkService に含まれないインターフェース</summary>
+    Unknown,
+    /// <summary>"Ethernet" — 有線 Ethernet (USB Ethernet アダプタを含む)</summary>
+    Ethernet,
+    /// <summary>"IEEE80211" — Wi-Fi (AirPort)</summary>
+    WiFi,
+    /// <summary>"Bridge" — ブリッジインターフェース (Thunderbolt Bridge など)</summary>
+    Bridge,
+    /// <summary>"Bond" — ボンディングインターフェース</summary>
+    Bond,
+    /// <summary>"VLAN" — 仮想 LAN</summary>
+    Vlan,
+    /// <summary>"PPP" — PPP 接続</summary>
+    Ppp,
+    /// <summary>"VPN" — VPN インターフェース</summary>
+    Vpn,
+}
+
 public sealed record InterfaceAddress
 {
     /// <summary>IP アドレス文字列。例: "192.168.1.1"、"fe80::1%lo0"</summary>
@@ -107,11 +131,24 @@ public sealed record NetworkInterfaceEntry
     /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
     public uint NoProto { get; init; }
 
-    /// <summary>macOS System Settings で表示されるインターフェース名。例: "Ethernet"、"Wi-Fi"。SCNetworkInterfaceCopyAll に含まれないインターフェースは null</summary>
+    /// <summary>macOS System Settings で表示されるサービス名。例: "Ethernet"、"Wi-Fi"。SCNetworkServiceCopyAll に含まれないインターフェースは null</summary>
     public string? DisplayName { get; init; }
 
-    /// <summary>macOS System Settings (ネットワーク設定) に表示されるハードウェアインターフェースかどうか</summary>
+    /// <summary>macOS System Settings (ネットワーク設定) に表示されるサービスかどうか</summary>
     public bool IsHardwareInterface => DisplayName is not null;
+
+    /// <summary>
+    /// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
+    /// カーネルの InterfaceType とは異なり、Wi-Fi を IEEE80211 として正しく識別できる。
+    /// SCNetworkServiceCopyAll に含まれないインターフェースは Unknown。
+    /// </summary>
+    public ScNetworkInterfaceType ScNetworkInterfaceType { get; init; }
+
+    /// <summary>
+    /// macOS System Settings でサービスが有効かどうか。
+    /// SCNetworkServiceCopyAll に含まれないインターフェース (includeAll = true 時) は null。
+    /// </summary>
+    public bool? IsServiceEnabled { get; init; }
 }
 
 public static class NetworkInfo
@@ -131,14 +168,20 @@ public static class NetworkInfo
             return all;
         }
 
-        // SCNetworkServiceCopyAll で System Settings に表示されるサービスの BSD名→サービス名マップを取得
-        var serviceNames = GetNetworkServiceNames();
-        var result = new List<NetworkInterfaceEntry>(serviceNames.Count);
+        // SCNetworkServiceCopyAll で System Settings に表示されるサービスの BSD名→(サービス名, SC種別, 有効)マップを取得
+        // enabled=false のサービスは System Settings で無効化されているため除外する
+        var serviceMap = GetNetworkServiceMap();
+        var result = new List<NetworkInterfaceEntry>(serviceMap.Count);
         foreach (var entry in all)
         {
-            if (serviceNames.TryGetValue(entry.Name, out var serviceName))
+            if (serviceMap.TryGetValue(entry.Name, out var info) && info.isEnabled)
             {
-                result.Add(entry with { DisplayName = serviceName });
+                result.Add(entry with
+                {
+                    DisplayName = info.serviceName,
+                    ScNetworkInterfaceType = info.scType,
+                    IsServiceEnabled = true,
+                });
             }
         }
 
@@ -146,12 +189,12 @@ public static class NetworkInfo
     }
 
     /// <summary>
-    /// SCNetworkServiceCopyAll() から BSD名 → サービス名のマップを構築する。
+    /// SCNetworkServiceCopyAll() から BSD名 → (サービス名, SC種別, 有効) のマップを構築する。
     /// これが macOS System Settings のネットワーク設定に表示されるサービス一覧に相当する。
     /// </summary>
-    private static Dictionary<string, string> GetNetworkServiceNames()
+    private static Dictionary<string, (string serviceName, ScNetworkInterfaceType scType, bool isEnabled)> GetNetworkServiceMap()
     {
-        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var result = new Dictionary<string, (string, ScNetworkInterfaceType, bool)>(StringComparer.Ordinal);
 
         var appName = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
         var prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero);
@@ -190,13 +233,23 @@ public static class NetworkInfo
 
                     var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
                     var serviceNameRef = NativeMethods.SCNetworkServiceGetName(service);
+                    var scTypeRef = NativeMethods.SCNetworkInterfaceGetInterfaceType(iface);
+                    var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
+
+                    // Interface.HiddenConfiguration = True のサービスは System Settings に表示されない隠しサービス
+                    // (Thunderbolt ポート経由の自動追加 Ethernet Adapter など)
+                    if (IsHiddenConfiguration(prefs, service))
+                    {
+                        continue;
+                    }
 
                     var bsdName = NativeMethods.CfStringToManaged(bsdNameRef);
                     var serviceName = NativeMethods.CfStringToManaged(serviceNameRef);
+                    var scType = ParseScInterfaceType(NativeMethods.CfStringToManaged(scTypeRef));
 
                     if (bsdName is not null && serviceName is not null)
                     {
-                        result.TryAdd(bsdName, serviceName);
+                        result.TryAdd(bsdName, (serviceName, scType, isEnabled));
                     }
                 }
             }
@@ -212,6 +265,49 @@ public static class NetworkInfo
 
         return result;
     }
+
+    /// <summary>
+    /// SC preferences で Interface.HiddenConfiguration = True が設定されたサービスかどうかを返す。
+    /// このフラグが True のサービスは macOS System Settings のネットワーク画面に表示されない
+    /// 自動管理の隠しサービス (Thunderbolt ポート用 Ethernet Adapter 等)。
+    /// </summary>
+    private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
+    {
+        var serviceIdRef = NativeMethods.SCNetworkServiceGetServiceID(service);
+        var serviceId = NativeMethods.CfStringToManaged(serviceIdRef);
+        if (serviceId is null)
+        {
+            return false;
+        }
+
+        var pathStr = $"/NetworkServices/{serviceId}/Interface";
+        var pathRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, pathStr, NativeMethods.kCFStringEncodingUTF8);
+        var ifaceDict = NativeMethods.SCPreferencesPathGetValue(prefs, pathRef);
+        NativeMethods.CFRelease(pathRef);
+
+        if (ifaceDict == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var hiddenKeyRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "HiddenConfiguration", NativeMethods.kCFStringEncodingUTF8);
+        var hiddenRef = NativeMethods.CFDictionaryGetValue(ifaceDict, hiddenKeyRef);
+        NativeMethods.CFRelease(hiddenKeyRef);
+
+        return hiddenRef != IntPtr.Zero && NativeMethods.CFBooleanGetValue(hiddenRef);
+    }
+
+    private static ScNetworkInterfaceType ParseScInterfaceType(string? scType) => scType switch
+    {
+        "Ethernet" => ScNetworkInterfaceType.Ethernet,
+        "IEEE80211" => ScNetworkInterfaceType.WiFi,
+        "Bridge" => ScNetworkInterfaceType.Bridge,
+        "Bond" => ScNetworkInterfaceType.Bond,
+        "VLAN" => ScNetworkInterfaceType.Vlan,
+        "PPP" => ScNetworkInterfaceType.Ppp,
+        "VPN" => ScNetworkInterfaceType.Vpn,
+        _ => ScNetworkInterfaceType.Unknown,
+    };
 
     private static unsafe NetworkInterfaceEntry[] GetNetworkInterfacesAll()
     {
@@ -469,6 +565,8 @@ public static class NetworkInfo
             Collisions = Collisions,
             NoProto = NoProto,
             DisplayName = null,
+            ScNetworkInterfaceType = ScNetworkInterfaceType.Unknown,
+            IsServiceEnabled = null,
         };
     }
 }

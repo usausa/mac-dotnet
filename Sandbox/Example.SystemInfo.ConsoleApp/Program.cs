@@ -145,14 +145,14 @@ foreach (var vol in volumes)
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 6. Network Interfaces (デフォルト: macOS System Settings のネットワーク設定と同じサービスのみ)
-// 全インターフェースを取得したい場合は GetNetworkInterfaces(includeAll: true)
+// 6. Network Interfaces (デフォルト: macOS System Settings で有効なサービスのみ)
+// 無効化されたサービスは除外。全インターフェースを取得したい場合は GetNetworkInterfaces(includeAll: true)
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6. Network Interfaces ###");
 var interfaces = PlatformProvider.GetNetworkInterfaces();
 foreach (var iface in interfaces)
 {
-    Console.WriteLine($"  [{iface.Name}] {iface.DisplayName} - {iface.State}");
+    Console.WriteLine($"  [{iface.Name}] {iface.DisplayName} ({iface.ScNetworkInterfaceType}) - {iface.State}");
     if (!string.IsNullOrEmpty(iface.MacAddress))
     {
         Console.WriteLine($"    MAC:    {iface.MacAddress}");
