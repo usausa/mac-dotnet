@@ -706,4 +706,185 @@ internal static class NativeMethods
             ? Marshal.PtrToStringUTF8((IntPtr)buffer)
             : null;
     }
+
+    //------------------------------------------------------------------------
+    // IOKit property helpers
+    //------------------------------------------------------------------------
+
+    public static unsafe string? GetIokitString(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    public static long GetIokitNumber(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (CFGetTypeID(val) != CFNumberGetTypeID())
+                {
+                    return 0;
+                }
+
+                long result = 0;
+                CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
+                return result;
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    public static uint GetIokitDataUInt32LE(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (CFGetTypeID(val) != CFDataGetTypeID())
+                {
+                    return 0;
+                }
+
+                var len = CFDataGetLength(val);
+                if (len < 4)
+                {
+                    return 0;
+                }
+
+                var ptr = CFDataGetBytePtr(val);
+                return (uint)(Marshal.ReadByte(ptr, 0)
+                    | (Marshal.ReadByte(ptr, 1) << 8)
+                    | (Marshal.ReadByte(ptr, 2) << 16)
+                    | (Marshal.ReadByte(ptr, 3) << 24));
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>IOKit エントリから CFDictionary プロパティを取得する。戻り値が非 Zero の場合は呼び出し元が CFRelease する必要がある</summary>
+    public static IntPtr GetIokitDictionary(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            if (CFGetTypeID(val) != CFDictionaryGetTypeID())
+            {
+                CFRelease(val);
+                return IntPtr.Zero;
+            }
+
+            return val;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    public static long GetIokitDictNumber(IntPtr dict, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = CFDictionaryGetValue(dict, cfKey);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            if (CFGetTypeID(val) != CFNumberGetTypeID())
+            {
+                return 0;
+            }
+
+            long result = 0;
+            CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
+            return result;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
 }

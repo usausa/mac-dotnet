@@ -17,7 +17,7 @@ public static class PlatformProvider
     // Load
     //--------------------------------------------------------------------------------
 
-    public static CpuUsage GetCpuUsageStat() => CpuUsage.Create();
+    public static CpuStat GetCpuStat() => CpuStat.Create();
 
     //--------------------------------------------------------------------------------
     // Memory
@@ -74,7 +74,9 @@ public static class PlatformProvider
     // GPU
     //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
+    public static GpuInfo[] GetGpuInfos() => HardwareInfo.GetGpus();
+
+    public static GpuDevice[] GetGpuDevices() => GpuDevice.GetDevices();
 
     //--------------------------------------------------------------------------------
     // Power

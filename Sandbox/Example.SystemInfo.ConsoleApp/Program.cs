@@ -61,29 +61,70 @@ if (perfLevels.Count > 0)
 }
 
 // ---------------------------------------------------------------------------
-// 3. CPU Usage  (constructor takes first snapshot; Update() after interval computes delta)
+// 3. CPU Stat  (1回目のスナップショットを保存し、500ms後に差分を計算して使用率を求める)
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 3. CPU Usage ###");
+Console.WriteLine("### 3. CPU Stat ###");
 Console.WriteLine("  Measuring (500ms)...");
-var cpu = PlatformProvider.GetCpuUsageStat();
+var cpuStat = PlatformProvider.GetCpuStat();
+
+// 1回目スナップショットを保存 (CpuCoreStat はミュータブルなため値をコピー)
+var prevTotalUser = cpuStat.CpuTotal.User;
+var prevTotalSystem = cpuStat.CpuTotal.System;
+var prevTotalIdle = cpuStat.CpuTotal.Idle;
+var prevTotalNice = cpuStat.CpuTotal.Nice;
+var prevCores = cpuStat.CpuCores.Select(c => (c.User, c.System, c.Idle, c.Nice)).ToArray();
+
 Thread.Sleep(500);
-cpu.Update();
-Console.WriteLine($"  User:             {cpu.UserLoad:P2}");
-Console.WriteLine($"  System:           {cpu.SystemLoad:P2}");
-Console.WriteLine($"  Idle:             {cpu.IdleLoad:P2}");
-Console.WriteLine($"  Total:            {cpu.TotalLoad:P2}");
-if (cpu.ECoreUsage is not null)
+cpuStat.Update();
+
+// 全体の使用率を計算
+var dUser = cpuStat.CpuTotal.User - prevTotalUser;
+var dSystem = cpuStat.CpuTotal.System - prevTotalSystem;
+var dIdle = cpuStat.CpuTotal.Idle - prevTotalIdle;
+var dNice = cpuStat.CpuTotal.Nice - prevTotalNice;
+var dTotal = dUser + dSystem + dIdle + dNice;
+var userLoad = dTotal > 0 ? (double)dUser / dTotal : 0;
+var systemLoad = dTotal > 0 ? (double)dSystem / dTotal : 0;
+var idleLoad = dTotal > 0 ? (double)dIdle / dTotal : 0;
+
+Console.WriteLine($"  User:             {userLoad:P2}");
+Console.WriteLine($"  System:           {systemLoad:P2}");
+Console.WriteLine($"  Idle:             {idleLoad:P2}");
+Console.WriteLine($"  Total:            {userLoad + systemLoad:P2}");
+
+// Apple Silicon P-core / E-core の平均使用率
+if (hw.PCoreCount > 0 && hw.ECoreCount > 0)
 {
-    Console.WriteLine($"  E-Core Average:   {cpu.ECoreUsage:P2}");
+    var pLoad = 0.0;
+    for (var i = 0; i < hw.PCoreCount && i < cpuStat.CpuCores.Count; i++)
+    {
+        var c = cpuStat.CpuCores[i];
+        var p = prevCores[i];
+        var dt = (c.User - p.User) + (c.System - p.System) + (c.Idle - p.Idle) + (c.Nice - p.Nice);
+        pLoad += dt > 0 ? (double)((c.User - p.User) + (c.System - p.System) + (c.Nice - p.Nice)) / dt : 0;
+    }
+    Console.WriteLine($"  P-Core Average:   {pLoad / hw.PCoreCount:P2}");
+
+    var eLoad = 0.0;
+    for (var i = hw.PCoreCount; i < hw.PCoreCount + hw.ECoreCount && i < cpuStat.CpuCores.Count; i++)
+    {
+        var c = cpuStat.CpuCores[i];
+        var p = prevCores[i];
+        var dt = (c.User - p.User) + (c.System - p.System) + (c.Idle - p.Idle) + (c.Nice - p.Nice);
+        eLoad += dt > 0 ? (double)((c.User - p.User) + (c.System - p.System) + (c.Nice - p.Nice)) / dt : 0;
+    }
+    Console.WriteLine($"  E-Core Average:   {eLoad / hw.ECoreCount:P2}");
 }
-if (cpu.PCoreUsage is not null)
+
+// コアごとの使用率
+Console.WriteLine($"  Per-Core ({cpuStat.CpuCores.Count} cores):");
+for (var i = 0; i < Math.Min(cpuStat.CpuCores.Count, 12); i++)
 {
-    Console.WriteLine($"  P-Core Average:   {cpu.PCoreUsage:P2}");
-}
-Console.WriteLine($"  Per-Core ({cpu.UsagePerCore.Length} cores):");
-for (var i = 0; i < Math.Min(cpu.UsagePerCore.Length, 12); i++)
-{
-    Console.WriteLine($"    Core {i,2}: {cpu.UsagePerCore[i]:P2}");
+    var c = cpuStat.CpuCores[i];
+    var p = prevCores[i];
+    var dt = (c.User - p.User) + (c.System - p.System) + (c.Idle - p.Idle) + (c.Nice - p.Nice);
+    var usage = dt > 0 ? (double)((c.User - p.User) + (c.System - p.System) + (c.Nice - p.Nice)) / dt : 0;
+    Console.WriteLine($"    Core {i,2}: {usage:P2}");
 }
 Console.WriteLine();
 
@@ -216,30 +257,38 @@ Console.WriteLine($"  Total processes: {processes.Length}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 8. GPU
+// 8. GPU  (HardwareInfo.GetGpuInfos: 静的情報 / GpuDevice: 動的統計・センサー)
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 8. GPU ###");
-var gpus = PlatformProvider.GetGpus();
-if (gpus.Count == 0)
+var gpuInfos = PlatformProvider.GetGpuInfos();
+var gpuDevices = PlatformProvider.GetGpuDevices();
+if (gpuDevices.Length == 0)
 {
     Console.WriteLine("  No GPU found.");
 }
-foreach (var gpu in gpus)
+foreach (var device in gpuDevices)
 {
-    Console.WriteLine($"  {gpu.Model ?? "Unknown GPU"}");
-    Console.WriteLine($"    Cores:       {gpu.CoreCount}");
-    if (gpu.Performance is not null)
+    var info = Array.Find(gpuInfos, g => g.ClassName == device.Name);
+    Console.WriteLine($"  {info?.Model ?? device.Name}");
+    Console.WriteLine($"    Class:       {device.Name}");
+    if (info is not null)
     {
-        var perf = gpu.Performance;
-        Console.WriteLine($"    Utilization: {perf.DeviceUtilization}%");
-        if (perf.Temperature > 0)
+        Console.WriteLine($"    Cores:       {info.CoreCount}");
+        Console.WriteLine($"    VendorId:    0x{info.VendorId:X4}");
+        if (info.Configuration is not null)
         {
-            Console.WriteLine($"    Temperature: {perf.Temperature}°C");
+            Console.WriteLine($"    GPU Gen:     {info.Configuration.GpuGeneration}");
         }
     }
-    if (gpu.Temperature is not null)
+    Console.WriteLine($"    Utilization: {device.DeviceUtilization}%  (Renderer={device.RendererUtilization}%, Tiler={device.TilerUtilization}%)");
+    Console.WriteLine($"    Mem Used:    {FormatBytes((ulong)device.InUseSystemMemory)}");
+    if (device.Temperature is not null)
     {
-        Console.WriteLine($"    Temperature: {gpu.Temperature}°C");
+        Console.WriteLine($"    Temperature: {device.Temperature}°C");
+    }
+    if (device.PowerState is not null)
+    {
+        Console.WriteLine($"    Power:       {(device.PowerState.Value ? "On" : "Off (AGC)")}");
     }
 }
 Console.WriteLine();

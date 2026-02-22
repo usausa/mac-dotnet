@@ -2,6 +2,50 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+/// <summary>GPU の静的なハードウェア構成情報 (GPUConfigurationVariable)</summary>
+public sealed record GpuConfiguration
+{
+    /// <summary>GPU アーキテクチャ世代番号</summary>
+    public required int GpuGeneration { get; init; }
+
+    /// <summary>GPU コア (Execution Unit) の数</summary>
+    public required int NumCores { get; init; }
+
+    /// <summary>ジオメトリプロセッサ (GP) の数</summary>
+    public required int NumGPs { get; init; }
+
+    /// <summary>フラグメントシェーダーユニットの数</summary>
+    public required int NumFragments { get; init; }
+
+    /// <summary>マルチ GPU の数 (通常は 1)</summary>
+    public required int NumMGpus { get; init; }
+
+    /// <summary>USC (Unified Shader Core) のアーキテクチャ世代番号</summary>
+    public required int UscGeneration { get; init; }
+}
+
+/// <summary>GPU の静的なハードウェア識別情報。HardwareInfo.GetGpus() で取得する</summary>
+public sealed record GpuInfo
+{
+    /// <summary>GPU モデル名。例: "Apple M2 Pro"</summary>
+    public required string Model { get; init; }
+
+    /// <summary>IOKit のクラス名。GpuDevice.Name と対応する。例: "AGXAcceleratorG14X"</summary>
+    public required string ClassName { get; init; }
+
+    /// <summary>Metal プラグイン名。例: "AGXMetalG14X"。取得できない場合は null</summary>
+    public string? MetalPluginName { get; init; }
+
+    /// <summary>GPU コア数</summary>
+    public required int CoreCount { get; init; }
+
+    /// <summary>GPU ベンダー ID。例: Apple Silicon の場合は 0x106B</summary>
+    public required uint VendorId { get; init; }
+
+    /// <summary>GPU 構成情報。GPUConfigurationVariable が存在する場合のみ非 null</summary>
+    public GpuConfiguration? Configuration { get; init; }
+}
+
 public sealed record PerformanceLevelEntry
 {
     /// <summary>パフォーマンスレベルのインデックス。0 が最高性能 (P-core)、1 以降が省電力 (E-core)</summary>
@@ -109,6 +153,12 @@ public sealed class HardwareInfo
     /// <summary>64 ビット対応かどうか (hw.cpu64bit_capable)</summary>
     public bool Cpu64BitCapable { get; }
 
+    /// <summary>パフォーマンスコア (P-core) の論理コア数 (hw.perflevel0.logicalcpu)。Apple Silicon 以外では 0</summary>
+    public int PCoreCount { get; }
+
+    /// <summary>効率コア (E-core) の論理コア数 (hw.perflevel1.logicalcpu)。Apple Silicon 以外では 0</summary>
+    public int ECoreCount { get; }
+
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
@@ -142,6 +192,9 @@ public sealed class HardwareInfo
         L3CacheSize = GetSystemControlInt64("hw.l3cachesize");
         Packages = GetSystemControlInt32("hw.packages");
         Cpu64BitCapable = GetSystemControlInt32("hw.cpu64bit_capable") != 0;
+        var nperflevels = GetSystemControlInt32("hw.nperflevels");
+        PCoreCount = nperflevels > 0 ? GetSystemControlInt32("hw.perflevel0.logicalcpu") : 0;
+        ECoreCount = nperflevels > 1 ? GetSystemControlInt32("hw.perflevel1.logicalcpu") : 0;
     }
 
     //--------------------------------------------------------------------------------
@@ -149,6 +202,79 @@ public sealed class HardwareInfo
     //--------------------------------------------------------------------------------
 
     public static HardwareInfo Create() => new();
+
+    /// <summary>システムに搭載されているすべての GPU の静的ハードウェア情報を返す</summary>
+    public static GpuInfo[] GetGpus()
+    {
+        var iter = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iter);
+        if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
+        {
+            return [];
+        }
+
+        try
+        {
+            var results = new List<GpuInfo>();
+            uint entry;
+            while ((entry = IOIteratorNext(iter)) != 0)
+            {
+                try
+                {
+                    results.Add(ReadGpuInfo(entry));
+                }
+                finally
+                {
+                    IOObjectRelease(entry);
+                }
+            }
+
+            return [.. results];
+        }
+        finally
+        {
+            IOObjectRelease(iter);
+        }
+    }
+
+    private static GpuInfo ReadGpuInfo(uint entry)
+    {
+        return new GpuInfo
+        {
+            Model = GetIokitString(entry, "model") ?? "(unknown)",
+            ClassName = GetIokitString(entry, "IOClass") ?? "(unknown)",
+            MetalPluginName = GetIokitString(entry, "MetalPluginName"),
+            CoreCount = (int)GetIokitNumber(entry, "gpu-core-count"),
+            VendorId = GetIokitDataUInt32LE(entry, "vendor-id"),
+            Configuration = ReadGpuConfiguration(entry),
+        };
+    }
+
+    private static GpuConfiguration? ReadGpuConfiguration(uint entry)
+    {
+        var dict = GetIokitDictionary(entry, "GPUConfigurationVariable");
+        if (dict == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            return new GpuConfiguration
+            {
+                GpuGeneration = (int)GetIokitDictNumber(dict, "gpu_gen"),
+                NumCores = (int)GetIokitDictNumber(dict, "num_cores"),
+                NumGPs = (int)GetIokitDictNumber(dict, "num_gps"),
+                NumFragments = (int)GetIokitDictNumber(dict, "num_frags"),
+                NumMGpus = (int)GetIokitDictNumber(dict, "num_mgpus"),
+                UscGeneration = (int)GetIokitDictNumber(dict, "usc_gen"),
+            };
+        }
+        finally
+        {
+            CFRelease(dict);
+        }
+    }
 
     public static PerformanceLevelEntry[] GetPerformanceLevels()
     {
