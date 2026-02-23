@@ -4,8 +4,11 @@ using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
 // NVMe SMARTセッション
+// NVMe SMART session.
 // IOCreatePlugInInterfaceForServiceで取得したプラグインインターフェースを保持し、
 // SMARTReadDataを繰り返し呼び出すことで最新のSMARTデータを取得する。
+// Holds the plug-in interface obtained via IOCreatePlugInInterfaceForService
+// and retrieves the latest SMART data by repeatedly calling SMARTReadData.
 #pragma warning disable CA1806
 #pragma warning disable SA1309
 internal sealed class SmartNvme : ISmartNvme, IDisposable
@@ -13,10 +16,12 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
     private const int SmartDataSize = 512;
 
     // プラグインインターフェースハンドル (COM-like二重ポインタ)
-    private nint pluginInterface;
+    // Plug-in interface handle (COM-like double pointer)
+    private IntPtr pluginInterface;
 
     // NVMe SMARTインターフェースハンドル
-    private nint smartInterface;
+    // NVMe SMART interface handle
+    private IntPtr smartInterface;
 
     public bool LastUpdate { get; private set; }
 
@@ -56,7 +61,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     public short[] TemperatureSensors { get; } = new short[8];
 
-    private SmartNvme(nint pluginInterface, nint smartInterface)
+    private SmartNvme(IntPtr pluginInterface, IntPtr smartInterface)
     {
         this.pluginInterface = pluginInterface;
         this.smartInterface = smartInterface;
@@ -64,26 +69,27 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     public void Dispose()
     {
-        if (smartInterface != nint.Zero)
+        if (smartInterface != IntPtr.Zero)
         {
             ReleasePlugInInterface(smartInterface);
-            smartInterface = nint.Zero;
+            smartInterface = IntPtr.Zero;
         }
 
-        if (pluginInterface != nint.Zero)
+        if (pluginInterface != IntPtr.Zero)
         {
             ReleasePlugInInterface(pluginInterface);
-            pluginInterface = nint.Zero;
+            pluginInterface = IntPtr.Zero;
         }
     }
 
     // デバイスサービスからSMARTセッションを開く
+    // Opens a SMART session from the device service
     public static unsafe SmartNvme? Open(uint service)
     {
         // NVMeSMARTLib plugin UUID (kIONVMeSMARTUserClientTypeID)
 #pragma warning disable SA1117
         var pluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
-            nint.Zero,
+            IntPtr.Zero,
             0xAA, 0x0F, 0xA6, 0xF9, 0xC2, 0xD6, 0x45, 0x7F,
             0xB1, 0x0B, 0x59, 0xA1, 0x32, 0x53, 0x29, 0x2F);
 #pragma warning restore SA1117
@@ -91,28 +97,29 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         // IOCFPlugInInterface UUID
 #pragma warning disable SA1117
         var cfPluginUuid = CFUUIDGetConstantUUIDWithBytes(
-            nint.Zero,
+            IntPtr.Zero,
             0xC2, 0x44, 0xE8, 0x58, 0x10, 0x9C, 0x11, 0xD4,
             0x91, 0xD4, 0x00, 0x50, 0xE4, 0xC6, 0x42, 0x6F);
 #pragma warning restore SA1117
 
-        if (pluginTypeUuid == nint.Zero || cfPluginUuid == nint.Zero)
+        if (pluginTypeUuid == IntPtr.Zero || cfPluginUuid == IntPtr.Zero)
         {
             return null;
         }
 
-        nint ppPlugin;
+        IntPtr ppPlugin;
         int score;
         var kr = IOCreatePlugInInterfaceForService(
             service, pluginTypeUuid, cfPluginUuid, &ppPlugin, &score);
-        if (kr != KERN_SUCCESS || ppPlugin == nint.Zero)
+        if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
         {
             return null;
         }
 
         // QueryInterfaceでSMARTインターフェースを取得
-        var vtable = *(nint*)ppPlugin;
-        var qiFn = (delegate* unmanaged<nint, CFUUIDBytes, nint*, int>)(*((nint*)vtable + 1));
+        // Obtain the SMART interface via QueryInterface
+        var vtable = *(IntPtr*)ppPlugin;
+        var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
 
         // NVMe SMART Interface UUID (kIONVMeSMARTInterfaceID)
         var smartUuid = new CFUUIDBytes
@@ -123,9 +130,9 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6
         };
 
-        var pSmartInterface = nint.Zero;
+        var pSmartInterface = IntPtr.Zero;
         var hr = qiFn(ppPlugin, smartUuid, &pSmartInterface);
-        if (hr != S_OK || pSmartInterface == nint.Zero)
+        if (hr != S_OK || pSmartInterface == IntPtr.Zero)
         {
             ReleasePlugInInterface(ppPlugin);
             return null;
@@ -135,9 +142,10 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
     }
 
     // SMARTデータ読み取り (繰り返し呼び出し可能)
+    // Reads SMART data (can be called repeatedly)
     public unsafe bool Update()
     {
-        if (smartInterface == nint.Zero)
+        if (smartInterface == IntPtr.Zero)
         {
             LastUpdate = false;
             return false;
@@ -149,8 +157,10 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         //   40: SMARTReadData
         // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
         //       macOSのアップデートにより変更される可能性がある。
-        var smartVtable = *(nint*)smartInterface;
-        var readDataFn = (delegate* unmanaged<nint, byte*, int>)(*(nint*)((byte*)smartVtable + 40));
+        // Note: This offset depends on the private Apple API layout
+        //       and may change with macOS updates.
+        var smartVtable = *(IntPtr*)smartInterface;
+        var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 40));
 
         var buffer = stackalloc byte[SmartDataSize];
         var kr = readDataFn(smartInterface, buffer);
@@ -189,6 +199,8 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     // NVMe仕様では一部カウンタが128-bitリトルエンディアンで格納される。
     // 実運用上は下位64-bitに収まるため上位8バイトは無視する。
+    // In the NVMe spec, some counters are stored as 128-bit little-endian.
+    // In practice they fit in the lower 64 bits, so the upper 8 bytes are ignored.
     private static unsafe ulong Le128ToUInt64(byte* p)
     {
         var v = 0ul;

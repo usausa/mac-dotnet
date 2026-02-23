@@ -5,20 +5,28 @@ using System.Runtime.InteropServices;
 using static MacDotNet.Disk.NativeMethods;
 
 // ディスク情報取得処理
+// Disk information retrieval.
 // IOBlockStorageDeviceをマッチングキーとして使用し、
 // IOKitレジストリからディスクの各種プロパティを取得する。
+// Uses IOBlockStorageDevice as the matching key to retrieve
+// various disk properties from the IOKit registry.
 #pragma warning disable CA1806
 public static class DiskInfo
 {
+    /// <summary>
+    /// 接続されている全ディスクの情報を取得する。
+    /// Retrieves information for all connected disks.
+    /// </summary>
     public static IReadOnlyList<IDiskInfo> GetInformation()
     {
         var matching = IOServiceMatching("IOBlockStorageDevice");
-        if (matching == nint.Zero)
+        if (matching == IntPtr.Zero)
         {
             return [];
         }
 
         // IOServiceGetMatchingServicesはmatchingを消費する (CFRelease不要)
+        // IOServiceGetMatchingServices consumes matching (no CFRelease needed)
         var iter = 0u;
         if (IOServiceGetMatchingServices(0, matching, ref iter) != KERN_SUCCESS || iter == 0)
         {
@@ -50,14 +58,19 @@ public static class DiskInfo
         }
     }
 
+    /// <summary>
+    /// 個々のIORegistryエントリからディスク情報を読み取る。
+    /// Reads disk information from an individual IORegistry entry.
+    /// </summary>
     private static unsafe DiskInfoGeneric ReadDiskEntry(uint entry, uint index)
     {
-        // IORegistryエントリ名を取得
+        // IORegistryエントリ名を取得 / Get the IORegistry entry name
         var nameBuf = stackalloc byte[128];
         IORegistryEntryGetName(entry, nameBuf);
-        var deviceName = Marshal.PtrToStringUTF8((nint)nameBuf);
+        var deviceName = Marshal.PtrToStringUTF8((IntPtr)nameBuf);
 
         // Device Characteristics辞書からデバイス基本情報を取得
+        // Retrieve basic device info from the Device Characteristics dictionary
         string? modelName = null;
         string? vendorName = null;
         string? serialNumber = null;
@@ -65,7 +78,7 @@ public static class DiskInfo
         string? mediumType = null;
 
         var devCharDict = GetDictionaryProperty(entry, "Device Characteristics");
-        if (devCharDict != nint.Zero)
+        if (devCharDict != IntPtr.Zero)
         {
             try
             {
@@ -82,11 +95,12 @@ public static class DiskInfo
         }
 
         // Protocol Characteristics辞書からバス情報を取得
+        // Retrieve bus information from the Protocol Characteristics dictionary
         string? physInterconnect = null;
         string? physInterconnectLocation = null;
 
         var protoCharDict = GetDictionaryProperty(entry, "Protocol Characteristics");
-        if (protoCharDict != nint.Zero)
+        if (protoCharDict != IntPtr.Zero)
         {
             try
             {
@@ -100,6 +114,7 @@ public static class DiskInfo
         }
 
         // 子エントリを再帰検索してIOMedia/IOBlockStorageDriverのプロパティを取得
+        // Recursively search child entries to obtain IOMedia / IOBlockStorageDriver properties
         var bsdName = SearchStringProperty(entry, "BSD Name");
         var diskSize = SearchNumberProperty(entry, "Size");
         var logicalBlockSize = SearchNumberProperty(entry, "Preferred Block Size");
@@ -109,9 +124,10 @@ public static class DiskInfo
         var contentType = SearchStringProperty(entry, "Content");
 
         // IOBlockStorageDriverのStatistics辞書からI/O統計を取得
+        // Retrieve I/O statistics from the IOBlockStorageDriver Statistics dictionary
         DiskIOStatistics? ioStats = null;
         var statsDict = SearchDictionaryProperty(entry, "Statistics");
-        if (statsDict != nint.Zero)
+        if (statsDict != IntPtr.Zero)
         {
             try
             {
@@ -138,18 +154,20 @@ public static class DiskInfo
         }
 
         // 物理ブロックサイズが取得できなかった場合、論理ブロックサイズをフォールバック
+        // Fall back to logical block size when physical block size is unavailable
         if (physicalBlockSize <= 0 && logicalBlockSize > 0)
         {
             physicalBlockSize = logicalBlockSize;
         }
 
         // モデル名の構築 (ベンダ名がある場合は結合)
+        // Build the model string (concatenate vendor name if present)
         var model = BuildModelString(modelName, vendorName);
 
-        // バス種別の判定
+        // バス種別の判定 / Determine the bus type
         var busType = ParseBusType(physInterconnect);
 
-        // SMARTセッションの作成
+        // SMARTセッションの作成 / Create SMART session
         SmartType smartType;
         ISmart smart;
 
@@ -220,6 +238,10 @@ public static class DiskInfo
         }
     }
 
+    /// <summary>
+    /// モデル文字列を構築する (ベンダ名がある場合は結合)。
+    /// Builds the model string, concatenating vendor name if present.
+    /// </summary>
     private static string BuildModelString(string? modelName, string? vendorName)
     {
         var model = modelName?.Trim();
@@ -233,6 +255,8 @@ public static class DiskInfo
         return model ?? vendor ?? string.Empty;
     }
 
+    // 物理接続文字列からバス種別を判定する
+    // Determines the bus type from the physical interconnect string
     // ReSharper disable StringLiteralTypo
     private static BusType ParseBusType(string? physInterconnect) => physInterconnect switch
     {
@@ -252,30 +276,31 @@ public static class DiskInfo
     // ReSharper restore StringLiteralTypo
 
     //------------------------------------------------------------------------
-    // IORegistry ヘルパー
+    // IORegistry ヘルパー / IORegistry Helpers
     //------------------------------------------------------------------------
 
     // IORegistryから辞書プロパティを直接取得 (呼び出し元がCFReleaseすること)
-    private static nint GetDictionaryProperty(uint entry, string key)
+    // Directly retrieves a dictionary property from the IORegistry (caller must CFRelease)
+    private static IntPtr GetDictionaryProperty(uint entry, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
-            return nint.Zero;
+            return IntPtr.Zero;
         }
 
         try
         {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, nint.Zero, 0);
-            if (val == nint.Zero)
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
             {
-                return nint.Zero;
+                return IntPtr.Zero;
             }
 
             if (CFGetTypeID(val) != CFDictionaryGetTypeID())
             {
                 CFRelease(val);
-                return nint.Zero;
+                return IntPtr.Zero;
             }
 
             return val;
@@ -287,10 +312,11 @@ public static class DiskInfo
     }
 
     // 子エントリを再帰検索して文字列プロパティを取得
+    // Recursively searches child entries to retrieve a string property
     private static string? SearchStringProperty(uint entry, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             return null;
         }
@@ -298,8 +324,8 @@ public static class DiskInfo
         try
         {
             var val = IORegistryEntrySearchCFProperty(
-                entry, kIOServicePlane, cfKey, nint.Zero, kIORegistryIterateRecursively);
-            if (val == nint.Zero)
+                entry, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively);
+            if (val == IntPtr.Zero)
             {
                 return null;
             }
@@ -320,10 +346,11 @@ public static class DiskInfo
     }
 
     // 子エントリを再帰検索して数値プロパティを取得
+    // Recursively searches child entries to retrieve a numeric property
     private static long SearchNumberProperty(uint entry, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             return 0;
         }
@@ -331,8 +358,8 @@ public static class DiskInfo
         try
         {
             var val = IORegistryEntrySearchCFProperty(
-                entry, kIOServicePlane, cfKey, nint.Zero, kIORegistryIterateRecursively);
-            if (val == nint.Zero)
+                entry, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively);
+            if (val == IntPtr.Zero)
             {
                 return 0;
             }
@@ -360,10 +387,11 @@ public static class DiskInfo
     }
 
     // 子エントリを再帰検索して真偽値プロパティを取得
+    // Recursively searches child entries to retrieve a boolean property
     private static bool SearchBoolProperty(uint entry, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             return false;
         }
@@ -371,8 +399,8 @@ public static class DiskInfo
         try
         {
             var val = IORegistryEntrySearchCFProperty(
-                entry, kIOServicePlane, cfKey, nint.Zero, kIORegistryIterateRecursively);
-            if (val == nint.Zero)
+                entry, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively);
+            if (val == IntPtr.Zero)
             {
                 return false;
             }
@@ -393,27 +421,28 @@ public static class DiskInfo
     }
 
     // 子エントリを再帰検索して辞書プロパティを取得 (呼び出し元がCFReleaseすること)
-    private static nint SearchDictionaryProperty(uint entry, string key)
+    // Recursively searches child entries to retrieve a dictionary property (caller must CFRelease)
+    private static IntPtr SearchDictionaryProperty(uint entry, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
-            return nint.Zero;
+            return IntPtr.Zero;
         }
 
         try
         {
             var val = IORegistryEntrySearchCFProperty(
-                entry, kIOServicePlane, cfKey, nint.Zero, kIORegistryIterateRecursively);
-            if (val == nint.Zero)
+                entry, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively);
+            if (val == IntPtr.Zero)
             {
-                return nint.Zero;
+                return IntPtr.Zero;
             }
 
             if (CFGetTypeID(val) != CFDictionaryGetTypeID())
             {
                 CFRelease(val);
-                return nint.Zero;
+                return IntPtr.Zero;
             }
 
             return val;
@@ -425,10 +454,11 @@ public static class DiskInfo
     }
 
     // CFDictionaryから文字列値を取得
-    internal static string? GetDictString(nint dict, string key)
+    // Retrieves a string value from a CFDictionary
+    internal static string? GetDictString(IntPtr dict, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             return null;
         }
@@ -436,8 +466,9 @@ public static class DiskInfo
         try
         {
             // CFDictionaryGetValueはGet規則 — 返り値をCFReleaseしてはならない
+            // CFDictionaryGetValue follows the Get Rule — the returned value must NOT be CFReleased
             var val = CFDictionaryGetValue(dict, cfKey);
-            if (val == nint.Zero)
+            if (val == IntPtr.Zero)
             {
                 return null;
             }
@@ -451,10 +482,11 @@ public static class DiskInfo
     }
 
     // CFDictionaryから数値を取得
-    internal static long GetDictNumber(nint dict, string key)
+    // Retrieves a numeric value from a CFDictionary
+    internal static long GetDictNumber(IntPtr dict, string key)
     {
-        var cfKey = CFStringCreateWithCString(nint.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             return 0;
         }
@@ -462,7 +494,7 @@ public static class DiskInfo
         try
         {
             var val = CFDictionaryGetValue(dict, cfKey);
-            if (val == nint.Zero)
+            if (val == IntPtr.Zero)
             {
                 return 0;
             }
@@ -483,10 +515,11 @@ public static class DiskInfo
     }
 
     // CFStringをマネージド文字列に変換
-    internal static unsafe string? CfStringToManaged(nint cfString)
+    // Converts a CFString to a managed string
+    internal static unsafe string? CfStringToManaged(IntPtr cfString)
     {
         var ptr = CFStringGetCStringPtr(cfString, kCFStringEncodingUTF8);
-        if (ptr != nint.Zero)
+        if (ptr != IntPtr.Zero)
         {
             return Marshal.PtrToStringUTF8(ptr);
         }
@@ -498,6 +531,7 @@ public static class DiskInfo
         }
 
         // CFStringGetCStringPtrが失敗した場合のフォールバック
+        // Fallback when CFStringGetCStringPtr fails
         const int stackAllocThreshold = 1024;
         var bufSize = (int)((length * 4) + 1);
 
@@ -505,7 +539,7 @@ public static class DiskInfo
         {
             var buf = stackalloc byte[bufSize];
             return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-                ? Marshal.PtrToStringUTF8((nint)buf)
+                ? Marshal.PtrToStringUTF8((IntPtr)buf)
                 : null;
         }
 
@@ -515,7 +549,7 @@ public static class DiskInfo
             fixed (byte* buf = rented)
             {
                 return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-                    ? Marshal.PtrToStringUTF8((nint)buf)
+                    ? Marshal.PtrToStringUTF8((IntPtr)buf)
                     : null;
             }
         }

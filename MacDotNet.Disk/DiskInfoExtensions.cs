@@ -4,9 +4,16 @@ using System.Text.RegularExpressions;
 
 using static MacDotNet.Disk.NativeMethods;
 
+/// <summary>
+/// ディスク情報の拡張メソッド。
+/// Extension methods for disk information.
+/// </summary>
 public static class DiskInfoExtensions
 {
-    // パーティション情報を取得
+    /// <summary>
+    /// パーティション情報を取得する。
+    /// Retrieves partition information for the specified disk.
+    /// </summary>
     public static IEnumerable<PartitionInfo> GetPartitions(this IDiskInfo disk)
     {
         ArgumentNullException.ThrowIfNull(disk);
@@ -24,6 +31,7 @@ public static class DiskInfoExtensions
             var devicePath = $"/dev/{name}";
 
             // IOKitからパーティションサイズを取得
+            // Retrieve partition size from IOKit
             var size = GetPartitionSize(name);
 
             yield return new PartitionInfo
@@ -36,9 +44,13 @@ public static class DiskInfoExtensions
         }
     }
 
+    // BSD名からパーティション検索用の正規表現パターンを生成する
+    // Generates a regex pattern for partition search from a BSD name
     private static string GetPartitionPattern(string bsdName) =>
         $"^{Regex.Escape(bsdName)}s\\d+$";
 
+    // /dev配下のパターンに一致するBSDデバイスを列挙する
+    // Enumerates BSD devices under /dev matching the given pattern
     private static IEnumerable<string> EnumerateBsdDevices(string pattern)
     {
         var regex = new Regex(pattern, RegexOptions.Compiled);
@@ -60,23 +72,24 @@ public static class DiskInfoExtensions
     }
 
     // IOKitを使用してパーティションサイズを取得
+    // Retrieves partition size using IOKit
     private static ulong GetPartitionSize(string bsdName)
     {
         var matching = IOServiceMatching("IOMedia");
-        if (matching == nint.Zero)
+        if (matching == IntPtr.Zero)
         {
             return 0;
         }
 
-        // BSD Nameでマッチング
-        var cfBsdName = CFStringCreateWithCString(nint.Zero, bsdName, kCFStringEncodingUTF8);
-        if (cfBsdName == nint.Zero)
+        // BSD Nameでマッチング / Match by BSD Name
+        var cfBsdName = CFStringCreateWithCString(IntPtr.Zero, bsdName, kCFStringEncodingUTF8);
+        if (cfBsdName == IntPtr.Zero)
         {
             return 0;
         }
 
-        var cfKey = CFStringCreateWithCString(nint.Zero, "BSD Name", kCFStringEncodingUTF8);
-        if (cfKey == nint.Zero)
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, "BSD Name", kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
         {
             CFRelease(cfBsdName);
             return 0;
@@ -94,16 +107,16 @@ public static class DiskInfoExtensions
 
         try
         {
-            var sizeKey = CFStringCreateWithCString(nint.Zero, "Size", kCFStringEncodingUTF8);
-            if (sizeKey == nint.Zero)
+            var sizeKey = CFStringCreateWithCString(IntPtr.Zero, "Size", kCFStringEncodingUTF8);
+            if (sizeKey == IntPtr.Zero)
             {
                 return 0;
             }
 
             try
             {
-                var val = IORegistryEntryCreateCFProperty(service, sizeKey, nint.Zero, 0);
-                if (val == nint.Zero)
+                var val = IORegistryEntryCreateCFProperty(service, sizeKey, IntPtr.Zero, 0);
+                if (val == IntPtr.Zero)
                 {
                     return 0;
                 }
