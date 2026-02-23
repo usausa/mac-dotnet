@@ -2,23 +2,23 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-/// <summary>温度センサー。HardwareMonitor.Update() で値が更新される。</summary>
+/// <summary>温度センサー。HardwareMonitor.Update() で値が更新される。<br/>Temperature sensor. Value is updated by HardwareMonitor.Update().</summary>
 public sealed class TemperatureSensor
 {
     internal readonly uint RawKey;
     internal readonly uint DataType;
     internal readonly uint DataSize;
 
-    /// <summary>SMC キー文字列。例: "TC0P"</summary>
+    /// <summary>SMC キー文字列。例: "TC0P"<br/>SMC key string. Example: "TC0P"</summary>
     public string Key { get; }
 
-    /// <summary>センサーの説明。例: "CPU Proximity"</summary>
+    /// <summary>センサーの説明。例: "CPU Proximity"<br/>Sensor description. Example: "CPU Proximity"</summary>
     public string Description { get; }
 
-    /// <summary>SMC データ型文字列。例: "sp78"、"flt "</summary>
+    /// <summary>SMC データ型文字列。例: "sp78"、"flt "<br/>SMC data type string. Example: "sp78", "flt "</summary>
     public string DataTypeString { get; }
 
-    /// <summary>温度 (°C)</summary>
+    /// <summary>温度 (°C)<br/>Temperature in °C</summary>
     public double Value { get; internal set; }
 
     internal TemperatureSensor(uint rawKey, uint dataType, uint dataSize, string key, string description, string dataTypeString)
@@ -32,23 +32,23 @@ public sealed class TemperatureSensor
     }
 }
 
-/// <summary>電圧センサー。HardwareMonitor.Update() で値が更新される。</summary>
+/// <summary>電圧センサー。HardwareMonitor.Update() で値が更新される。<br/>Voltage sensor. Value is updated by HardwareMonitor.Update().</summary>
 public sealed class VoltageSensor
 {
     internal readonly uint RawKey;
     internal readonly uint DataType;
     internal readonly uint DataSize;
 
-    /// <summary>SMC キー文字列。例: "VD0R"</summary>
+    /// <summary>SMC キー文字列。例: "VD0R"<br/>SMC key string. Example: "VD0R"</summary>
     public string Key { get; }
 
-    /// <summary>センサーの説明。例: "Main DC Input"</summary>
+    /// <summary>センサーの説明。例: "Main DC Input"<br/>Sensor description. Example: "Main DC Input"</summary>
     public string Description { get; }
 
-    /// <summary>SMC データ型文字列</summary>
+    /// <summary>SMC データ型文字列<br/>SMC data type string</summary>
     public string DataTypeString { get; }
 
-    /// <summary>電圧 (V)</summary>
+    /// <summary>電圧 (V)<br/>Voltage in V</summary>
     public double Value { get; internal set; }
 
     internal VoltageSensor(uint rawKey, uint dataType, uint dataSize, string key, string description, string dataTypeString)
@@ -62,23 +62,23 @@ public sealed class VoltageSensor
     }
 }
 
-/// <summary>電力センサー。HardwareMonitor.Update() で値が更新される。</summary>
+/// <summary>電力センサー。HardwareMonitor.Update() で値が更新される。<br/>Power sensor. Value is updated by HardwareMonitor.Update().</summary>
 public sealed class PowerSensor
 {
     internal readonly uint RawKey;
     internal readonly uint DataType;
     internal readonly uint DataSize;
 
-    /// <summary>SMC キー文字列。例: "PSTR"</summary>
+    /// <summary>SMC キー文字列。例: "PSTR"<br/>SMC key string. Example: "PSTR"</summary>
     public string Key { get; }
 
-    /// <summary>センサーの説明。例: "Total System"</summary>
+    /// <summary>センサーの説明。例: "Total System"<br/>Sensor description. Example: "Total System"</summary>
     public string Description { get; }
 
-    /// <summary>SMC データ型文字列</summary>
+    /// <summary>SMC データ型文字列<br/>SMC data type string</summary>
     public string DataTypeString { get; }
 
-    /// <summary>電力 (W)</summary>
+    /// <summary>電力 (W)<br/>Power in W</summary>
     public double Value { get; internal set; }
 
     internal PowerSensor(uint rawKey, uint dataType, uint dataSize, string key, string description, string dataTypeString)
@@ -92,22 +92,22 @@ public sealed class PowerSensor
     }
 }
 
-/// <summary>ファンセンサー。HardwareMonitor.Update() で値が更新される。</summary>
+/// <summary>ファンセンサー。HardwareMonitor.Update() で値が更新される。<br/>Fan sensor. Values are updated by HardwareMonitor.Update().</summary>
 public sealed class FanSensor
 {
-    /// <summary>ファンのインデックス (0 始まり)</summary>
+    /// <summary>ファンのインデックス (0 始まり)<br/>Fan index (0-based)</summary>
     public int Index { get; }
 
-    /// <summary>現在の実際の回転数 (RPM)</summary>
+    /// <summary>現在の実際の回転数 (RPM)<br/>Current actual fan speed (RPM)</summary>
     public double ActualRpm { get; internal set; }
 
-    /// <summary>最小回転数 (RPM)</summary>
+    /// <summary>最小回転数 (RPM)<br/>Minimum fan speed (RPM)</summary>
     public double MinRpm { get; internal set; }
 
-    /// <summary>最大回転数 (RPM)</summary>
+    /// <summary>最大回転数 (RPM)<br/>Maximum fan speed (RPM)</summary>
     public double MaxRpm { get; internal set; }
 
-    /// <summary>目標回転数 (RPM)</summary>
+    /// <summary>目標回転数 (RPM)<br/>Target fan speed (RPM)</summary>
     public double TargetRpm { get; internal set; }
 
     internal readonly uint KeyActual;
@@ -150,6 +150,11 @@ public sealed class FanSensor
 /// ハードウェアモニター。温度・電圧・電力・ファンの各センサー値を管理する。
 /// <see cref="Create"/> でインスタンスを生成し、<see cref="Update"/> を呼ぶたびに最新値を更新する。
 /// SMC 接続をインスタンスの生存期間中保持するため、使用後は <see cref="Dispose"/> を呼び出すこと。
+/// <para>
+/// Hardware monitor that manages temperature, voltage, power, and fan sensor values.
+/// Create an instance via <see cref="Create"/> and call <see cref="Update"/> to refresh all values.
+/// Holds an SMC connection for the lifetime of the instance; call <see cref="Dispose"/> when done.
+/// </para>
 /// </summary>
 public sealed class HardwareMonitor : IDisposable
 {
@@ -158,22 +163,22 @@ public sealed class HardwareMonitor : IDisposable
     private readonly PowerSensor? _systemPowerSensor;
     private bool _disposed;
 
-    /// <summary>最後に Update() を呼び出した日時</summary>
+    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
-    /// <summary>温度センサー一覧</summary>
+    /// <summary>温度センサー一覧<br/>List of temperature sensors</summary>
     public IReadOnlyList<TemperatureSensor> Temperatures { get; }
 
-    /// <summary>電圧センサー一覧</summary>
+    /// <summary>電圧センサー一覧<br/>List of voltage sensors</summary>
     public IReadOnlyList<VoltageSensor> Voltages { get; }
 
-    /// <summary>電力センサー一覧</summary>
+    /// <summary>電力センサー一覧<br/>List of power sensors</summary>
     public IReadOnlyList<PowerSensor> Powers { get; }
 
-    /// <summary>ファンセンサー一覧</summary>
+    /// <summary>ファンセンサー一覧<br/>List of fan sensors</summary>
     public IReadOnlyList<FanSensor> Fans { get; }
 
-    /// <summary>システム総電力 (W)。PSTR キーが存在しない場合は null</summary>
+    /// <summary>システム総電力 (W)。PSTR キーが存在しない場合は null<br/>Total system power in watts. Null if the PSTR key is not present.</summary>
     public double? TotalSystemPower => _systemPowerSensor?.Value;
 
     //--------------------------------------------------------------------------------

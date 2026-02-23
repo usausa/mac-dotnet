@@ -4,27 +4,37 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+/// <summary>
+/// Apple Silicon 専用の IOReport エネルギーカウンター。
+/// CPU・GPU・ANE・RAM の累積エネルギー消費量をジュール単位で提供する。
+/// ARM64 以外の環境では Supported = false となり Update() は常に false を返す。
+/// <para>
+/// Apple Silicon-specific IOReport energy counter.
+/// Reports cumulative energy consumption in joules for CPU, GPU, ANE, and RAM.
+/// On non-ARM64 platforms, Supported = false and Update() always returns false.
+/// </para>
+/// </summary>
 public sealed class AppleSiliconEnergyCounter
 {
     private IntPtr channels;
     private IntPtr subscription;
 
-    /// <summary>CPU の累積エネルギー消費量 (J)</summary>
+    /// <summary>CPU の累積エネルギー消費量 (J)<br/>Cumulative CPU energy consumption (J)</summary>
     public double Cpu { get; private set; }
 
-    /// <summary>GPU の累積エネルギー消費量 (J)</summary>
+    /// <summary>GPU の累積エネルギー消費量 (J)<br/>Cumulative GPU energy consumption (J)</summary>
     public double Gpu { get; private set; }
 
-    /// <summary>ANE (Apple Neural Engine) の累積エネルギー消費量 (J)</summary>
+    /// <summary>ANE (Apple Neural Engine) の累積エネルギー消費量 (J)<br/>Cumulative ANE (Apple Neural Engine) energy consumption (J)</summary>
     public double Ane { get; private set; }
 
-    /// <summary>RAM の累積エネルギー消費量 (J)</summary>
+    /// <summary>RAM の累積エネルギー消費量 (J)<br/>Cumulative RAM energy consumption (J)</summary>
     public double Ram { get; private set; }
 
-    /// <summary>CPU + GPU + ANE + RAM の累積エネルギー消費量合計 (J)</summary>
+    /// <summary>CPU + GPU + ANE + RAM の累積エネルギー消費量合計 (J)<br/>Total cumulative energy consumption (CPU + GPU + ANE + RAM) in joules</summary>
     public double Total => Cpu + Gpu + Ane + Ram;
 
-    /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか</summary>
+    /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか<br/>Whether IOReport energy monitoring is available (Apple Silicon / ARM64 only)</summary>
     public bool Supported { get; }
 
     //--------------------------------------------------------------------------------
@@ -41,12 +51,28 @@ public sealed class AppleSiliconEnergyCounter
     // Factory
     //--------------------------------------------------------------------------------
 
+    /// <summary>
+    /// AppleSiliconEnergyCounter インスタンスを生成する。
+    /// ARM64 以外または IOReport が利用不可な場合は Supported = false のインスタンスを返す。
+    /// <para>
+    /// Creates an AppleSiliconEnergyCounter instance.
+    /// Returns an instance with Supported = false on non-ARM64 or when IOReport is unavailable.
+    /// </para>
+    /// </summary>
     public static AppleSiliconEnergyCounter Create() => new();
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
+    /// <summary>
+    /// IOReport からエネルギーサンプルを取得して各プロパティを更新する。
+    /// 成功時は true、Supported が false またはサンプル取得失敗時は false を返す。
+    /// <para>
+    /// Fetches an energy sample from IOReport and updates each property.
+    /// Returns true on success, false when Supported is false or sampling fails.
+    /// </para>
+    /// </summary>
     public bool Update()
     {
         if (!Supported || subscription == IntPtr.Zero)

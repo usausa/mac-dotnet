@@ -4,63 +4,71 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+/// <summary>
+/// IOPowerSources API から取得したバッテリー情報。ユーザー表示向けのサマリ情報を提供する。
+/// 詳細な診断情報 (電圧・電流・温度・サイクル数) は BatteryDetail または BatteryGeneric を使用する。
+/// <para>
+/// Battery information retrieved via the IOPowerSources API. Provides user-facing summary info.
+/// For detailed diagnostics (voltage, current, temperature, cycle count) use BatteryDetail or BatteryGeneric.
+/// </para>
+/// </summary>
 public sealed class Battery
 {
-    /// <summary>最後に Update() を呼び出した日時</summary>
+    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
-    /// <summary>バッテリー情報の取得に成功したかどうか</summary>
+    /// <summary>バッテリー情報の取得に成功したかどうか<br/>Whether battery information was successfully retrieved</summary>
     public bool Supported { get; private set; }
 
-    /// <summary>電源の名前。例: "InternalBattery-0"</summary>
+    /// <summary>電源の名前。例: "InternalBattery-0"<br/>Power source name. Example: "InternalBattery-0"</summary>
     public string Name { get; private set; } = string.Empty;
 
-    /// <summary>電源の種類。例: "InternalBattery"</summary>
+    /// <summary>電源の種類。例: "InternalBattery"<br/>Power source type. Example: "InternalBattery"</summary>
     public string Type { get; private set; } = string.Empty;
 
-    /// <summary>電源の接続方式。例: "Internal"。取得できない場合は null</summary>
+    /// <summary>電源の接続方式。例: "Internal"。取得できない場合は null<br/>Transport type. Example: "Internal". Returns null if unavailable.</summary>
     public string? TransportType { get; private set; }
 
-    /// <summary>バッテリーのハードウェアシリアル番号。取得できない場合は null</summary>
+    /// <summary>バッテリーのハードウェアシリアル番号。取得できない場合は null<br/>Battery hardware serial number. Returns null if unavailable.</summary>
     public string? HardwareSerialNumber { get; private set; }
 
-    /// <summary>バッテリーが物理的に接続されているかどうか</summary>
+    /// <summary>バッテリーが物理的に接続されているかどうか<br/>Whether the battery is physically present</summary>
     public bool IsPresent { get; private set; }
 
-    /// <summary>現在の電源状態。例: "AC Power"、"Battery Power"</summary>
+    /// <summary>現在の電源状態。例: "AC Power"、"Battery Power"<br/>Current power source state. Example: "AC Power", "Battery Power"</summary>
     public string PowerSourceState { get; private set; } = string.Empty;
 
-    /// <summary>AC 電源に接続されているかどうか</summary>
+    /// <summary>AC 電源に接続されているかどうか<br/>Whether the system is connected to AC power</summary>
     public bool IsACConnected => string.Equals(PowerSourceState, kIOPSACPowerValue, StringComparison.Ordinal);
 
-    /// <summary>充電中かどうか</summary>
+    /// <summary>充電中かどうか<br/>Whether the battery is currently charging</summary>
     public bool IsCharging { get; private set; }
 
-    /// <summary>満充電かどうか</summary>
+    /// <summary>満充電かどうか<br/>Whether the battery is fully charged</summary>
     public bool IsCharged { get; private set; }
 
-    /// <summary>現在のバッテリー容量 (mAh)</summary>
+    /// <summary>現在のバッテリー容量 (mAh)<br/>Current battery capacity (mAh)</summary>
     public int CurrentCapacity { get; private set; }
 
-    /// <summary>現在の最大バッテリー容量 (mAh)</summary>
+    /// <summary>現在の最大バッテリー容量 (mAh)<br/>Current maximum battery capacity (mAh)</summary>
     public int MaxCapacity { get; private set; }
 
-    /// <summary>バッテリー残量 (%)。CurrentCapacity / MaxCapacity × 100</summary>
+    /// <summary>バッテリー残量 (%)。CurrentCapacity / MaxCapacity × 100<br/>Battery level (%). CurrentCapacity / MaxCapacity × 100</summary>
     public int BatteryPercent => MaxCapacity > 0 ? (int)(100.0 * CurrentCapacity / MaxCapacity) : 0;
 
-    /// <summary>放電完了までの推定時間 (分)。不明の場合は -1</summary>
+    /// <summary>放電完了までの推定時間 (分)。不明の場合は -1<br/>Estimated time to empty in minutes. -1 if unknown.</summary>
     public int TimeToEmpty { get; private set; } = -1;
 
-    /// <summary>満充電までの推定時間 (分)。不明の場合は -1</summary>
+    /// <summary>満充電までの推定時間 (分)。不明の場合は -1<br/>Estimated time to full charge in minutes. -1 if unknown.</summary>
     public int TimeToFullCharge { get; private set; } = -1;
 
-    /// <summary>バッテリー健全性の評価。例: "Good"</summary>
+    /// <summary>バッテリー健全性の評価。例: "Good"<br/>Battery health assessment. Example: "Good"</summary>
     public string? BatteryHealth { get; private set; }
 
-    /// <summary>バッテリー健全性の詳細条件。例: "Check Battery"</summary>
+    /// <summary>バッテリー健全性の詳細条件。例: "Check Battery"<br/>Battery health condition detail. Example: "Check Battery"</summary>
     public string? BatteryHealthCondition { get; private set; }
 
-    /// <summary>設計上のサイクル数上限。取得できない場合は -1</summary>
+    /// <summary>設計上のサイクル数上限。取得できない場合は -1<br/>Design cycle count limit. -1 if unavailable.</summary>
     public int DesignCycleCount { get; private set; } = -1;
 
     //--------------------------------------------------------------------------------

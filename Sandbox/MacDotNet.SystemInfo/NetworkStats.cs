@@ -7,45 +7,55 @@ using static MacDotNet.SystemInfo.NativeMethods;
 /// <summary>
 /// ネットワークインターフェース 1 本分の統計スナップショット。
 /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
+/// <para>
+/// Statistics snapshot for a single network interface.
+/// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
+/// </para>
 /// </summary>
 public readonly record struct NetworkInterfaceStat(
-    /// <summary>インターフェース名。例: "en0"</summary>
+    /// <summary>インターフェース名。例: "en0"<br/>Interface name. Example: "en0"</summary>
     string Name,
 
-    /// <summary>受信バイト数の累積値</summary>
+    /// <summary>受信バイト数の累積値<br/>Cumulative bytes received</summary>
     uint RxBytes,
-    /// <summary>受信パケット数の累積値</summary>
+    /// <summary>受信パケット数の累積値<br/>Cumulative packets received</summary>
     uint RxPackets,
-    /// <summary>受信エラー数の累積値</summary>
+    /// <summary>受信エラー数の累積値<br/>Cumulative receive errors</summary>
     uint RxErrors,
-    /// <summary>受信ドロップ数の累積値</summary>
+    /// <summary>受信ドロップ数の累積値<br/>Cumulative receive drops</summary>
     uint RxDrops,
-    /// <summary>受信マルチキャストパケット数の累積値</summary>
+    /// <summary>受信マルチキャストパケット数の累積値<br/>Cumulative multicast packets received</summary>
     uint RxMulticast,
-    /// <summary>送信バイト数の累積値</summary>
+    /// <summary>送信バイト数の累積値<br/>Cumulative bytes transmitted</summary>
     uint TxBytes,
-    /// <summary>送信パケット数の累積値</summary>
+    /// <summary>送信パケット数の累積値<br/>Cumulative packets transmitted</summary>
     uint TxPackets,
-    /// <summary>送信エラー数の累積値</summary>
+    /// <summary>送信エラー数の累積値<br/>Cumulative transmit errors</summary>
     uint TxErrors,
-    /// <summary>送信マルチキャストパケット数の累積値</summary>
+    /// <summary>送信マルチキャストパケット数の累積値<br/>Cumulative multicast packets transmitted</summary>
     uint TxMulticast,
-    /// <summary>コリジョン数の累積値</summary>
+    /// <summary>コリジョン数の累積値<br/>Cumulative collision count</summary>
     uint Collisions,
-    /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
+    /// <summary>未知プロトコルによる受信パケット数の累積値<br/>Cumulative packets received for unknown protocols</summary>
     uint NoProto
 );
 
 /// <summary>
 /// 全ネットワークインターフェースのトラフィック統計。
 /// <see cref="Create()"/> でインスタンスを生成し、<see cref="Update()"/> を呼ぶたびに
-/// 最新の累積値を更新する。<see cref="CpuUsage"/> と同じパターン。
+/// 最新の累積値を更新する。<see cref="CpuStat"/> と同じパターン。
 /// <para>
 /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
 /// </para>
 /// <para>
 /// <see cref="System.Net.NetworkInformation.NetworkInterface.GetIPv4Statistics()"/> に対する追加価値:
 /// Collisions / NoProto 等 .NET 標準では取得できない macOS 固有カウンタを提供する。
+/// </para>
+/// <para>
+/// Traffic statistics for all network interfaces.
+/// Create an instance via <see cref="Create()"/> and call <see cref="Update()"/> to refresh.
+/// Values are cumulative since kernel boot; the caller is responsible for computing deltas.
+/// Provides macOS-specific counters (Collisions, NoProto, etc.) not available via GetIPv4Statistics().
 /// </para>
 /// </summary>
 public sealed class NetworkStats
@@ -54,15 +64,21 @@ public sealed class NetworkStats
     /// HiddenConfiguration 除外が有効な場合、対象インターフェース名のセット。
     /// null の場合はフィルタリングなし (全インターフェースを対象)。
     /// インスタンス生成時に一度だけ構築し、Update() では使い回す。
+    /// <para>
+    /// Set of included interface names when HiddenConfiguration filtering is enabled.
+    /// Null means no filtering (all interfaces included).
+    /// Built once at construction time and reused in each Update() call.
+    /// </para>
     /// </summary>
     private readonly HashSet<string>? _includedInterfaces;
 
-    /// <summary>最後に Update() を呼び出した日時</summary>
+    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
     /// <summary>
     /// 全インターフェースの統計エントリ一覧 (名前昇順)。
     /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
+    /// <para>List of statistics entries for all interfaces (sorted by name). Values are cumulative since boot.</para>
     /// </summary>
     public IReadOnlyList<NetworkInterfaceStat> Interfaces { get; private set; } = [];
 

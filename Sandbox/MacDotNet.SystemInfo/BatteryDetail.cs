@@ -2,45 +2,53 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+/// <summary>
+/// IOKit/AppleSmartBattery レジストリから取得したバッテリー詳細情報。
+/// 電圧・電流・温度・サイクル数など診断監視向けの詳細データを提供する。
+/// <para>
+/// Detailed battery information retrieved from the IOKit/AppleSmartBattery registry.
+/// Provides diagnostic data including voltage, current, temperature, and cycle count.
+/// </para>
+/// </summary>
 public sealed class BatteryDetail
 {
-    /// <summary>バッテリー詳細情報の取得に成功したかどうか</summary>
+    /// <summary>バッテリー詳細情報の取得に成功したかどうか<br/>Whether detailed battery information was successfully retrieved</summary>
     public bool Supported { get; private set; }
 
-    /// <summary>現在のバッテリー電圧 (V)</summary>
+    /// <summary>現在のバッテリー電圧 (V)<br/>Current battery voltage (V)</summary>
     public double Voltage { get; private set; }
 
-    /// <summary>現在の電流 (mA)。負の値は放電を示す</summary>
+    /// <summary>現在の電流 (mA)。負の値は放電を示す<br/>Current in mA. Negative value indicates discharging.</summary>
     public int Amperage { get; private set; }
 
-    /// <summary>バッテリー温度 (°C)</summary>
+    /// <summary>バッテリー温度 (°C)<br/>Battery temperature (°C)</summary>
     public double Temperature { get; private set; }
 
-    /// <summary>充放電サイクル数</summary>
+    /// <summary>充放電サイクル数<br/>Charge/discharge cycle count</summary>
     public int CycleCount { get; private set; }
 
-    /// <summary>現在のバッテリー容量 (mAh)。AppleRawCurrentCapacity</summary>
+    /// <summary>現在のバッテリー容量 (mAh)。AppleRawCurrentCapacity<br/>Current battery capacity (mAh). Source: AppleRawCurrentCapacity</summary>
     public int CurrentCapacity { get; private set; }
 
-    /// <summary>設計上のバッテリー容量 (mAh)</summary>
+    /// <summary>設計上のバッテリー容量 (mAh)<br/>Design (rated) battery capacity (mAh)</summary>
     public int DesignCapacity { get; private set; }
 
-    /// <summary>現在の最大バッテリー容量 (mAh)。Apple Silicon では AppleRawMaxCapacity</summary>
+    /// <summary>現在の最大バッテリー容量 (mAh)。Apple Silicon では AppleRawMaxCapacity<br/>Current maximum battery capacity (mAh). Uses AppleRawMaxCapacity on Apple Silicon.</summary>
     public int MaxCapacity { get; private set; }
 
-    /// <summary>バッテリー健全性 (%)。MaxCapacity / DesignCapacity × 100</summary>
+    /// <summary>バッテリー健全性 (%)。MaxCapacity / DesignCapacity × 100<br/>Battery health (%). MaxCapacity / DesignCapacity × 100</summary>
     public int Health { get; private set; }
 
-    /// <summary>接続されている AC アダプタの定格電力 (W)。接続されていない場合は 0</summary>
+    /// <summary>接続されている AC アダプタの定格電力 (W)。接続されていない場合は 0<br/>Rated wattage of the connected AC adapter (W). Returns 0 if not connected.</summary>
     public int AcWatts { get; private set; }
 
-    /// <summary>充電器が供給している電流 (mA)</summary>
+    /// <summary>充電器が供給している電流 (mA)<br/>Charging current supplied by the charger (mA)</summary>
     public int ChargingCurrent { get; private set; }
 
-    /// <summary>充電器が供給している電圧 (mV)</summary>
+    /// <summary>充電器が供給している電圧 (mV)<br/>Charging voltage supplied by the charger (mV)</summary>
     public int ChargingVoltage { get; private set; }
 
-    /// <summary>最適化充電 (Optimized Battery Charging) が有効かどうか</summary>
+    /// <summary>最適化充電 (Optimized Battery Charging) が有効かどうか<br/>Whether Optimized Battery Charging is engaged</summary>
     public bool OptimizedChargingEngaged { get; private set; }
 
     private readonly uint batteryService;
@@ -72,6 +80,14 @@ public sealed class BatteryDetail
     // Factory
     //--------------------------------------------------------------------------------
 
+    /// <summary>
+    /// BatteryDetail インスタンスを生成する。AppleSmartBattery サービスが利用できない場合、
+    /// Supported = false のインスタンスを返す。
+    /// <para>
+    /// Creates a BatteryDetail instance.
+    /// If the AppleSmartBattery service is unavailable, returns an instance with Supported = false.
+    /// </para>
+    /// </summary>
     public static BatteryDetail Create() => new();
 
     //--------------------------------------------------------------------------------

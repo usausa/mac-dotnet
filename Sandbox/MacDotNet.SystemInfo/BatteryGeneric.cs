@@ -7,113 +7,119 @@ using static MacDotNet.SystemInfo.NativeMethods;
 /// <summary>
 /// IOPowerSources と IOKit/AppleSmartBattery の両方を直接参照し、
 /// ユーザー表示向けのサマリ情報と診断監視向けの詳細情報を統合したバッテリークラス。
+/// <para>
+/// Unified battery class that combines data from both IOPowerSources and IOKit/AppleSmartBattery.
+/// Provides both user-facing summary information and diagnostic detail in a single object.
+/// When AppleSmartBattery is available (DetailSupported = true), precise capacity and health data
+/// from the hardware register is used; otherwise IOPowerSources values serve as a fallback.
+/// </para>
 /// </summary>
 public sealed class BatteryGeneric
 {
     private readonly uint batteryService;
 
     //--------------------------------------------------------------------------------
-    // Common
+    // Common / 共通
     //--------------------------------------------------------------------------------
 
-    /// <summary>最後に Update() を呼び出した日時</summary>
+    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
     //--------------------------------------------------------------------------------
-    // IOPowerSources - ユーザー表示向けサマリ情報
+    // IOPowerSources - ユーザー表示向けサマリ情報 / User-facing summary info
     //--------------------------------------------------------------------------------
 
-    /// <summary>IOPowerSources からバッテリー情報を取得できるかどうか</summary>
+    /// <summary>IOPowerSources からバッテリー情報を取得できるかどうか<br/>Whether battery info is available from IOPowerSources</summary>
     public bool Supported { get; private set; }
 
-    /// <summary>電源の名前。例: "InternalBattery-0"</summary>
+    /// <summary>電源の名前。例: "InternalBattery-0"<br/>Power source name. Example: "InternalBattery-0"</summary>
     public string Name { get; private set; } = string.Empty;
 
-    /// <summary>電源の種類。例: "InternalBattery"</summary>
+    /// <summary>電源の種類。例: "InternalBattery"<br/>Power source type. Example: "InternalBattery"</summary>
     public string Type { get; private set; } = string.Empty;
 
-    /// <summary>電源の接続方式。例: "Internal"。取得できない場合は null</summary>
+    /// <summary>電源の接続方式。例: "Internal"。取得できない場合は null<br/>Transport type. Example: "Internal". Returns null if unavailable.</summary>
     public string? TransportType { get; private set; }
 
-    /// <summary>バッテリーのハードウェアシリアル番号。取得できない場合は null</summary>
+    /// <summary>バッテリーのハードウェアシリアル番号。取得できない場合は null<br/>Battery hardware serial number. Returns null if unavailable.</summary>
     public string? HardwareSerialNumber { get; private set; }
 
-    /// <summary>バッテリーが物理的に接続されているかどうか</summary>
+    /// <summary>バッテリーが物理的に接続されているかどうか<br/>Whether the battery is physically present</summary>
     public bool IsPresent { get; private set; }
 
-    /// <summary>現在の電源状態。例: "AC Power"、"Battery Power"</summary>
+    /// <summary>現在の電源状態。例: "AC Power"、"Battery Power"<br/>Current power source state. Example: "AC Power", "Battery Power"</summary>
     public string PowerSourceState { get; private set; } = string.Empty;
 
-    /// <summary>AC 電源に接続されているかどうか</summary>
+    /// <summary>AC 電源に接続されているかどうか<br/>Whether the system is connected to AC power</summary>
     public bool IsACConnected => string.Equals(PowerSourceState, kIOPSACPowerValue, StringComparison.Ordinal);
 
-    /// <summary>充電中かどうか</summary>
+    /// <summary>充電中かどうか<br/>Whether the battery is currently charging</summary>
     public bool IsCharging { get; private set; }
 
-    /// <summary>満充電かどうか</summary>
+    /// <summary>満充電かどうか<br/>Whether the battery is fully charged</summary>
     public bool IsCharged { get; private set; }
 
-    /// <summary>バッテリー残量 (%)。CurrentCapacity / MaxCapacity × 100</summary>
+    /// <summary>バッテリー残量 (%)。CurrentCapacity / MaxCapacity × 100<br/>Battery level (%). CurrentCapacity / MaxCapacity × 100</summary>
     public int BatteryPercent => MaxCapacity > 0 ? (int)(100.0 * CurrentCapacity / MaxCapacity) : 0;
 
-    /// <summary>放電完了までの推定時間 (分)。不明の場合は -1</summary>
+    /// <summary>放電完了までの推定時間 (分)。不明の場合は -1<br/>Estimated time to empty in minutes. -1 if unknown.</summary>
     public int TimeToEmpty { get; private set; } = -1;
 
-    /// <summary>満充電までの推定時間 (分)。不明の場合は -1</summary>
+    /// <summary>満充電までの推定時間 (分)。不明の場合は -1<br/>Estimated time to full charge in minutes. -1 if unknown.</summary>
     public int TimeToFullCharge { get; private set; } = -1;
 
-    /// <summary>バッテリー健全性の評価。例: "Good"</summary>
+    /// <summary>バッテリー健全性の評価。例: "Good"<br/>Battery health assessment. Example: "Good"</summary>
     public string? BatteryHealth { get; private set; }
 
-    /// <summary>バッテリー健全性の詳細条件。例: "Check Battery"</summary>
+    /// <summary>バッテリー健全性の詳細条件。例: "Check Battery"<br/>Battery health condition detail. Example: "Check Battery"</summary>
     public string? BatteryHealthCondition { get; private set; }
 
-    /// <summary>設計上のサイクル数上限 (IOPowerSources 経由)。取得できない場合は -1</summary>
+    /// <summary>設計上のサイクル数上限 (IOPowerSources 経由)。取得できない場合は -1<br/>Design cycle count limit from IOPowerSources. -1 if unavailable.</summary>
     public int DesignCycleCount { get; private set; } = -1;
 
     //--------------------------------------------------------------------------------
-    // IOKit/AppleSmartBattery - 診断監視向け詳細情報
+    // IOKit/AppleSmartBattery - 診断監視向け詳細情報 / Diagnostic detail info
     //--------------------------------------------------------------------------------
 
-    /// <summary>IOKit/AppleSmartBattery から詳細情報を取得できるかどうか</summary>
+    /// <summary>IOKit/AppleSmartBattery から詳細情報を取得できるかどうか<br/>Whether detailed info is available from IOKit/AppleSmartBattery</summary>
     public bool DetailSupported { get; private set; }
 
-    /// <summary>現在のバッテリー容量 (mAh)。DetailSupported の場合は AppleRawCurrentCapacity、それ以外は IOPowerSources の値</summary>
+    /// <summary>現在のバッテリー容量 (mAh)。DetailSupported の場合は AppleRawCurrentCapacity、それ以外は IOPowerSources の値<br/>Current battery capacity (mAh). AppleRawCurrentCapacity when DetailSupported; falls back to IOPowerSources.</summary>
     public int CurrentCapacity { get; private set; }
 
-    /// <summary>現在の最大バッテリー容量 (mAh)。DetailSupported の場合は AppleRawMaxCapacity、それ以外は IOPowerSources の値</summary>
+    /// <summary>現在の最大バッテリー容量 (mAh)。DetailSupported の場合は AppleRawMaxCapacity、それ以外は IOPowerSources の値<br/>Current maximum battery capacity (mAh). AppleRawMaxCapacity when DetailSupported; falls back to IOPowerSources.</summary>
     public int MaxCapacity { get; private set; }
 
-    /// <summary>設計上のバッテリー容量 (mAh)。DetailSupported の場合のみ有効</summary>
+    /// <summary>設計上のバッテリー容量 (mAh)。DetailSupported の場合のみ有効<br/>Design (rated) battery capacity (mAh). Valid only when DetailSupported is true.</summary>
     public int DesignCapacity { get; private set; }
 
-    /// <summary>充放電サイクル数。DetailSupported の場合は AppleSmartBattery の値、それ以外は DesignCycleCount</summary>
+    /// <summary>充放電サイクル数。DetailSupported の場合は AppleSmartBattery の値、それ以外は DesignCycleCount<br/>Charge/discharge cycle count. AppleSmartBattery value when DetailSupported; otherwise DesignCycleCount.</summary>
     public int CycleCount => DetailSupported ? rawCycleCount : DesignCycleCount;
 
     private int rawCycleCount;
 
-    /// <summary>バッテリー健全性 (%)。MaxCapacity / DesignCapacity × 100。DetailSupported の場合のみ有効</summary>
+    /// <summary>バッテリー健全性 (%)。MaxCapacity / DesignCapacity × 100。DetailSupported の場合のみ有効<br/>Battery health (%). MaxCapacity / DesignCapacity × 100. Valid only when DetailSupported is true.</summary>
     public int Health { get; private set; }
 
-    /// <summary>現在のバッテリー電圧 (V)。DetailSupported の場合のみ有効</summary>
+    /// <summary>現在のバッテリー電圧 (V)。DetailSupported の場合のみ有効<br/>Current battery voltage (V). Valid only when DetailSupported is true.</summary>
     public double Voltage { get; private set; }
 
-    /// <summary>現在の電流 (mA)。負の値は放電を示す。DetailSupported の場合のみ有効</summary>
+    /// <summary>現在の電流 (mA)。負の値は放電を示す。DetailSupported の場合のみ有効<br/>Current in mA. Negative indicates discharging. Valid only when DetailSupported is true.</summary>
     public int Amperage { get; private set; }
 
-    /// <summary>バッテリー温度 (°C)。DetailSupported の場合のみ有効</summary>
+    /// <summary>バッテリー温度 (°C)。DetailSupported の場合のみ有効<br/>Battery temperature (°C). Valid only when DetailSupported is true.</summary>
     public double Temperature { get; private set; }
 
-    /// <summary>接続されている AC アダプタの定格電力 (W)。DetailSupported の場合のみ有効</summary>
+    /// <summary>接続されている AC アダプタの定格電力 (W)。DetailSupported の場合のみ有効<br/>Rated wattage of the connected AC adapter (W). Valid only when DetailSupported is true.</summary>
     public int AcWatts { get; private set; }
 
-    /// <summary>充電器が供給している電流 (mA)。DetailSupported の場合のみ有効</summary>
+    /// <summary>充電器が供給している電流 (mA)。DetailSupported の場合のみ有効<br/>Charging current supplied by the charger (mA). Valid only when DetailSupported is true.</summary>
     public int ChargingCurrent { get; private set; }
 
-    /// <summary>充電器が供給している電圧 (mV)。DetailSupported の場合のみ有効</summary>
+    /// <summary>充電器が供給している電圧 (mV)。DetailSupported の場合のみ有効<br/>Charging voltage supplied by the charger (mV). Valid only when DetailSupported is true.</summary>
     public int ChargingVoltage { get; private set; }
 
-    /// <summary>最適化充電 (Optimized Battery Charging) が有効かどうか。DetailSupported の場合のみ有効</summary>
+    /// <summary>最適化充電 (Optimized Battery Charging) が有効かどうか。DetailSupported の場合のみ有効<br/>Whether Optimized Battery Charging is engaged. Valid only when DetailSupported is true.</summary>
     public bool OptimizedChargingEngaged { get; private set; }
 
     //--------------------------------------------------------------------------------

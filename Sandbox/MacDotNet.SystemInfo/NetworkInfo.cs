@@ -8,24 +8,28 @@ using static MacDotNet.SystemInfo.NativeMethods;
 /// <summary>
 /// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
 /// カーネルの InterfaceType (if_data.ifi_type) とは異なり、Wi-Fi を正しく識別できる。
+/// <para>
+/// SC-level interface type returned by SCNetworkInterfaceGetInterfaceType().
+/// Unlike the kernel InterfaceType (if_data.ifi_type), this correctly identifies Wi-Fi.
+/// </para>
 /// </summary>
 public enum ScNetworkInterfaceType
 {
-    /// <summary>不明または SCNetworkService に含まれないインターフェース</summary>
+    /// <summary>不明または SCNetworkService に含まれないインターフェース<br/>Unknown or not part of a SCNetworkService</summary>
     Unknown,
-    /// <summary>"Ethernet" — 有線 Ethernet (USB Ethernet アダプタを含む)</summary>
+    /// <summary>"Ethernet" — 有線 Ethernet (USB Ethernet アダプタを含む)<br/>"Ethernet" — Wired Ethernet (including USB Ethernet adapters)</summary>
     Ethernet,
-    /// <summary>"IEEE80211" — Wi-Fi (AirPort)</summary>
+    /// <summary>"IEEE80211" — Wi-Fi (AirPort)<br/>"IEEE80211" — Wi-Fi (AirPort)</summary>
     WiFi,
-    /// <summary>"Bridge" — ブリッジインターフェース (Thunderbolt Bridge など)</summary>
+    /// <summary>"Bridge" — ブリッジインターフェース (Thunderbolt Bridge など)<br/>"Bridge" — Bridge interface (e.g. Thunderbolt Bridge)</summary>
     Bridge,
-    /// <summary>"Bond" — ボンディングインターフェース</summary>
+    /// <summary>"Bond" — ボンディングインターフェース<br/>"Bond" — Link aggregation (bonding) interface</summary>
     Bond,
-    /// <summary>"VLAN" — 仮想 LAN</summary>
+    /// <summary>"VLAN" — 仮想 LAN<br/>"VLAN" — Virtual LAN</summary>
     Vlan,
-    /// <summary>"PPP" — PPP 接続</summary>
+    /// <summary>"PPP" — PPP 接続<br/>"PPP" — Point-to-Point Protocol connection</summary>
     Ppp,
-    /// <summary>"VPN" — VPN インターフェース</summary>
+    /// <summary>"VPN" — VPN インターフェース<br/>"VPN" — VPN interface</summary>
     Vpn,
 }
 
@@ -45,34 +49,46 @@ public enum ScNetworkInterfaceType
 /// <para>
 /// トラフィック統計 (Rx/Tx バイト数・パケット数・デルタ) は <see cref="NetworkStats"/> を使用する。
 /// </para>
+/// <para>
+/// macOS network interface configuration entry.
+/// Designed to complement <see cref="System.Net.NetworkInformation.NetworkInterface"/>.
+/// Use Name (BSD name) as the join key to obtain macOS-specific info not available via the standard API:
+/// SC service name, interface type, and enabled state.
+/// The following are already available via NetworkInterface and are not duplicated here:
+/// OperationalStatus, PhysicalAddress (MAC), UnicastAddresses (IP), NetworkInterfaceType, Speed, Mtu, SupportsMulticast.
+/// For traffic statistics (Rx/Tx bytes/packets/deltas) use <see cref="NetworkStats"/>.
+/// </para>
 /// </summary>
 public sealed record NetworkInterfaceEntry
 {
     /// <summary>
     /// BSD インターフェース名。例: "en0"、"lo0"。
     /// <see cref="System.Net.NetworkInformation.NetworkInterface.Name"/> と同一の値で、両者の突合キーになる。
+    /// <para>BSD interface name (e.g. "en0", "lo0"). Identical to NetworkInterface.Name and serves as the join key.</para>
     /// </summary>
     public required string Name { get; init; }
 
     /// <summary>
     /// macOS カーネルのインターフェースフラグ (IFF_*)。
     /// <see cref="System.Net.NetworkInformation"/> では公開されない macOS 固有の raw フラグ。
+    /// <para>macOS kernel interface flags (IFF_*). Raw flags not exposed by System.Net.NetworkInformation.</para>
     /// </summary>
     public required uint Flags { get; init; }
 
-    /// <summary>ブロードキャストをサポートするかどうか (IFF_BROADCAST)</summary>
+    /// <summary>ブロードキャストをサポートするかどうか (IFF_BROADCAST)<br/>Whether the interface supports broadcast (IFF_BROADCAST)</summary>
     public bool SupportsBroadcast => (Flags & IFF_BROADCAST) != 0;
 
-    /// <summary>ポイント・ツー・ポイント接続かどうか (IFF_POINTOPOINT)。VPN トンネルなど</summary>
+    /// <summary>ポイント・ツー・ポイント接続かどうか (IFF_POINTOPOINT)。VPN トンネルなど<br/>Whether this is a point-to-point link (IFF_POINTOPOINT), e.g. a VPN tunnel</summary>
     public bool IsPointToPoint => (Flags & IFF_POINTOPOINT) != 0;
 
     /// <summary>
     /// macOS System Settings のネットワーク設定に表示されるサービス名。
     /// 例: "Ethernet"、"Wi-Fi"。SCNetworkServiceCopyAll に含まれないインターフェースは null。
+    /// <para>Service name shown in macOS System Settings (e.g. "Ethernet", "Wi-Fi"). Null for interfaces not in SCNetworkServiceCopyAll.</para>
     /// </summary>
     public string? DisplayName { get; init; }
 
-    /// <summary>macOS System Settings のネットワーク設定に登録されたサービスかどうか</summary>
+    /// <summary>macOS System Settings のネットワーク設定に登録されたサービスかどうか<br/>Whether this interface is registered as a service in macOS System Settings</summary>
     public bool IsHardwareInterface => DisplayName is not null;
 
     /// <summary>
@@ -80,12 +96,21 @@ public sealed record NetworkInterfaceEntry
     /// <see cref="System.Net.NetworkInformation.NetworkInterface.NetworkInterfaceType"/> より正確で、
     /// Wi-Fi を <see cref="ScNetworkInterfaceType.WiFi"/> として識別できる。
     /// SCNetworkServiceCopyAll に含まれないインターフェースは Unknown。
+    /// <para>
+    /// SC-level interface type from SCNetworkInterfaceGetInterfaceType().
+    /// More accurate than NetworkInterface.NetworkInterfaceType; correctly identifies Wi-Fi as WiFi.
+    /// Unknown for interfaces not in SCNetworkServiceCopyAll.
+    /// </para>
     /// </summary>
     public ScNetworkInterfaceType ScNetworkInterfaceType { get; init; }
 
     /// <summary>
     /// macOS System Settings でサービスが有効かどうか (SCNetworkServiceGetEnabled)。
     /// SCNetworkServiceCopyAll に含まれないインターフェース (includeAll = true 時) は null。
+    /// <para>
+    /// Whether the service is enabled in macOS System Settings (SCNetworkServiceGetEnabled).
+    /// Null for interfaces not in SCNetworkServiceCopyAll (when includeAll = true).
+    /// </para>
     /// </summary>
     public bool? IsServiceEnabled { get; init; }
 }
@@ -97,6 +122,12 @@ public static class NetworkInfo
     /// デフォルト (includeAll = false) では macOS System Settings のネットワーク設定に表示される
     /// サービスのみを返す。DisplayName にサービス名 ("Ethernet"、"Wi-Fi" 等) が設定される。
     /// includeAll = true にすると getifaddrs が返すすべてのインターフェースを返す。
+    /// <para>
+    /// Returns the list of network interfaces.
+    /// By default (includeAll = false), only services visible in macOS System Settings are returned,
+    /// with DisplayName set to the service name (e.g. "Ethernet", "Wi-Fi").
+    /// Set includeAll = true to return all interfaces reported by getifaddrs.
+    /// </para>
     /// </summary>
     public static NetworkInterfaceEntry[] GetNetworkInterfaces(bool includeAll = false)
     {
