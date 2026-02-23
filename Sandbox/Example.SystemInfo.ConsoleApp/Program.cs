@@ -55,7 +55,10 @@ if (perfLevels.Count > 0)
     Console.WriteLine("### 2a. Performance Levels (Apple Silicon) ###");
     foreach (var level in perfLevels)
     {
-        Console.WriteLine($"  [{level.Index}] {level.Name}: PhysicalCpu={level.PhysicalCpu}, LogicalCpu={level.LogicalCpu}, L2={FormatBytes((ulong)level.L2CacheSize)}");
+        var freqStr = level.CpuFrequencyMax > 0
+            ? $", Freq={level.CpuFrequencyMax / 1_000_000_000.0:F2} GHz"
+            : string.Empty;
+        Console.WriteLine($"  [{level.Index}] {level.Name}: PhysicalCpu={level.PhysicalCpu}, LogicalCpu={level.LogicalCpu}, L2={FormatBytes((ulong)level.L2CacheSize)}{freqStr}");
     }
     Console.WriteLine();
 }
@@ -139,6 +142,8 @@ Console.WriteLine($"  Free:             {FormatBytes(mem.FreeBytes)}");
 Console.WriteLine($"  Active:           {FormatBytes(mem.ActiveBytes)}");
 Console.WriteLine($"  Inactive:         {FormatBytes(mem.InactiveBytes)}");
 Console.WriteLine($"  Wired:            {FormatBytes(mem.WiredBytes)}");
+Console.WriteLine($"  App Memory:       {FormatBytes(mem.AppMemoryBytes)}");
+Console.WriteLine($"  Compressed:       {FormatBytes(mem.CompressorBytes)}");
 Console.WriteLine($"  Compression Ratio:{mem.CompressionRatio:F2}");
 Console.WriteLine();
 
@@ -230,8 +235,10 @@ Console.WriteLine();
 Console.WriteLine("### 6a. Network Stats (500ms delta) ###");
 var netStats = PlatformProvider.GetNetworkStats();
 var prevSnapshot = netStats.Interfaces.ToDictionary(x => x.Name);
+var netT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 netStats.Update();
+var netElapsed = (DateTime.UtcNow - netT0).TotalSeconds;
 var serviceNames = interfaces.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
 foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
 {
@@ -243,8 +250,37 @@ foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
     var deltaTxBytes   = hasPrev ? unchecked(s.TxBytes   - prev.TxBytes)   : 0u;
     var deltaTxPackets = hasPrev ? unchecked(s.TxPackets - prev.TxPackets) : 0u;
     var deltaTxErrors  = hasPrev ? unchecked(s.TxErrors  - prev.TxErrors)  : 0u;
-    Console.WriteLine($"    RX: {FormatBytes(s.RxBytes),10} total  delta: {FormatBytes(deltaRxBytes),8} ({deltaRxPackets} pkts, {deltaRxErrors} err)");
-    Console.WriteLine($"    TX: {FormatBytes(s.TxBytes),10} total  delta: {FormatBytes(deltaTxBytes),8} ({deltaTxPackets} pkts, {deltaTxErrors} err)");
+    var rxKbps = netElapsed > 0 ? deltaRxBytes / 1024.0 / netElapsed : 0;
+    var txKbps = netElapsed > 0 ? deltaTxBytes / 1024.0 / netElapsed : 0;
+    Console.WriteLine($"    RX: {FormatBytes(s.RxBytes),10} total  {rxKbps,8:F2} KB/s  ({deltaRxPackets} pkts, {deltaRxErrors} err)");
+    Console.WriteLine($"    TX: {FormatBytes(s.TxBytes),10} total  {txKbps,8:F2} KB/s  ({deltaTxPackets} pkts, {deltaTxErrors} err)");
+}
+Console.WriteLine();
+
+// ---------------------------------------------------------------------------
+// 6b. Disk I/O Stats (500ms delta)
+// ---------------------------------------------------------------------------
+Console.WriteLine("### 6b. Disk I/O Stats (500ms delta) ###");
+var diskStats = PlatformProvider.GetDiskStats();
+var prevDiskSnapshot = diskStats.Devices.ToDictionary(x => x.Name);
+var diskT0 = DateTime.UtcNow;
+Thread.Sleep(500);
+diskStats.Update();
+var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
+foreach (var d in diskStats.Devices)
+{
+    var hasPrevDisk = prevDiskSnapshot.TryGetValue(d.Name, out var prevDisk);
+    var deltaRead    = hasPrevDisk ? d.BytesRead    - prevDisk.BytesRead    : 0UL;
+    var deltaWritten = hasPrevDisk ? d.BytesWritten - prevDisk.BytesWritten : 0UL;
+    var readMbps  = diskElapsed > 0 ? deltaRead    / (1024.0 * 1024.0) / diskElapsed : 0;
+    var writeMbps = diskElapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / diskElapsed : 0;
+    Console.WriteLine($"  [{d.Name}]");
+    Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
+    Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
+}
+if (diskStats.Devices.Count == 0)
+{
+    Console.WriteLine("  No disk devices found.");
 }
 Console.WriteLine();
 

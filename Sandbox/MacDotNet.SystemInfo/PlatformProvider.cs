@@ -48,6 +48,9 @@ public static class PlatformProvider
     /// <summary>すべてのマウント済みファイルシステムの詳細情報を取得する。<br/>Returns detailed information for all mounted file systems.</summary>
     public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
+    /// <summary>全ディスクデバイスの累積 I/O 統計を取得する。<br/>Returns cumulative I/O statistics for all disk devices.</summary>
+    public static DiskStats GetDiskStats() => DiskStats.Create();
+
     /// <summary>ユーザーから見えるローカルボリュームの一覧を取得する。<br/>Returns user-visible local disk volumes.</summary>
     public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();
 

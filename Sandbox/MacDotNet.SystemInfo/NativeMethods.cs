@@ -547,6 +547,12 @@ internal static class NativeMethods
     public static extern int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
 
     [DllImport(IOKitLib)]
+    public static extern unsafe int IORegistryEntryGetName(uint entry, byte* name);
+
+    [DllImport(IOKitLib)]
+    public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
+
+    [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
 
     //------------------------------------------------------------------------
