@@ -62,6 +62,36 @@ public sealed class VoltageSensor
     }
 }
 
+/// <summary>電流センサー。HardwareMonitor.Update() で値が更新される。<br/>Current sensor. Value is updated by HardwareMonitor.Update().</summary>
+public sealed class CurrentSensor
+{
+    internal readonly uint RawKey;
+    internal readonly uint DataType;
+    internal readonly uint DataSize;
+
+    /// <summary>SMC キー文字列。例: "ID0R"<br/>SMC key string. Example: "ID0R"</summary>
+    public string Key { get; }
+
+    /// <summary>センサーの説明。例: "DC In"<br/>Sensor description. Example: "DC In"</summary>
+    public string Description { get; }
+
+    /// <summary>SMC データ型文字列<br/>SMC data type string</summary>
+    public string DataTypeString { get; }
+
+    /// <summary>電流 (A)<br/>Current in A</summary>
+    public double Value { get; internal set; }
+
+    internal CurrentSensor(uint rawKey, uint dataType, uint dataSize, string key, string description, string dataTypeString)
+    {
+        RawKey = rawKey;
+        DataType = dataType;
+        DataSize = dataSize;
+        Key = key;
+        Description = description;
+        DataTypeString = dataTypeString;
+    }
+}
+
 /// <summary>電力センサー。HardwareMonitor.Update() で値が更新される。<br/>Power sensor. Value is updated by HardwareMonitor.Update().</summary>
 public sealed class PowerSensor
 {
@@ -175,6 +205,9 @@ public sealed class HardwareMonitor : IDisposable
     /// <summary>電力センサー一覧<br/>List of power sensors</summary>
     public IReadOnlyList<PowerSensor> Powers { get; }
 
+    /// <summary>電流センサー一覧<br/>List of current sensors</summary>
+    public IReadOnlyList<CurrentSensor> Currents { get; }
+
     /// <summary>ファンセンサー一覧<br/>List of fan sensors</summary>
     public IReadOnlyList<FanSensor> Fans { get; }
 
@@ -191,6 +224,7 @@ public sealed class HardwareMonitor : IDisposable
         List<TemperatureSensor> temperatures,
         List<VoltageSensor> voltages,
         List<PowerSensor> powers,
+        List<CurrentSensor> currents,
         List<FanSensor> fans)
     {
         _service = service;
@@ -198,6 +232,7 @@ public sealed class HardwareMonitor : IDisposable
         Temperatures = temperatures;
         Voltages = voltages;
         Powers = powers;
+        Currents = currents;
         Fans = fans;
         _systemPowerSensor = powers.Find(static p => p.Key == "PSTR");
         UpdateAt = DateTime.Now;
@@ -216,9 +251,9 @@ public sealed class HardwareMonitor : IDisposable
 
         try
         {
-            var (temperatures, voltages, powers) = DiscoverSensors(conn);
+            var (temperatures, voltages, powers, currents) = DiscoverSensors(conn);
             var fans = DiscoverFans(conn);
-            return new HardwareMonitor(service, conn, temperatures, voltages, powers, fans);
+            return new HardwareMonitor(service, conn, temperatures, voltages, powers, currents, fans);
         }
         catch
         {
@@ -262,6 +297,15 @@ public sealed class HardwareMonitor : IDisposable
         }
 
         foreach (var sensor in Powers)
+        {
+            var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
+            if (value.HasValue)
+            {
+                sensor.Value = value.Value;
+            }
+        }
+
+        foreach (var sensor in Currents)
         {
             var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
             if (value.HasValue)
@@ -350,16 +394,17 @@ public sealed class HardwareMonitor : IDisposable
     // Discovery
     //--------------------------------------------------------------------------------
 
-    private static unsafe (List<TemperatureSensor>, List<VoltageSensor>, List<PowerSensor>) DiscoverSensors(uint conn)
+    private static unsafe (List<TemperatureSensor>, List<VoltageSensor>, List<PowerSensor>, List<CurrentSensor>) DiscoverSensors(uint conn)
     {
         var temperatures = new List<TemperatureSensor>();
         var voltages = new List<VoltageSensor>();
         var powers = new List<PowerSensor>();
+        var currents = new List<CurrentSensor>();
 
         var keyCount = GetKeyCount(conn);
         if (keyCount <= 0)
         {
-            return (temperatures, voltages, powers);
+            return (temperatures, voltages, powers, currents);
         }
 
         for (uint i = 0; i < (uint)keyCount; i++)
@@ -371,7 +416,7 @@ public sealed class HardwareMonitor : IDisposable
             }
 
             var firstChar = (char)((key >> 24) & 0xFF);
-            if (firstChar is not ('T' or 'V' or 'P'))
+            if (firstChar is not ('T' or 'V' or 'P' or 'I'))
             {
                 continue;
             }
@@ -420,10 +465,16 @@ public sealed class HardwareMonitor : IDisposable
                     powerSensor.Value = value.Value;
                     powers.Add(powerSensor);
                     break;
+
+                case 'I':
+                    var currSensor = new CurrentSensor(key, dataType, dataSize, keyStr, GetCurrentDescription(keyStr), dataTypeStr);
+                    currSensor.Value = value.Value;
+                    currents.Add(currSensor);
+                    break;
             }
         }
 
-        return (temperatures, voltages, powers);
+        return (temperatures, voltages, powers, currents);
     }
 
     private static List<FanSensor> DiscoverFans(uint conn)
@@ -685,16 +736,22 @@ public sealed class HardwareMonitor : IDisposable
         "TG0D" => "GPU Die",
         "TG0T" => "GPU Transistor",
         "TB0T" => "Battery",
+        "TB1T" => "Battery 1",
+        "TB2T" => "Battery 2",
         "TPCD" => "Platform Controller Hub Die",
         "TPMP" => "PMU",
         "TPSD" => "SSD",
         "TPSP" => "SoC Package",
-        "TW0P" => "WiFi Proximity",
+        "TW0P" => "Airport",
         "TH0P" => "Thunderbolt Proximity",
+        "TH0x" => "NAND",
         "TM0P" => "Memory Proximity",
         "TM1P" => "Memory Proximity 1",
         "TMVR" => "Memory VRM",
+        "Tm0P" => "Mainboard",
         "TA0P" => "Ambient",
+        "TaLP" => "Airflow Left",
+        "TaRF" => "Airflow Right",
         "Ts0P" => "Palm Rest",
         "Ts1P" => "Palm Rest Right",
         _ => GetTemperatureDescriptionByPrefix(key),
@@ -752,6 +809,36 @@ public sealed class HardwareMonitor : IDisposable
             "PI" => $"I/O Power ({key})",
             "PM" => $"Memory Power ({key})",
             "PO" => $"Other Power ({key})",
+            _ => key,
+        };
+    }
+
+    private static string GetCurrentDescription(string key) => key switch
+    {
+        "IC0R" => "CPU High Side",
+        "IG0R" => "GPU High Side",
+        "ID0R" => "DC In",
+        "IBAC" => "Battery",
+        "IDBR" => "Brightness",
+        "IU1R" => "Thunderbolt Left",
+        "IU2R" => "Thunderbolt Right",
+        _ => GetCurrentDescriptionByPrefix(key),
+    };
+
+    private static string GetCurrentDescriptionByPrefix(string key)
+    {
+        if (key.Length < 2)
+        {
+            return key;
+        }
+
+        return key[..2] switch
+        {
+            "IC" => $"CPU ({key})",
+            "IG" => $"GPU ({key})",
+            "ID" => $"DC ({key})",
+            "IB" => $"Battery ({key})",
+            "IU" => $"USB/Thunderbolt ({key})",
             _ => key,
         };
     }

@@ -502,6 +502,7 @@ internal static class NativeMethods
     //------------------------------------------------------------------------
 
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
+    private const string IOReportLib = "/usr/lib/libIOReport.dylib";
 
     [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyPowerSourcesInfo();
@@ -599,25 +600,25 @@ internal static class NativeMethods
     [DllImport(SystemConfigurationLib)]
     public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOReportCopyChannelsInGroup([MarshalAs(UnmanagedType.LPUTF8Str)] string? group, [MarshalAs(UnmanagedType.LPUTF8Str)] string? subgroup, ulong a, ulong b, ulong c);
+    [DllImport(IOReportLib)]
+    public static extern IntPtr IOReportCopyChannelsInGroup(IntPtr group, IntPtr subgroup, ulong a, ulong b, ulong c);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportCreateSubscription(IntPtr a, IntPtr channels, out IntPtr b, ulong c, IntPtr d);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportCreateSamples(IntPtr subscription, IntPtr channels, IntPtr a);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetGroup(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetChannelName(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetUnitLabel(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern long IOReportSimpleGetIntegerValue(IntPtr channel, int idx);
 
     [DllImport(CoreFoundationLib)]

@@ -388,18 +388,35 @@ else
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 10. Apple Silicon Energy Counter
+// 10. Apple Silicon Energy / Power (IOReport)
+// 累積エネルギー (J) と瞬間消費電力 (W) を表示する。
+// 初回 Update() はベースライン確立のため電力値は 0。
+// 2 回目以降の Update() でデルタから瞬間電力を算出する。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 10. Apple Silicon Energy Counter ###");
+Console.WriteLine("### 10. Apple Silicon Energy / Power (IOReport) ###");
 var asPower = PlatformProvider.GetAppleSiliconEnergyCounter();
 if (asPower.Supported)
 {
+    // 初回読み取り (ベースライン)
     asPower.Update();
+    Thread.Sleep(1000);
+    // 2 回目読み取りで瞬間電力を算出
+    asPower.Update();
+    Console.WriteLine($"  [Cumulative Energy]");
     Console.WriteLine($"  CPU Energy: {asPower.Cpu:F6} J");
     Console.WriteLine($"  GPU Energy: {asPower.Gpu:F6} J");
     Console.WriteLine($"  ANE Energy: {asPower.Ane:F6} J");
     Console.WriteLine($"  RAM Energy: {asPower.Ram:F6} J");
+    Console.WriteLine($"  PCI Energy: {asPower.Pci:F6} J");
     Console.WriteLine($"  Total:      {asPower.Total:F6} J");
+    Console.WriteLine();
+    Console.WriteLine($"  [Instantaneous Power]");
+    Console.WriteLine($"  CPU Power:  {asPower.CpuPower:F2} W");
+    Console.WriteLine($"  GPU Power:  {asPower.GpuPower:F2} W");
+    Console.WriteLine($"  ANE Power:  {asPower.AnePower:F2} W");
+    Console.WriteLine($"  RAM Power:  {asPower.RamPower:F2} W");
+    Console.WriteLine($"  PCI Power:  {asPower.PciPower:F2} W");
+    Console.WriteLine($"  Total:      {asPower.TotalPower:F2} W");
 }
 else
 {
@@ -466,7 +483,24 @@ else
     }
     Console.WriteLine();
 
-    Console.WriteLine("### 11d. Fans ###");
+    Console.WriteLine("### 11d. Current Readings ###");
+    if (monitor.Currents.Count == 0)
+    {
+        Console.WriteLine("  No current sensors detected.");
+    }
+    var currentsLimit = Math.Min(10, monitor.Currents.Count);
+    for (var i = 0; i < currentsLimit; i++)
+    {
+        var s = monitor.Currents[i];
+        Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F3} A");
+    }
+    if (monitor.Currents.Count > 10)
+    {
+        Console.WriteLine($"  ... and {monitor.Currents.Count - 10} more readings.");
+    }
+    Console.WriteLine();
+
+    Console.WriteLine("### 11e. Fans ###");
     if (monitor.Fans.Count == 0)
     {
         Console.WriteLine("  No fans detected.");
