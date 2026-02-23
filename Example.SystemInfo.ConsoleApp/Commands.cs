@@ -77,14 +77,16 @@ public sealed class MemoryCommand : ICommandHandler
     {
         var mem = PlatformProvider.GetMemoryStat();
         var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
-        Console.WriteLine($"PhysicalMemory: {FormatBytes(mem.PhysicalMemory)}");
-        Console.WriteLine($"Used:           {FormatBytes(mem.UsedBytes)}  ({usage:F1}%)");
-        Console.WriteLine($"Free:           {FormatBytes(mem.FreeBytes)}");
-        Console.WriteLine($"Active:         {FormatBytes(mem.ActiveBytes)}");
-        Console.WriteLine($"Inactive:       {FormatBytes(mem.InactiveBytes)}");
-        Console.WriteLine($"Wired:          {FormatBytes(mem.WiredBytes)}");
-        Console.WriteLine($"AppMemory:      {FormatBytes(mem.AppMemoryBytes)}");
-        Console.WriteLine($"Compressed:     {FormatBytes(mem.CompressorBytes)}");
+        Console.WriteLine($"PhysicalMemory:   {FormatBytes(mem.PhysicalMemory)}");
+        Console.WriteLine($"Used:             {FormatBytes(mem.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Free:             {FormatBytes(mem.FreeBytes)}");
+        Console.WriteLine($"Active:           {FormatBytes(mem.ActiveBytes)}");
+        Console.WriteLine($"Inactive:         {FormatBytes(mem.InactiveBytes)}");
+        Console.WriteLine($"Wired:            {FormatBytes(mem.WiredBytes)}");
+        Console.WriteLine($"AppMemory:        {FormatBytes(mem.AppMemoryBytes)}");
+        Console.WriteLine($"Compressed:       {FormatBytes(mem.CompressorBytes)}");
+        var compressionRatio = mem.CompressorPageCount > 0 ? (double)mem.TotalUncompressedPagesInCompressor / mem.CompressorPageCount : 0;
+        Console.WriteLine($"CompressionRatio: {compressionRatio:F2}");
 
         return ValueTask.CompletedTask;
     }
