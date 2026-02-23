@@ -206,52 +206,47 @@ public sealed class DiskStats
             {
                 try
                 {
-                    var dynStat = ReadDynamicStats(entry);
-                    if (dynStat is null)
+                    var info = ReadMediaInfo(entry);
+                    if (info is null)
                     {
                         continue;
                     }
 
-                    var dyn = dynStat.Value;
-
-                    // physicalOnly フィルタ
-                    if (_physicalOnly && !dyn.IsPhysicalMedium)
+                    var (name, isPhysical, parent) = info.Value;
+                    try
                     {
-                        continue;
-                    }
-
-                    var device = default(DiskDeviceStat);
-                    foreach (var item in _devices)
-                    {
-                        if (item.Name == dyn.Name)
+                        // physicalOnly フィルタ
+                        if (_physicalOnly && !isPhysical)
                         {
-                            device = item;
-                            break;
+                            continue;
                         }
-                    }
 
-                    if (device is null)
+                        var device = default(DiskDeviceStat);
+                        foreach (var item in _devices)
+                        {
+                            if (item.Name == name)
+                            {
+                                device = item;
+                                break;
+                            }
+                        }
+
+                        if (device is null)
+                        {
+                            // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
+                            var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
+                            device = new DiskDeviceStat(name, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
+                            _devices.Add(device);
+                            added = true;
+                        }
+
+                        device.Live = true;
+                        ReadStats(parent, device);
+                    }
+                    finally
                     {
-                        // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
-                        var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
-                        device = new DiskDeviceStat(dyn.Name, dyn.IsPhysicalMedium, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
-                        _devices.Add(device);
-                        added = true;
+                        IOObjectRelease(parent);
                     }
-
-                    device.Live = true;
-                    device.BytesRead = dyn.BytesRead;
-                    device.BytesWritten = dyn.BytesWritten;
-                    device.ReadsCompleted = dyn.ReadsCompleted;
-                    device.WritesCompleted = dyn.WritesCompleted;
-                    device.TotalTimeRead = dyn.TotalTimeRead;
-                    device.TotalTimeWritten = dyn.TotalTimeWritten;
-                    device.RetriesRead = dyn.RetriesRead;
-                    device.RetriesWritten = dyn.RetriesWritten;
-                    device.ErrorsRead = dyn.ErrorsRead;
-                    device.ErrorsWritten = dyn.ErrorsWritten;
-                    device.LatencyTimeRead = dyn.LatencyTimeRead;
-                    device.LatencyTimeWritten = dyn.LatencyTimeWritten;
                 }
                 finally
                 {
@@ -285,28 +280,11 @@ public sealed class DiskStats
     // Private types / helpers
     //--------------------------------------------------------------------------------
 
-    private readonly record struct DynamicStats(
-        string Name,
-        bool IsPhysicalMedium,
-        ulong BytesRead,
-        ulong BytesWritten,
-        ulong ReadsCompleted,
-        ulong WritesCompleted,
-        ulong TotalTimeRead,
-        ulong TotalTimeWritten,
-        ulong RetriesRead,
-        ulong RetriesWritten,
-        ulong ErrorsRead,
-        ulong ErrorsWritten,
-        ulong LatencyTimeRead,
-        ulong LatencyTimeWritten);
-
     /// <summary>
-    /// IOMedia エントリから動的な I/O 統計を読み取る。
-    /// Whole=true でない場合、BSD 名が取得できない場合、Statistics がない場合は null を返す。
-    /// IsPhysicalMedium は親クラスが IOBlockStorageDriver かどうかで判定する。
+    /// IOMedia エントリが Whole=true かつ BSD 名を持つ場合に (BSD名, 物理メディアフラグ, 親エントリ) を返す。
+    /// 戻り値が non-null の場合、呼び出し元が Parent を IOObjectRelease しなければならない。
     /// </summary>
-    private static DynamicStats? ReadDynamicStats(uint mediaEntry)
+    private static (string Name, bool IsPhysicalMedium, uint Parent)? ReadMediaInfo(uint mediaEntry)
     {
         // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
@@ -342,50 +320,46 @@ public sealed class DiskStats
             return null;
         }
 
-        // 親エントリの Statistics を取得
+        // 親エントリを取得 (呼び出し元が release する)
         if (IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
         {
             return null;
         }
 
+        // 親クラスが IOBlockStorageDriver であれば物理メディア
+        var isPhysicalMedium = GetIokitClassName(parent) == "IOBlockStorageDriver";
+        return (bsdName, isPhysicalMedium, parent);
+    }
+
+    /// <summary>
+    /// 親エントリの Statistics ディクショナリを読み取り、device のプロパティを直接更新する。
+    /// </summary>
+    private static void ReadStats(uint parentEntry, DiskDeviceStat device)
+    {
+        var statsDict = GetIokitDictionary(parentEntry, "Statistics");
+        if (statsDict == IntPtr.Zero)
+        {
+            return;
+        }
+
         try
         {
-            var statsDict = GetIokitDictionary(parent, "Statistics");
-            if (statsDict == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            // 親クラスが IOBlockStorageDriver であれば物理メディア
-            var parentClass = GetIokitClassName(parent);
-            var isPhysicalMedium = parentClass == "IOBlockStorageDriver";
-
-            try
-            {
-                return new DynamicStats(
-                    Name: bsdName,
-                    IsPhysicalMedium: isPhysicalMedium,
-                    BytesRead: (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)"),
-                    BytesWritten: (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)"),
-                    ReadsCompleted: (ulong)GetIokitDictNumber(statsDict, "Operations (Read)"),
-                    WritesCompleted: (ulong)GetIokitDictNumber(statsDict, "Operations (Write)"),
-                    TotalTimeRead: (ulong)GetIokitDictNumber(statsDict, "Total Time (Read)"),
-                    TotalTimeWritten: (ulong)GetIokitDictNumber(statsDict, "Total Time (Write)"),
-                    RetriesRead: (ulong)GetIokitDictNumber(statsDict, "Retries (Read)"),
-                    RetriesWritten: (ulong)GetIokitDictNumber(statsDict, "Retries (Write)"),
-                    ErrorsRead: (ulong)GetIokitDictNumber(statsDict, "Errors (Read)"),
-                    ErrorsWritten: (ulong)GetIokitDictNumber(statsDict, "Errors (Write)"),
-                    LatencyTimeRead: (ulong)GetIokitDictNumber(statsDict, "Latency Time (Read)"),
-                    LatencyTimeWritten: (ulong)GetIokitDictNumber(statsDict, "Latency Time (Write)"));
-            }
-            finally
-            {
-                CFRelease(statsDict);
-            }
+            device.BytesRead          = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
+            device.BytesWritten       = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
+            device.ReadsCompleted     = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
+            device.WritesCompleted    = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
+            device.TotalTimeRead      = (ulong)GetIokitDictNumber(statsDict, "Total Time (Read)");
+            device.TotalTimeWritten   = (ulong)GetIokitDictNumber(statsDict, "Total Time (Write)");
+            device.RetriesRead        = (ulong)GetIokitDictNumber(statsDict, "Retries (Read)");
+            device.RetriesWritten     = (ulong)GetIokitDictNumber(statsDict, "Retries (Write)");
+            device.ErrorsRead         = (ulong)GetIokitDictNumber(statsDict, "Errors (Read)");
+            device.ErrorsWritten      = (ulong)GetIokitDictNumber(statsDict, "Errors (Write)");
+            device.LatencyTimeRead    = (ulong)GetIokitDictNumber(statsDict, "Latency Time (Read)");
+            device.LatencyTimeWritten = (ulong)GetIokitDictNumber(statsDict, "Latency Time (Write)");
         }
         finally
         {
-            IOObjectRelease(parent);
+            CFRelease(statsDict);
         }
     }
 
