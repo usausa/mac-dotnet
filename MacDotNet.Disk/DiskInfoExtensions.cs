@@ -36,11 +36,6 @@ public static class DiskInfoExtensions
         }
     }
 
-/*
-    [GeneratedRegex(@"^(disk\d+)s(\d+)$")]
-    private static partial Regex PartitionRegex();
-*/
-
     private static string GetPartitionPattern(string bsdName) =>
         $"^{Regex.Escape(bsdName)}s\\d+$";
 

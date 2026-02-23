@@ -43,8 +43,8 @@ internal static class Program
             {
                 var s = disk.IOStatistics;
                 Console.WriteLine("--- I/O Statistics ---");
-                Console.WriteLine($"Bytes Read:         {FormatBytes((ulong)Math.Max(0, s.BytesRead))}");
-                Console.WriteLine($"Bytes Written:      {FormatBytes((ulong)Math.Max(0, s.BytesWritten))}");
+                Console.WriteLine($"Bytes Read:         {FormatBytes(s.BytesRead)}");
+                Console.WriteLine($"Bytes Written:      {FormatBytes(s.BytesWritten)}");
                 Console.WriteLine($"Ops Read:           {s.OperationsRead}");
                 Console.WriteLine($"Ops Written:        {s.OperationsWritten}");
                 Console.WriteLine($"Time Read:          {s.TotalTimeRead / 1_000_000} ms");

@@ -34,7 +34,7 @@ internal sealed class DiskInfoGeneric : IDiskInfo
 
     public SmartType SmartType { get; set; }
 
-    public ISmart Smart { get; set; } = default!;
+    public ISmart Smart { get; set; } = SmartUnsupported.Default;
 
     public DiskIOStatistics? IOStatistics { get; set; }
 

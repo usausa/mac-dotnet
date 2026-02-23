@@ -38,13 +38,10 @@ internal static class NativeMethods
 
     [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
     public static extern int IOServiceGetMatchingServices(
-        uint mainPort, nint matching, ref nint existing);
+        uint mainPort, nint matching, ref uint existing);
 
     [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
-    public static extern uint IOIteratorNext(nint iterator);
-
-    [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
-    public static extern int IOObjectRelease(nint @object);
+    public static extern uint IOIteratorNext(uint iterator);
 
     [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
     public static extern int IOObjectRelease(uint @object);

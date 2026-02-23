@@ -19,8 +19,8 @@ public static class DiskInfo
         }
 
         // IOServiceGetMatchingServicesはmatchingを消費する (CFRelease不要)
-        var iter = nint.Zero;
-        if (IOServiceGetMatchingServices(0, matching, ref iter) != KERN_SUCCESS || iter == nint.Zero)
+        var iter = 0u;
+        if (IOServiceGetMatchingServices(0, matching, ref iter) != KERN_SUCCESS || iter == 0)
         {
             return [];
         }
@@ -30,7 +30,7 @@ public static class DiskInfo
             var results = new List<IDiskInfo>();
             uint entry;
             var index = 0u;
-            while ((entry = IOIteratorNext(iter)) != 0)
+            while ((entry = IOIteratorNext(iter)) != 0u)
             {
                 try
                 {
@@ -117,18 +117,18 @@ public static class DiskInfo
             {
                 ioStats = new DiskIOStatistics
                 {
-                    BytesRead = GetDictNumber(statsDict, "Bytes (Read)"),
-                    BytesWritten = GetDictNumber(statsDict, "Bytes (Write)"),
-                    OperationsRead = GetDictNumber(statsDict, "Operations (Read)"),
-                    OperationsWritten = GetDictNumber(statsDict, "Operations (Write)"),
-                    TotalTimeRead = GetDictNumber(statsDict, "Total Time (Read)"),
-                    TotalTimeWritten = GetDictNumber(statsDict, "Total Time (Write)"),
-                    RetriesRead = GetDictNumber(statsDict, "Retries (Read)"),
-                    RetriesWritten = GetDictNumber(statsDict, "Retries (Write)"),
-                    ErrorsRead = GetDictNumber(statsDict, "Errors (Read)"),
-                    ErrorsWritten = GetDictNumber(statsDict, "Errors (Write)"),
-                    LatencyTimeRead = GetDictNumber(statsDict, "Latency Time (Read)"),
-                    LatencyTimeWritten = GetDictNumber(statsDict, "Latency Time (Write)")
+                    BytesRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Bytes (Read)")),
+                    BytesWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Bytes (Write)")),
+                    OperationsRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Operations (Read)")),
+                    OperationsWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Operations (Write)")),
+                    TotalTimeRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Total Time (Read)")),
+                    TotalTimeWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Total Time (Write)")),
+                    RetriesRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Retries (Read)")),
+                    RetriesWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Retries (Write)")),
+                    ErrorsRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Errors (Read)")),
+                    ErrorsWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Errors (Write)")),
+                    LatencyTimeRead = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Latency Time (Read)")),
+                    LatencyTimeWritten = (ulong)Math.Max(0L, GetDictNumber(statsDict, "Latency Time (Write)"))
                 };
             }
             finally

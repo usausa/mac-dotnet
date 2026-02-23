@@ -105,6 +105,8 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTEnableDisableOperations
+        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
+        //       macOSのアップデートにより変更される可能性がある。
         var smartVtable = *(nint*)pSmartInterface;
         var enableFn = (delegate* unmanaged<nint, byte, int>)(*(nint*)((byte*)smartVtable + 40));
         kr = enableFn(pSmartInterface, 1);
@@ -128,6 +130,8 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         }
 
         // ATA SMART interface vtable offset 72: SMARTReadData
+        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
+        //       macOSのアップデートにより変更される可能性がある。
         var smartVtable = *(nint*)smartInterface;
         var readDataFn = (delegate* unmanaged<nint, byte*, int>)(*(nint*)((byte*)smartVtable + 72));
 

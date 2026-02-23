@@ -147,6 +147,8 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTReadData
+        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
+        //       macOSのアップデートにより変更される可能性がある。
         var smartVtable = *(nint*)smartInterface;
         var readDataFn = (delegate* unmanaged<nint, byte*, int>)(*(nint*)((byte*)smartVtable + 40));
 
@@ -185,6 +187,8 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         return true;
     }
 
+    // NVMe仕様では一部カウンタが128-bitリトルエンディアンで格納される。
+    // 実運用上は下位64-bitに収まるため上位8バイトは無視する。
     private static unsafe ulong Le128ToUInt64(byte* p)
     {
         var v = 0ul;
