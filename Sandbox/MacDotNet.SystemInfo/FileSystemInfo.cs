@@ -66,6 +66,33 @@ public sealed record FileSystemEntry
 
     /// <summary>ローカルファイルシステムかどうか。false の場合はネットワークまたは仮想<br/>Whether the file system is local. False indicates network or virtual.</summary>
     public bool IsLocal => (Flags & MNT_LOCAL) != 0;
+
+    /// <summary>
+    /// DeviceName から物理ディスクの BSD 名を返す。
+    /// 例: "/dev/disk3s1s1" → "disk3"、取得できない場合は null。
+    /// <para>Returns the physical disk BSD name extracted from DeviceName.
+    /// Example: "/dev/disk3s1s1" → "disk3". Returns null if unavailable.</para>
+    /// </summary>
+    public string? PhysicalDiskName
+    {
+        get
+        {
+            const string prefix = "/dev/disk";
+            if (!DeviceName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var span = DeviceName.AsSpan(prefix.Length);
+            var n = 0;
+            while (n < span.Length && char.IsAsciiDigit(span[n]))
+            {
+                n++;
+            }
+
+            return n > 0 ? string.Concat("disk", span[..n]) : null;
+        }
+    }
 }
 
 /// <summary>
@@ -85,6 +112,33 @@ public sealed record DiskVolume
 
     /// <summary>読み取り専用でマウントされているかどうか<br/>Whether the volume is mounted read-only</summary>
     public required bool IsReadOnly { get; init; }
+
+    /// <summary>
+    /// DeviceName から物理ディスクの BSD 名を返す。
+    /// 例: "/dev/disk3s1s1" → "disk3"、取得できない場合は null。
+    /// <para>Returns the physical disk BSD name extracted from DeviceName.
+    /// Example: "/dev/disk3s1s1" → "disk3". Returns null if unavailable.</para>
+    /// </summary>
+    public string? PhysicalDiskName
+    {
+        get
+        {
+            const string prefix = "/dev/disk";
+            if (!DeviceName.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var span = DeviceName.AsSpan(prefix.Length);
+            var n = 0;
+            while (n < span.Length && char.IsAsciiDigit(span[n]))
+            {
+                n++;
+            }
+
+            return n > 0 ? string.Concat("disk", span[..n]) : null;
+        }
+    }
 }
 
 /// <summary>

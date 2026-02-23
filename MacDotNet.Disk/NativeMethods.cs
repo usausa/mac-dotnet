@@ -28,6 +28,13 @@ internal static class NativeMethods
     // IOServiceプレーン名
     public const string kIOServicePlane = "IOService";
 
+    // マウントフラグ (sys/mount.h) / Mount flags
+    public const uint MNT_RDONLY = 0x00000001;  // 読み取り専用 / Read-only filesystem
+    public const uint MNT_LOCAL = 0x00001000;   // ローカルFS / Local filesystem
+
+    // getfsstat モード (sys/mount.h) / getfsstat mode flags
+    public const int MNT_NOWAIT = 2;  // 非同期: キャッシュ値を即返す / Return cached values immediately
+
     //------------------------------------------------------------------------
     // IOKit
     //------------------------------------------------------------------------
@@ -68,6 +75,12 @@ internal static class NativeMethods
         IntPtr interfaceType,
         IntPtr* theInterface,
         int* theScore);
+
+    [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
+
+    [DllImport("/System/Library/Frameworks/IOKit.framework/IOKit")]
+    public static extern unsafe int IOObjectGetClass(uint @object, byte* className);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -142,7 +155,51 @@ internal static class NativeMethods
         var releaseFn = (delegate* unmanaged<IntPtr, uint>)(*((IntPtr*)vtable + 3));
         releaseFn(ppInterface);
     }
+
+    //------------------------------------------------------------------------
+    // libc (statfs)
+    //------------------------------------------------------------------------
+
+    [DllImport("libc")]
+    public static extern unsafe int getfsstat(statfs_disk* buf, int bufsize, int mode);
 }
+
+// マウント済みファイルシステム情報 (sys/mount.h statfs)
+// GetVolumes が使用する最小限フィールドのみ定義する
+#pragma warning disable SA1307
+#pragma warning disable SA1310
+#pragma warning disable SA1300
+[StructLayout(LayoutKind.Sequential)]
+internal struct fsid_disk
+{
+    public int val0;
+    public int val1;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct statfs_disk
+{
+    public uint f_bsize;
+    public int f_iosize;
+    public ulong f_blocks;
+    public ulong f_bfree;
+    public ulong f_bavail;
+    public ulong f_files;
+    public ulong f_ffree;
+    public fsid_disk f_fsid;
+    public uint f_owner;
+    public uint f_type;
+    public uint f_flags;
+    public uint f_fssubtype;
+    public fixed byte f_fstypename[16];
+    public fixed byte f_mntonname[1024];
+    public fixed byte f_mntfromname[1024];
+    public uint f_flags_ext;
+    public fixed uint f_reserved[7];
+}
+#pragma warning restore SA1300
+#pragma warning restore SA1310
+#pragma warning restore SA1307
 
 // COM-like QueryInterfaceで使用するUUID構造体 (CoreFoundation CFUUIDBytes互換)
 // フィールド名はAppleオリジナル定義に合わせる
