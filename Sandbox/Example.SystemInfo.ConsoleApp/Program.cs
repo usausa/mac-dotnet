@@ -229,14 +229,22 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6a. Network Stats (500ms delta) ###");
 var netStats = PlatformProvider.GetNetworkStats();
+var prevSnapshot = netStats.Interfaces.ToDictionary(x => x.Name);
 Thread.Sleep(500);
 netStats.Update();
 var serviceNames = interfaces.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
 foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
 {
     Console.WriteLine($"  [{s.Name}]");
-    Console.WriteLine($"    RX: {FormatBytes(s.RxBytes),10} total  delta: {FormatBytes(s.DeltaRxBytes),8} ({s.DeltaRxPackets} pkts, {s.DeltaRxErrors} err)");
-    Console.WriteLine($"    TX: {FormatBytes(s.TxBytes),10} total  delta: {FormatBytes(s.DeltaTxBytes),8} ({s.DeltaTxPackets} pkts, {s.DeltaTxErrors} err)");
+    var hasPrev = prevSnapshot.TryGetValue(s.Name, out var prev);
+    var deltaRxBytes   = hasPrev ? unchecked(s.RxBytes   - prev.RxBytes)   : 0u;
+    var deltaRxPackets = hasPrev ? unchecked(s.RxPackets - prev.RxPackets) : 0u;
+    var deltaRxErrors  = hasPrev ? unchecked(s.RxErrors  - prev.RxErrors)  : 0u;
+    var deltaTxBytes   = hasPrev ? unchecked(s.TxBytes   - prev.TxBytes)   : 0u;
+    var deltaTxPackets = hasPrev ? unchecked(s.TxPackets - prev.TxPackets) : 0u;
+    var deltaTxErrors  = hasPrev ? unchecked(s.TxErrors  - prev.TxErrors)  : 0u;
+    Console.WriteLine($"    RX: {FormatBytes(s.RxBytes),10} total  delta: {FormatBytes(deltaRxBytes),8} ({deltaRxPackets} pkts, {deltaRxErrors} err)");
+    Console.WriteLine($"    TX: {FormatBytes(s.TxBytes),10} total  delta: {FormatBytes(deltaTxBytes),8} ({deltaTxPackets} pkts, {deltaTxErrors} err)");
 }
 Console.WriteLine();
 

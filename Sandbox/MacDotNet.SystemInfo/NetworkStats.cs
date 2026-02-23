@@ -6,13 +6,11 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
 /// ネットワークインターフェース 1 本分の統計スナップショット。
-/// 累積値 (カーネル起動からの合計) とデルタ値 (前回 Update() からの差分) を保持する。
+/// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
 /// </summary>
 public readonly record struct NetworkInterfaceStat(
     /// <summary>インターフェース名。例: "en0"</summary>
     string Name,
-
-    // ---- 累積値 ----
 
     /// <summary>受信バイト数の累積値</summary>
     uint RxBytes,
@@ -35,47 +33,36 @@ public readonly record struct NetworkInterfaceStat(
     /// <summary>コリジョン数の累積値</summary>
     uint Collisions,
     /// <summary>未知プロトコルによる受信パケット数の累積値</summary>
-    uint NoProto,
-
-    // ---- デルタ値 (前回 Update() からの差分、初回は 0) ----
-
-    /// <summary>受信バイト数のデルタ</summary>
-    uint DeltaRxBytes,
-    /// <summary>受信パケット数のデルタ</summary>
-    uint DeltaRxPackets,
-    /// <summary>受信エラー数のデルタ</summary>
-    uint DeltaRxErrors,
-    /// <summary>受信ドロップ数のデルタ</summary>
-    uint DeltaRxDrops,
-    /// <summary>送信バイト数のデルタ</summary>
-    uint DeltaTxBytes,
-    /// <summary>送信パケット数のデルタ</summary>
-    uint DeltaTxPackets,
-    /// <summary>送信エラー数のデルタ</summary>
-    uint DeltaTxErrors,
-    /// <summary>コリジョン数のデルタ</summary>
-    uint DeltaCollisions
+    uint NoProto
 );
 
 /// <summary>
 /// 全ネットワークインターフェースのトラフィック統計。
 /// <see cref="Create()"/> でインスタンスを生成し、<see cref="Update()"/> を呼ぶたびに
-/// 最新値とデルタ値を更新する。<see cref="CpuUsage"/> と同じパターン。
+/// 最新の累積値を更新する。<see cref="CpuUsage"/> と同じパターン。
+/// <para>
+/// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
+/// </para>
 /// <para>
 /// <see cref="System.Net.NetworkInformation.NetworkInterface.GetIPv4Statistics()"/> に対する追加価値:
-/// デルタ値の計算、Collisions / NoProto 等 .NET 標準では取得できない macOS 固有カウンタを提供する。
+/// Collisions / NoProto 等 .NET 標準では取得できない macOS 固有カウンタを提供する。
 /// </para>
 /// </summary>
 public sealed class NetworkStats
 {
-    private Dictionary<string, NetworkInterfaceStat> _previous = [];
+    /// <summary>
+    /// HiddenConfiguration 除外が有効な場合、対象インターフェース名のセット。
+    /// null の場合はフィルタリングなし (全インターフェースを対象)。
+    /// インスタンス生成時に一度だけ構築し、Update() では使い回す。
+    /// </summary>
+    private readonly HashSet<string>? _includedInterfaces;
 
     /// <summary>最後に Update() を呼び出した日時</summary>
     public DateTime UpdateAt { get; private set; }
 
     /// <summary>
     /// 全インターフェースの統計エントリ一覧 (名前昇順)。
-    /// デルタ値は初回 Update() では 0、2 回目以降から有効。
+    /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
     /// </summary>
     public IReadOnlyList<NetworkInterfaceStat> Interfaces { get; private set; } = [];
 
@@ -83,20 +70,33 @@ public sealed class NetworkStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    private NetworkStats()
+    private NetworkStats(HashSet<string>? includedInterfaces)
     {
+        _includedInterfaces = includedInterfaces;
         Update();
     }
 
-    public static NetworkStats Create() => new();
+    /// <summary>
+    /// NetworkStats インスタンスを生成する。
+    /// </summary>
+    /// <param name="excludeHiddenConfiguration">
+    /// true の場合、macOS System Settings のネットワーク画面に表示されない
+    /// HiddenConfiguration なインターフェース (Thunderbolt ポート用 Ethernet Adapter 等) を除外する。
+    /// 対象インターフェースの決定はインスタンス生成時に一度だけ行われ、Update() では使い回される。
+    /// </param>
+    public static NetworkStats Create(bool excludeHiddenConfiguration = false)
+    {
+        var includedInterfaces = excludeHiddenConfiguration ? BuildNonHiddenInterfaceSet() : null;
+        return new NetworkStats(includedInterfaces);
+    }
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// getifaddrs(3) から全インターフェースの if_data カウンタを取得し、
-    /// 前回スナップショットとの差分でデルタを計算して Interfaces を更新する。
+    /// getifaddrs(3) から全インターフェースの if_data カウンタを取得し、Interfaces を更新する。
+    /// HiddenConfiguration 除外は Create() 時に決定済みのセットで行い、このメソッドでは再判定しない。
     /// </summary>
     public unsafe bool Update()
     {
@@ -107,8 +107,7 @@ public sealed class NetworkStats
 
         try
         {
-            // AF_LINK エントリから if_data を収集 (1インターフェースにつき1エントリ)
-            var raws = new Dictionary<string, if_data>(StringComparer.Ordinal);
+            var entries = new List<NetworkInterfaceStat>();
 
             for (var ptr = ifap; ptr != IntPtr.Zero;)
             {
@@ -118,52 +117,31 @@ public sealed class NetworkStats
                 if (name is not null
                     && ifa.ifa_addr != IntPtr.Zero
                     && ((sockaddr*)ifa.ifa_addr)->sa_family == AF_LINK
-                    && ifa.ifa_data != IntPtr.Zero)
+                    && ifa.ifa_data != IntPtr.Zero
+                    && (_includedInterfaces is null || _includedInterfaces.Contains(name)))
                 {
-                    raws[name] = *(if_data*)ifa.ifa_data;
+                    var raw = *(if_data*)ifa.ifa_data;
+                    entries.Add(new NetworkInterfaceStat(
+                        Name: name,
+                        RxBytes: raw.ifi_ibytes,
+                        RxPackets: raw.ifi_ipackets,
+                        RxErrors: raw.ifi_ierrors,
+                        RxDrops: raw.ifi_iqdrops,
+                        RxMulticast: raw.ifi_imcasts,
+                        TxBytes: raw.ifi_obytes,
+                        TxPackets: raw.ifi_opackets,
+                        TxErrors: raw.ifi_oerrors,
+                        TxMulticast: raw.ifi_omcasts,
+                        Collisions: raw.ifi_collisions,
+                        NoProto: raw.ifi_noproto
+                    ));
                 }
 
                 ptr = ifa.ifa_next;
             }
 
-            // スナップショット構築
-            var entries = new List<NetworkInterfaceStat>(raws.Count);
-            var newPrev = new Dictionary<string, NetworkInterfaceStat>(raws.Count, StringComparer.Ordinal);
-
-            foreach (var (name, raw) in raws)
-            {
-                var hasPrev = _previous.TryGetValue(name, out var prev);
-
-                var stat = new NetworkInterfaceStat(
-                    Name: name,
-                    RxBytes: raw.ifi_ibytes,
-                    RxPackets: raw.ifi_ipackets,
-                    RxErrors: raw.ifi_ierrors,
-                    RxDrops: raw.ifi_iqdrops,
-                    RxMulticast: raw.ifi_imcasts,
-                    TxBytes: raw.ifi_obytes,
-                    TxPackets: raw.ifi_opackets,
-                    TxErrors: raw.ifi_oerrors,
-                    TxMulticast: raw.ifi_omcasts,
-                    Collisions: raw.ifi_collisions,
-                    NoProto: raw.ifi_noproto,
-                    DeltaRxBytes: hasPrev ? unchecked(raw.ifi_ibytes - prev.RxBytes) : 0,
-                    DeltaRxPackets: hasPrev ? unchecked(raw.ifi_ipackets - prev.RxPackets) : 0,
-                    DeltaRxErrors: hasPrev ? unchecked(raw.ifi_ierrors - prev.RxErrors) : 0,
-                    DeltaRxDrops: hasPrev ? unchecked(raw.ifi_iqdrops - prev.RxDrops) : 0,
-                    DeltaTxBytes: hasPrev ? unchecked(raw.ifi_obytes - prev.TxBytes) : 0,
-                    DeltaTxPackets: hasPrev ? unchecked(raw.ifi_opackets - prev.TxPackets) : 0,
-                    DeltaTxErrors: hasPrev ? unchecked(raw.ifi_oerrors - prev.TxErrors) : 0,
-                    DeltaCollisions: hasPrev ? unchecked(raw.ifi_collisions - prev.Collisions) : 0
-                );
-
-                entries.Add(stat);
-                newPrev[name] = stat;
-            }
-
             entries.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
             Interfaces = entries;
-            _previous = newPrev;
             UpdateAt = DateTime.Now;
 
             return true;
@@ -172,5 +150,77 @@ public sealed class NetworkStats
         {
             freeifaddrs(ifap);
         }
+    }
+
+    //--------------------------------------------------------------------------------
+    // Private helpers
+    //--------------------------------------------------------------------------------
+
+    /// <summary>
+    /// SC preferences から HiddenConfiguration でないインターフェース名のセットを構築する。
+    /// このメソッドはインスタンス生成時に一度だけ呼ばれる。
+    /// </summary>
+    private static HashSet<string>? BuildNonHiddenInterfaceSet()
+    {
+        var result = new HashSet<string>(StringComparer.Ordinal);
+
+        var appName = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
+        var prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero);
+        NativeMethods.CFRelease(appName);
+
+        if (prefs == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var services = NativeMethods.SCNetworkServiceCopyAll(prefs);
+            if (services == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                var count = NativeMethods.CFArrayGetCount(services);
+                for (var i = 0L; i < count; i++)
+                {
+                    var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
+                    if (service == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    if (NetworkInfo.IsHiddenConfiguration(prefs, service))
+                    {
+                        continue;
+                    }
+
+                    var iface = NativeMethods.SCNetworkServiceGetInterface(service);
+                    if (iface == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
+                    var bsdName = NativeMethods.CfStringToManaged(bsdNameRef);
+                    if (bsdName is not null)
+                    {
+                        result.Add(bsdName);
+                    }
+                }
+            }
+            finally
+            {
+                NativeMethods.CFRelease(services);
+            }
+        }
+        finally
+        {
+            NativeMethods.CFRelease(prefs);
+        }
+
+        return result;
     }
 }

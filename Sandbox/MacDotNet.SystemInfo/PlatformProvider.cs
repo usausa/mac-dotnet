@@ -56,7 +56,7 @@ public static class PlatformProvider
 
     /// <summary>
     /// 全ネットワークインターフェースのトラフィック統計を返す。
-    /// <see cref="NetworkStats.Update()"/> を呼ぶたびに累積値とデルタ値が更新される。
+    /// <see cref="NetworkStats.Update()"/> を呼ぶたびに累積値が更新される。差分が必要な場合は呼び出し元で計算する。
     /// </summary>
     public static NetworkStats GetNetworkStats() => NetworkStats.Create();
 

@@ -210,7 +210,7 @@ public static class NetworkInfo
     /// このフラグが True のサービスは macOS System Settings のネットワーク画面に表示されない
     /// 自動管理の隠しサービス (Thunderbolt ポート用 Ethernet Adapter 等)。
     /// </summary>
-    private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
+    internal static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
     {
         var serviceIdRef = NativeMethods.SCNetworkServiceGetServiceID(service);
         var serviceId = NativeMethods.CfStringToManaged(serviceIdRef);
