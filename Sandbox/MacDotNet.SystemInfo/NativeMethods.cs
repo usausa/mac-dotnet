@@ -952,4 +952,36 @@ internal static class NativeMethods
             CFRelease(cfKey);
         }
     }
+
+    /// <summary>
+    /// CFDictionary から CFString 値をマネージ文字列として取得する。
+    /// キーが存在しないか CFString 以外の型の場合は null を返す。
+    /// <para>
+    /// Retrieves a CFString value from a CFDictionary as a managed string.
+    /// Returns null if the key is absent or the value is not a CFString.
+    /// </para>
+    /// </summary>
+    public static string? GetIokitDictString(IntPtr dict, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var val = CFDictionaryGetValue(dict, cfKey);
+            if (val == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
 }

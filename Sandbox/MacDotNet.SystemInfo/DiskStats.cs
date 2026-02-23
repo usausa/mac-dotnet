@@ -29,6 +29,13 @@ public sealed class DiskDeviceStat
     /// <summary>累積書き込み操作数<br/>Cumulative write operations completed</summary>
     public ulong WritesCompleted { get; internal set; }
 
+    /// <summary>
+    /// IOKit から取得したディスクの製品名。例: "APPLE SSD AP0512Q"。
+    /// 取得できない場合は null。
+    /// <para>Disk product name retrieved from IOKit. Null if unavailable.</para>
+    /// </summary>
+    public string? MediaName { get; internal set; }
+
     internal DiskDeviceStat(string name)
     {
         Name = name;
@@ -115,7 +122,7 @@ public sealed class DiskStats
                         continue;
                     }
 
-                    var (name, bytesRead, bytesWritten, readsCompleted, writesCompleted) = stat.Value;
+                    var (name, bytesRead, bytesWritten, readsCompleted, writesCompleted, mediaName) = stat.Value;
 
                     var device = default(DiskDeviceStat);
                     foreach (var item in _devices)
@@ -139,6 +146,7 @@ public sealed class DiskStats
                     device.BytesWritten = bytesWritten;
                     device.ReadsCompleted = readsCompleted;
                     device.WritesCompleted = writesCompleted;
+                    device.MediaName = mediaName;
                 }
                 finally
                 {
@@ -172,7 +180,58 @@ public sealed class DiskStats
     // Private helpers
     //--------------------------------------------------------------------------------
 
-    private static (string Name, ulong BytesRead, ulong BytesWritten, ulong ReadsCompleted, ulong WritesCompleted)? ReadWholeDiskStat(uint mediaEntry)
+    /// <summary>
+    /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
+    /// "Device Characteristics" 辞書中の "Product Name" を返す。
+    /// 見つからない場合は null。entry 自体は呼び出し元が所有するため release しない。
+    /// </summary>
+    private static string? FindProductName(uint entry)
+    {
+        var current = entry;
+        var shouldReleaseCurrent = false;
+
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+            {
+                break;
+            }
+
+            if (shouldReleaseCurrent)
+            {
+                IOObjectRelease(current);
+            }
+
+            current = parent;
+            shouldReleaseCurrent = true;
+
+            var deviceCharacts = GetIokitDictionary(current, "Device Characteristics");
+            if (deviceCharacts != IntPtr.Zero)
+            {
+                string? name;
+                try
+                {
+                    name = GetIokitDictString(deviceCharacts, "Product Name");
+                }
+                finally
+                {
+                    CFRelease(deviceCharacts);
+                }
+
+                IOObjectRelease(current);
+                return name;
+            }
+        }
+
+        if (shouldReleaseCurrent)
+        {
+            IOObjectRelease(current);
+        }
+
+        return null;
+    }
+
+    private static (string Name, ulong BytesRead, ulong BytesWritten, ulong ReadsCompleted, ulong WritesCompleted, string? MediaName)? ReadWholeDiskStat(uint mediaEntry)
     {
         // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
@@ -222,18 +281,25 @@ public sealed class DiskStats
                 return null;
             }
 
+            ulong bytesRead, bytesWritten, readsCompleted, writesCompleted;
             try
             {
-                var bytesRead = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
-                var bytesWritten = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
-                var readsCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
-                var writesCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
-                return (bsdName, bytesRead, bytesWritten, readsCompleted, writesCompleted);
+                bytesRead = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
+                bytesWritten = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
+                readsCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
+                writesCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
             }
             finally
             {
                 CFRelease(statsDict);
             }
+
+            // 製品名は IOKit 祖先を上方向に辿って "Device Characteristics" から取得する。
+            // APFS 仮想コンテナ (disk3 等) は複数段上に物理デバイスがあるため、
+            // 固定深度ではなく見つかるまで辿る。
+            var mediaName = FindProductName(parent);
+
+            return (bsdName, bytesRead, bytesWritten, readsCompleted, writesCompleted, mediaName);
         }
         finally
         {

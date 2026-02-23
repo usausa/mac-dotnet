@@ -110,7 +110,7 @@ public sealed class NetworkStats
     /// HiddenConfiguration なインターフェース (Thunderbolt ポート用 Ethernet Adapter 等) を除外する。
     /// 対象インターフェースの決定はインスタンス生成時に一度だけ行われ、Update() では使い回される。
     /// </param>
-    public static NetworkStats Create(bool excludeHiddenConfiguration = false)
+    public static NetworkStats Create(bool excludeHiddenConfiguration = true)
     {
         var includedInterfaces = excludeHiddenConfiguration ? BuildNonHiddenInterfaceSet() : null;
         return new NetworkStats(includedInterfaces);

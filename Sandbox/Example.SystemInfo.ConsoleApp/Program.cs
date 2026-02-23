@@ -262,6 +262,8 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 6b. Disk I/O Stats (500ms delta)
+// 5a と同じ単位 (ユーザー可視ボリューム) で表示する。
+// /dev/disk3s1s1 → 物理ディスク disk3 の I/O にマッピングする。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6b. Disk I/O Stats (500ms delta) ###");
 var diskStats = PlatformProvider.GetDiskStats();
@@ -273,20 +275,34 @@ var diskT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 diskStats.Update();
 var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
-foreach (var d in diskStats.Devices)
+var diskVolumes = PlatformProvider.GetDiskVolumes();
+if (diskVolumes.Count == 0)
 {
+    Console.WriteLine("  No disk volumes found.");
+}
+foreach (var vol in diskVolumes)
+{
+    var physicalDisk = ExtractPhysicalDiskName(vol.DeviceName);
+    var d = physicalDisk is not null
+        ? diskStats.Devices.FirstOrDefault(x => x.Name == physicalDisk)
+        : null;
+    var diskLabel = physicalDisk is not null && d?.MediaName is not null
+        ? $"{physicalDisk} [{d.MediaName}]"
+        : physicalDisk ?? "?";
+    Console.WriteLine($"  [{vol.MountPoint}] ({vol.DeviceName} → {diskLabel})");
+    if (d is null)
+    {
+        Console.WriteLine($"    (I/O stats not available)");
+        continue;
+    }
+
     var hasPrevDisk = prevDiskSnapshot.TryGetValue(d.Name, out var prevDisk);
     var deltaRead    = hasPrevDisk ? d.BytesRead    - prevDisk.BytesRead    : 0UL;
     var deltaWritten = hasPrevDisk ? d.BytesWritten - prevDisk.BytesWritten : 0UL;
     var readMbps  = diskElapsed > 0 ? deltaRead    / (1024.0 * 1024.0) / diskElapsed : 0;
     var writeMbps = diskElapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / diskElapsed : 0;
-    Console.WriteLine($"  [{d.Name}]");
     Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
     Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
-}
-if (diskStats.Devices.Count == 0)
-{
-    Console.WriteLine("  No disk devices found.");
 }
 Console.WriteLine();
 
@@ -580,3 +596,22 @@ static string FormatBytes(ulong bytes) => bytes switch
 
 static string Truncate(string s, int max) =>
     s.Length <= max ? s : s[..(max - 1)] + "…";
+
+// /dev/disk3s1s1 や /dev/disk7s2 から物理ディスク名 (disk3, disk7) を抽出する。
+static string? ExtractPhysicalDiskName(string devicePath)
+{
+    const string prefix = "/dev/";
+    if (!devicePath.StartsWith(prefix, StringComparison.Ordinal))
+    {
+        return null;
+    }
+
+    var name = devicePath[prefix.Length..]; // "disk3s1s1"
+    var i = 4; // "disk" の長さ分スキップ
+    while (i < name.Length && char.IsDigit(name[i]))
+    {
+        i++;
+    }
+
+    return i > 4 ? name[..i] : null; // "disk3"
+}
