@@ -14,7 +14,9 @@ public static class CommandBuilderExtensions
     {
         commands.AddCommand<UptimeCommand>();
         commands.AddCommand<LoadCommand>();
-        //commands.AddCommand<MemoryCommand>();
+        commands.AddCommand<MemoryCommand>();
+        commands.AddCommand<SwapCommand>();
+        commands.AddCommand<ProcessCommand>();
         //commands.AddCommand<CpuCommand>();
         //commands.AddCommand<CpuLoadCommand>();
         //commands.AddCommand<FileSystemCommand>();
@@ -65,46 +67,81 @@ public sealed class LoadCommand : ICommandHandler
     }
 }
 
-//// Memory
-//[Command("memory", "Memory Info")]
-//public sealed class MemoryCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var mem = PlatformProvider.GetMemory();
-//        Console.WriteLine("=== Memory Info ===");
-//        Console.WriteLine($"Physical Memory:  {FormatBytes(mem.PhysicalMemory)}");
-//        Console.WriteLine($"Page Size:        {mem.PageSize} bytes");
-//        Console.WriteLine($"Used:             {FormatBytes(mem.UsedBytes)}");
-//        Console.WriteLine($"Free:             {FormatBytes(mem.FreeBytes)}");
-//        Console.WriteLine($"Usage:            {mem.UsagePercent:F1}%");
-//        Console.WriteLine($"Active:           {FormatBytes(mem.ActiveBytes)}");
-//        Console.WriteLine($"Wired:            {FormatBytes(mem.WiredBytes)}");
-//        Console.WriteLine($"Compressor:       {FormatBytes(mem.CompressorBytes)}");
+//--------------------------------------------------------------------------------
+// Memory
+//--------------------------------------------------------------------------------
+[Command("memory", "Get memory stat")]
+public sealed class MemoryCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var mem = PlatformProvider.GetMemoryStat();
+        var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
+        Console.WriteLine($"PhysicalMemory: {FormatBytes(mem.PhysicalMemory)}");
+        Console.WriteLine($"Used:           {FormatBytes(mem.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Free:           {FormatBytes(mem.FreeBytes)}");
+        Console.WriteLine($"Active:         {FormatBytes(mem.ActiveBytes)}");
+        Console.WriteLine($"Inactive:       {FormatBytes(mem.InactiveBytes)}");
+        Console.WriteLine($"Wired:          {FormatBytes(mem.WiredBytes)}");
+        Console.WriteLine($"AppMemory:      {FormatBytes(mem.AppMemoryBytes)}");
+        Console.WriteLine($"Compressed:     {FormatBytes(mem.CompressorBytes)}");
 
-//        var swap = PlatformProvider.GetSwap();
-//        if (swap.Supported)
-//        {
-//            Console.WriteLine();
-//            Console.WriteLine("=== Swap Info ===");
-//            Console.WriteLine($"Total:            {FormatBytes(swap.TotalBytes)}");
-//            Console.WriteLine($"Used:             {FormatBytes(swap.UsedBytes)}");
-//            Console.WriteLine($"Available:        {FormatBytes(swap.AvailableBytes)}");
-//            Console.WriteLine($"Usage:            {swap.UsagePercent:F1}%");
-//        }
+        return ValueTask.CompletedTask;
+    }
 
-//        return ValueTask.CompletedTask;
-//    }
+    private static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
+        _ => $"{bytes} B"
+    };
+}
 
-//    private static string FormatBytes(ulong bytes) => bytes switch
-//    {
-//        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-//        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-//        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-//        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-//        _ => $"{bytes} B"
-//    };
-//}
+//--------------------------------------------------------------------------------
+// Swap
+//--------------------------------------------------------------------------------
+[Command("swap", "Get swap usage")]
+public sealed class SwapCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var swap = PlatformProvider.GetSwapUsage();
+        var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
+        Console.WriteLine($"Total:            {FormatBytes(swap.TotalBytes)}");
+        Console.WriteLine($"Used:             {FormatBytes(swap.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Available:        {FormatBytes(swap.AvailableBytes)}");
+        Console.WriteLine($"Encrypted:        {swap.IsEncrypted}");
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
+        _ => $"{bytes} B"
+    };
+}
+
+//--------------------------------------------------------------------------------
+// Process
+//--------------------------------------------------------------------------------
+[Command("process", "Get process summary")]
+public sealed class ProcessCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var ps = PlatformProvider.GetProcessSummary();
+        Console.WriteLine($"Process Count: {ps.ProcessCount}");
+        Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
+
+        return ValueTask.CompletedTask;
+    }
+}
 
 //// CPU
 //[Command("cpu", "CPU Info")]
