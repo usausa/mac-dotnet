@@ -2,6 +2,11 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+// TODO delete
+#pragma warning disable SA1611
+#pragma warning disable SA1615
+#pragma warning disable SA1629
+
 // ReSharper disable CommentTypo
 // ReSharper disable IdentifierTypo
 // ReSharper disable InconsistentNaming
@@ -12,36 +17,36 @@ using System.Runtime.InteropServices;
 internal static class NativeMethods
 {
     //------------------------------------------------------------------------
-    // Constants
+    // Constants / 定数
     //------------------------------------------------------------------------
 
-    // 成功コード (mach/kern_return.h)
+    // 成功コード (mach/kern_return.h) / Mach kernel success return code
     public const int KERN_SUCCESS = 0;
 
-    // host_statistics64のflavor (mach/host_info.h)
+    // host_statistics64 の flavor 引数 (mach/host_info.h) / Flavor argument for host_statistics64
     public const int HOST_VM_INFO64 = 4;
 
-    // vm_statistics64のサイズ (natural_t単位)
+    // vm_statistics64 のサイズ (natural_t 単位) / Size of vm_statistics64 in natural_t units
     public const int HOST_VM_INFO64_COUNT = 40;
 
-    // host_processor_info flavor (mach/processor_info.h)
+    // host_processor_info の flavor 引数 (mach/processor_info.h) / Flavor argument for host_processor_info
     public const int PROCESSOR_CPU_LOAD_INFO = 2;
 
-    // CPU state indices (mach/machine.h)
-    public const int CPU_STATE_USER = 0;
-    public const int CPU_STATE_SYSTEM = 1;
-    public const int CPU_STATE_IDLE = 2;
-    public const int CPU_STATE_NICE = 3;
-    public const int CPU_STATE_MAX = 4;
+    // CPU 状態インデックス (mach/machine.h) / CPU state indices (mach/machine.h)
+    public const int CPU_STATE_USER = 0;    // ユーザーモード / User mode
+    public const int CPU_STATE_SYSTEM = 1;  // カーネルモード / Kernel mode
+    public const int CPU_STATE_IDLE = 2;    // アイドル / Idle
+    public const int CPU_STATE_NICE = 3;    // nice 付きユーザーモード / User mode with nice priority
+    public const int CPU_STATE_MAX = 4;     // 状態数 / Number of CPU states
 
-    // CFStringEncoding (CFString.h)
+    // CFStringEncoding: UTF-8 (CFString.h)
     public const uint kCFStringEncodingUTF8 = 0x08000100;
 
-    // CFNumberType (CFNumber.h)
-    public const int kCFNumberSInt32Type = 3;
-    public const int kCFNumberSInt64Type = 4;
+    // CFNumberType (CFNumber.h) / CFNumber type identifiers
+    public const int kCFNumberSInt32Type = 3;   // 32-bit signed integer
+    public const int kCFNumberSInt64Type = 4;   // 64-bit signed integer
 
-    // IOPowerSources dictionary keys (IOPSKeys.h)
+    // IOPowerSources ディクショナリキー (IOPSKeys.h) / IOPowerSources dictionary keys
     public const string kIOPSNameKey = "Name";
     public const string kIOPSTypeKey = "Type";
     public const string kIOPSTransportTypeKey = "Transport Type";
@@ -57,68 +62,68 @@ internal static class NativeMethods
     public const string kIOPSBatteryHealthKey = "BatteryHealth";
     public const string kIOPSBatteryHealthConditionKey = "BatteryHealthCondition";
     public const string kIOPSDesignCycleCountKey = "DesignCycleCount9C";
-    public const string kIOPSACPowerValue = "AC Power";
+    public const string kIOPSACPowerValue = "AC Power";  // PowerSourceState value when on AC / AC 電源時の値
 
-    // getfsstat モード (sys/mount.h)
-    public const int MNT_WAIT = 1;
-    public const int MNT_NOWAIT = 2;
+    // getfsstat モード (sys/mount.h) / getfsstat mode flags
+    public const int MNT_WAIT = 1;    // 同期: ファイルシステム統計の更新を待つ / Synchronous: wait for filesystem stats update
+    public const int MNT_NOWAIT = 2;  // 非同期: キャッシュ値を即返す / Asynchronous: return cached values immediately
 
-    // マウントフラグ (sys/mount.h)
-    public const uint MNT_RDONLY = 0x00000001;
-    public const uint MNT_LOCAL = 0x00001000;
+    // マウントフラグ (sys/mount.h) / Mount flags
+    public const uint MNT_RDONLY = 0x00000001;  // 読み取り専用 / Read-only filesystem
+    public const uint MNT_LOCAL = 0x00001000;   // ローカルFS / Local filesystem (not network)
 
-    // アドレスファミリー定数 (sys/socket.h)
-    public const byte AF_INET = 2;
-    public const byte AF_LINK = 18;
-    public const byte AF_INET6 = 30;
+    // アドレスファミリー定数 (sys/socket.h) / Address family constants
+    public const byte AF_INET = 2;   // IPv4
+    public const byte AF_LINK = 18;  // BSD データリンク / BSD data-link layer
+    public const byte AF_INET6 = 30; // IPv6
 
-    // インターフェースフラグ定数 (net/if.h)
-    public const uint IFF_UP = 0x1;
-    public const uint IFF_BROADCAST = 0x2;
-    public const uint IFF_LOOPBACK = 0x8;
-    public const uint IFF_POINTOPOINT = 0x10;
-    public const uint IFF_RUNNING = 0x40;
-    public const uint IFF_MULTICAST = 0x8000;
+    // インターフェースフラグ定数 (net/if.h) / Interface flag constants (IFF_*)
+    public const uint IFF_UP = 0x1;           // インターフェースが有効 / Interface is up
+    public const uint IFF_BROADCAST = 0x2;    // ブロードキャスト対応 / Supports broadcast
+    public const uint IFF_LOOPBACK = 0x8;     // ループバック / Loopback interface
+    public const uint IFF_POINTOPOINT = 0x10; // P2P リンク / Point-to-point link
+    public const uint IFF_RUNNING = 0x40;     // リソース割り当て済み / Resources allocated
+    public const uint IFF_MULTICAST = 0x8000; // マルチキャスト対応 / Supports multicast
 
-    // インターフェース種別定数 (net/if_types.h)
-    public const byte IFT_ETHER = 0x06;
-    public const byte IFT_LOOP = 0x18;
-    public const byte IFT_GIF = 0x37;
-    public const byte IFT_STF = 0x39;
-    public const byte IFT_IEEE80211 = 0x47;
-    public const byte IFT_BRIDGE = 0xD1;
-    public const byte IFT_CELLULAR = 0xFF;
+    // インターフェース種別定数 (net/if_types.h) / Interface type constants
+    public const byte IFT_ETHER = 0x06;      // 有線 Ethernet / Wired Ethernet
+    public const byte IFT_LOOP = 0x18;       // ループバック / Loopback
+    public const byte IFT_GIF = 0x37;        // 汎用トンネル / Generic tunnel
+    public const byte IFT_STF = 0x39;        // 6to4 トンネル / 6-to-4 tunnel
+    public const byte IFT_IEEE80211 = 0x47;  // Wi-Fi (IEEE 802.11)
+    public const byte IFT_BRIDGE = 0xD1;     // ブリッジ / Bridge
+    public const byte IFT_CELLULAR = 0xFF;   // セルラー / Cellular
 
-    // inet_ntop用バッファサイズ定数 (netinet/in.h)
-    public const uint INET_ADDRSTRLEN = 16;
-    public const uint INET6_ADDRSTRLEN = 46;
+    // inet_ntop 用バッファサイズ定数 (netinet/in.h) / Buffer size constants for inet_ntop
+    public const uint INET_ADDRSTRLEN = 16;   // IPv4 アドレス文字列の最大長 / Max length of an IPv4 address string
+    public const uint INET6_ADDRSTRLEN = 46;  // IPv6 アドレス文字列の最大長 / Max length of an IPv6 address string
 
-    // proc_listpids type (sys/proc_info.h)
-    public const uint PROC_ALL_PIDS = 1;
+    // proc_listpids type (sys/proc_info.h) / Type argument for proc_listpids
+    public const uint PROC_ALL_PIDS = 1;  // すべてのプロセス / All processes
 
-    // proc_pidinfo flavor (sys/proc_info.h)
-    public const int PROC_PIDTBSDINFO = 3;
-    public const int PROC_PIDTASKINFO = 4;
+    // proc_pidinfo flavor (sys/proc_info.h) / Flavor arguments for proc_pidinfo
+    public const int PROC_PIDTBSDINFO = 3;  // BSD プロセス情報 (proc_bsdinfo) / BSD process info
+    public const int PROC_PIDTASKINFO = 4;  // タスク情報 (proc_taskinfo) / Task info
 
-    // proc_pidpath buffer size (sys/proc_info.h)
+    // proc_pidpath バッファサイズ (sys/proc_info.h) / Buffer size for proc_pidpath
     public const uint PROC_PIDPATHINFO_MAXSIZE = 4096;
 
-    // SMC selector (IOConnectCallStructMethodのselector引数)
+    // SMC selector: IOConnectCallStructMethod の selector 引数 / Selector for IOConnectCallStructMethod
     public const uint KERNEL_INDEX_SMC = 2;
 
-    // SMCコマンド
-    public const byte SMC_CMD_READ_BYTES = 5;
-    public const byte SMC_CMD_READ_KEYINFO = 9;
-    public const byte SMC_CMD_READ_INDEX = 8;
+    // SMC コマンド / SMC command codes
+    public const byte SMC_CMD_READ_BYTES = 5;    // キー値をバイト列として読み取る / Read key value as bytes
+    public const byte SMC_CMD_READ_KEYINFO = 9;  // キーのメタ情報を読み取る / Read key metadata
+    public const byte SMC_CMD_READ_INDEX = 8;    // インデックスでキーを読み取る / Read key by index
 
-    // SMCデータ型定数 (4文字をビッグエンディアンuint32にエンコード)
-    public const uint DATA_TYPE_FLT = 0x666C7420;   // "flt "
-    public const uint DATA_TYPE_SP78 = 0x73703738;  // "sp78"
-    public const uint DATA_TYPE_FPE2 = 0x66706532;  // "fpe2"
-    public const uint DATA_TYPE_IOFT = 0x696F6674;  // "ioft"
-    public const uint DATA_TYPE_UI8 = 0x75693820;   // "ui8 "
-    public const uint DATA_TYPE_UI16 = 0x75693136;  // "ui16"
-    public const uint DATA_TYPE_UI32 = 0x75693332;  // "ui32"
+    // SMC データ型定数: 4 文字をビッグエンディアン uint32 にエンコード / SMC data type codes (4-char big-endian uint32)
+    public const uint DATA_TYPE_FLT = 0x666C7420;   // "flt " — 32-bit IEEE 754 float
+    public const uint DATA_TYPE_SP78 = 0x73703738;  // "sp78" — signed fixed-point Q7.8 (温度 / temperature)
+    public const uint DATA_TYPE_FPE2 = 0x66706532;  // "fpe2" — unsigned fixed-point Qn.2 (RPM 等 / e.g. fan RPM)
+    public const uint DATA_TYPE_IOFT = 0x696F6674;  // "ioft" — signed fixed-point Q16.16
+    public const uint DATA_TYPE_UI8 = 0x75693820;   // "ui8 " — 8-bit unsigned integer
+    public const uint DATA_TYPE_UI16 = 0x75693136;  // "ui16" — 16-bit unsigned integer
+    public const uint DATA_TYPE_UI32 = 0x75693332;  // "ui32" — 32-bit unsigned integer
 
     //------------------------------------------------------------------------
     // Struct
@@ -409,6 +414,9 @@ internal static class NativeMethods
     [DllImport("libc")]
     public static extern unsafe int getfsstat(statfs* buf, int bufsize, int mode);
 
+    [DllImport("libc", EntryPoint = "statfs")]
+    public static extern unsafe int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
+
     [DllImport("libc")]
     public static extern int getifaddrs(out IntPtr ifap);
 
@@ -499,6 +507,7 @@ internal static class NativeMethods
     //------------------------------------------------------------------------
 
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
+    private const string IOReportLib = "/usr/lib/libIOReport.dylib";
 
     [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyPowerSourcesInfo();
@@ -543,27 +552,84 @@ internal static class NativeMethods
     public static extern int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
 
     [DllImport(IOKitLib)]
+    public static extern unsafe int IORegistryEntryGetName(uint entry, byte* name);
+
+    [DllImport(IOKitLib)]
+    public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
+
+    [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOReportCopyChannelsInGroup([MarshalAs(UnmanagedType.LPUTF8Str)] string? group, [MarshalAs(UnmanagedType.LPUTF8Str)] string? subgroup, ulong a, ulong b, ulong c);
+    //------------------------------------------------------------------------
+    // SystemConfiguration
+    //------------------------------------------------------------------------
 
-    [DllImport(IOKitLib)]
+    private const string SystemConfigurationLib = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
+
+    /// <summary>ユーザーが設定可能なハードウェアネットワークインターフェースの一覧を CFArrayRef で返す。呼び出し元が CFRelease する必要がある</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceCopyAll();
+
+    /// <summary>インターフェースの BSD 名 (例: "en0") を CFStringRef で返す。所有権は呼び出し元に移らないため CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
+
+    /// <summary>インターフェースのローカライズされた表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetLocalizedDisplayName(IntPtr networkInterface);
+
+    /// <summary>SystemConfiguration の設定ファイルを開く。戻り値は CFRelease が必要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
+
+    /// <summary>System Settings のネットワーク設定に登録されているネットワークサービスの一覧を CFArrayRef で返す。CFRelease が必要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
+
+    /// <summary>ネットワークサービスのユーザー表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetName(IntPtr service);
+
+    /// <summary>ネットワークサービスに紐付くハードウェアインターフェースを返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
+
+    /// <summary>インターフェースの SC レベルの種別を CFStringRef で返す。例: "Ethernet"、"IEEE80211"、"Bridge"。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
+
+    /// <summary>ネットワークサービスが有効かどうかを返す (System Settings で有効/無効切り替え可能)</summary>
+    [DllImport(SystemConfigurationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool SCNetworkServiceGetEnabled(IntPtr service);
+
+    /// <summary>ネットワークサービスの UUID 文字列を CFStringRef で返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetServiceID(IntPtr service);
+
+    /// <summary>SC preferences の指定パスの値 (CFPropertyListRef) を返す。CFRelease 不要</summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
+
+    [DllImport(IOReportLib)]
+    public static extern IntPtr IOReportCopyChannelsInGroup(IntPtr group, IntPtr subgroup, ulong a, ulong b, ulong c);
+
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportCreateSubscription(IntPtr a, IntPtr channels, out IntPtr b, ulong c, IntPtr d);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportCreateSamples(IntPtr subscription, IntPtr channels, IntPtr a);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetGroup(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetChannelName(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern IntPtr IOReportChannelGetUnitLabel(IntPtr channel);
 
-    [DllImport(IOKitLib)]
+    [DllImport(IOReportLib)]
     public static extern long IOReportSimpleGetIntegerValue(IntPtr channel, int idx);
 
     [DllImport(CoreFoundationLib)]
@@ -583,9 +649,19 @@ internal static class NativeMethods
     public const int kCFNumberFloat64Type = 6;
 
     //------------------------------------------------------------------------
-    // Helper
+    // Helper / ヘルパーメソッド
     //------------------------------------------------------------------------
 
+    /// <summary>
+    /// CFStringRef をマネージ文字列に変換する。
+    /// まず CFStringGetCStringPtr で高速パスを試み、失敗した場合はバッファを確保して変換する。
+    /// cfString が IntPtr.Zero の場合は null を返す。
+    /// <para>
+    /// Converts a CFStringRef to a managed string.
+    /// Tries the fast path via CFStringGetCStringPtr first; falls back to buffer allocation if needed.
+    /// Returns null if cfString is IntPtr.Zero.
+    /// </para>
+    /// </summary>
     public static unsafe string? CfStringToManaged(IntPtr cfString)
     {
         if (cfString == IntPtr.Zero)
@@ -612,6 +688,10 @@ internal static class NativeMethods
             : null;
     }
 
+    /// <summary>
+    /// sysctlbyname で 32 ビット整数値を取得する。取得失敗時は 0 を返す。
+    /// <para>Reads a 32-bit integer value via sysctlbyname. Returns 0 on failure.</para>
+    /// </summary>
     public static unsafe int GetSystemControlInt32(string name)
     {
         int value;
@@ -619,6 +699,10 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
+    /// <summary>
+    /// sysctlbyname で 64 ビット符号付き整数値を取得する。取得失敗時は 0 を返す。
+    /// <para>Reads a 64-bit signed integer value via sysctlbyname. Returns 0 on failure.</para>
+    /// </summary>
     public static unsafe long GetSystemControlInt64(string name)
     {
         long value;
@@ -626,6 +710,10 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
+    /// <summary>
+    /// sysctlbyname で 64 ビット符号なし整数値を取得する。取得失敗時は 0 を返す。
+    /// <para>Reads a 64-bit unsigned integer value via sysctlbyname. Returns 0 on failure.</para>
+    /// </summary>
     public static unsafe ulong GetSystemControlUInt64(string name)
     {
         ulong value;
@@ -633,6 +721,10 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
+    /// <summary>
+    /// sysctlbyname で文字列値を取得する。1024 バイトを超える場合は null を返す。
+    /// <para>Reads a string value via sysctlbyname. Returns null if the value exceeds 1024 bytes.</para>
+    /// </summary>
     public static unsafe string? GetSystemControlString(string name)
     {
         var len = IntPtr.Zero;
@@ -651,5 +743,218 @@ internal static class NativeMethods
         return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0
             ? Marshal.PtrToStringUTF8((IntPtr)buffer)
             : null;
+    }
+
+    //------------------------------------------------------------------------
+    // IOKit property helpers / IOKit プロパティヘルパー
+    //------------------------------------------------------------------------
+
+    /// <summary>
+    /// IOKit エントリから CFString プロパティを取得してマネージ文字列に変換する。
+    /// プロパティが存在しないか CFString 以外の型の場合は null を返す。
+    /// <para>
+    /// Retrieves a CFString property from an IOKit entry and converts it to a managed string.
+    /// Returns null if the property is absent or is not a CFString.
+    /// </para>
+    /// </summary>
+    public static string? GetIokitString(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// IOKit エントリから CFNumber プロパティを 64 ビット整数として取得する。
+    /// プロパティが存在しないか CFNumber 以外の型の場合は 0 を返す。
+    /// <para>
+    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit integer.
+    /// Returns 0 if the property is absent or is not a CFNumber.
+    /// </para>
+    /// </summary>
+    public static long GetIokitNumber(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (CFGetTypeID(val) != CFNumberGetTypeID())
+                {
+                    return 0;
+                }
+
+                long result = 0;
+                CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
+                return result;
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// IOKit エントリから CFData プロパティを取得し、先頭 4 バイトをリトルエンディアン uint32 として返す。
+    /// データが 4 バイト未満の場合は 0 を返す。
+    /// <para>
+    /// Retrieves a CFData property from an IOKit entry and interprets the first 4 bytes as a little-endian uint32.
+    /// Returns 0 if the data is shorter than 4 bytes.
+    /// </para>
+    /// </summary>
+    public static uint GetIokitDataUInt32LE(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            try
+            {
+                if (CFGetTypeID(val) != CFDataGetTypeID())
+                {
+                    return 0;
+                }
+
+                var len = CFDataGetLength(val);
+                if (len < 4)
+                {
+                    return 0;
+                }
+
+                var ptr = CFDataGetBytePtr(val);
+                return (uint)(Marshal.ReadByte(ptr, 0)
+                    | (Marshal.ReadByte(ptr, 1) << 8)
+                    | (Marshal.ReadByte(ptr, 2) << 16)
+                    | (Marshal.ReadByte(ptr, 3) << 24));
+            }
+            finally
+            {
+                CFRelease(val);
+            }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>IOKit エントリから CFDictionary プロパティを取得する。戻り値が非 Zero の場合は呼び出し元が CFRelease する必要がある</summary>
+    public static IntPtr GetIokitDictionary(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return IntPtr.Zero;
+            }
+
+            if (CFGetTypeID(val) != CFDictionaryGetTypeID())
+            {
+                CFRelease(val);
+                return IntPtr.Zero;
+            }
+
+            return val;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// CFDictionary から CFNumber 値を 64 ビット整数として取得する。
+    /// キーが存在しないか CFNumber 以外の型の場合は 0 を返す。
+    /// <para>
+    /// Retrieves a CFNumber value from a CFDictionary as a 64-bit integer.
+    /// Returns 0 if the key is absent or the value is not a CFNumber.
+    /// </para>
+    /// </summary>
+    public static long GetIokitDictNumber(IntPtr dict, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = CFDictionaryGetValue(dict, cfKey);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            if (CFGetTypeID(val) != CFNumberGetTypeID())
+            {
+                return 0;
+            }
+
+            long result = 0;
+            CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
+            return result;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
     }
 }
