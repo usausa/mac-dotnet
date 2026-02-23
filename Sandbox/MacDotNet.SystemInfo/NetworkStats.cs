@@ -12,33 +12,41 @@ using static MacDotNet.SystemInfo.NativeMethods;
 /// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
 /// </para>
 /// </summary>
-public readonly record struct NetworkInterfaceStat(
+public sealed class NetworkInterfaceStat
+{
+    internal bool Live { get; set; }
+
     /// <summary>インターフェース名。例: "en0"<br/>Interface name. Example: "en0"</summary>
-    string Name,
+    public string Name { get; }
 
     /// <summary>受信バイト数の累積値<br/>Cumulative bytes received</summary>
-    uint RxBytes,
+    public uint RxBytes { get; internal set; }
     /// <summary>受信パケット数の累積値<br/>Cumulative packets received</summary>
-    uint RxPackets,
+    public uint RxPackets { get; internal set; }
     /// <summary>受信エラー数の累積値<br/>Cumulative receive errors</summary>
-    uint RxErrors,
+    public uint RxErrors { get; internal set; }
     /// <summary>受信ドロップ数の累積値<br/>Cumulative receive drops</summary>
-    uint RxDrops,
+    public uint RxDrops { get; internal set; }
     /// <summary>受信マルチキャストパケット数の累積値<br/>Cumulative multicast packets received</summary>
-    uint RxMulticast,
+    public uint RxMulticast { get; internal set; }
     /// <summary>送信バイト数の累積値<br/>Cumulative bytes transmitted</summary>
-    uint TxBytes,
+    public uint TxBytes { get; internal set; }
     /// <summary>送信パケット数の累積値<br/>Cumulative packets transmitted</summary>
-    uint TxPackets,
+    public uint TxPackets { get; internal set; }
     /// <summary>送信エラー数の累積値<br/>Cumulative transmit errors</summary>
-    uint TxErrors,
+    public uint TxErrors { get; internal set; }
     /// <summary>送信マルチキャストパケット数の累積値<br/>Cumulative multicast packets transmitted</summary>
-    uint TxMulticast,
+    public uint TxMulticast { get; internal set; }
     /// <summary>コリジョン数の累積値<br/>Cumulative collision count</summary>
-    uint Collisions,
+    public uint Collisions { get; internal set; }
     /// <summary>未知プロトコルによる受信パケット数の累積値<br/>Cumulative packets received for unknown protocols</summary>
-    uint NoProto
-);
+    public uint NoProto { get; internal set; }
+
+    internal NetworkInterfaceStat(string name)
+    {
+        Name = name;
+    }
+}
 
 /// <summary>
 /// 全ネットワークインターフェースのトラフィック統計。
@@ -72,6 +80,8 @@ public sealed class NetworkStats
     /// </summary>
     private readonly HashSet<string>? _includedInterfaces;
 
+    private readonly List<NetworkInterfaceStat> _interfaces = new();
+
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
@@ -80,7 +90,7 @@ public sealed class NetworkStats
     /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
     /// <para>List of statistics entries for all interfaces (sorted by name). Values are cumulative since boot.</para>
     /// </summary>
-    public IReadOnlyList<NetworkInterfaceStat> Interfaces { get; private set; } = [];
+    public IReadOnlyList<NetworkInterfaceStat> Interfaces => _interfaces;
 
     //--------------------------------------------------------------------------------
     // Constructor / Factory
@@ -121,9 +131,14 @@ public sealed class NetworkStats
             return false;
         }
 
+        foreach (var iface in _interfaces)
+        {
+            iface.Live = false;
+        }
+
         try
         {
-            var entries = new List<NetworkInterfaceStat>();
+            var added = false;
 
             for (var ptr = ifap; ptr != IntPtr.Zero;)
             {
@@ -137,27 +152,54 @@ public sealed class NetworkStats
                     && (_includedInterfaces is null || _includedInterfaces.Contains(name)))
                 {
                     var raw = *(if_data*)ifa.ifa_data;
-                    entries.Add(new NetworkInterfaceStat(
-                        Name: name,
-                        RxBytes: raw.ifi_ibytes,
-                        RxPackets: raw.ifi_ipackets,
-                        RxErrors: raw.ifi_ierrors,
-                        RxDrops: raw.ifi_iqdrops,
-                        RxMulticast: raw.ifi_imcasts,
-                        TxBytes: raw.ifi_obytes,
-                        TxPackets: raw.ifi_opackets,
-                        TxErrors: raw.ifi_oerrors,
-                        TxMulticast: raw.ifi_omcasts,
-                        Collisions: raw.ifi_collisions,
-                        NoProto: raw.ifi_noproto
-                    ));
+
+                    var iface = default(NetworkInterfaceStat);
+                    foreach (var item in _interfaces)
+                    {
+                        if (item.Name == name)
+                        {
+                            iface = item;
+                            break;
+                        }
+                    }
+
+                    if (iface is null)
+                    {
+                        iface = new NetworkInterfaceStat(name);
+                        _interfaces.Add(iface);
+                        added = true;
+                    }
+
+                    iface.Live = true;
+                    iface.RxBytes = raw.ifi_ibytes;
+                    iface.RxPackets = raw.ifi_ipackets;
+                    iface.RxErrors = raw.ifi_ierrors;
+                    iface.RxDrops = raw.ifi_iqdrops;
+                    iface.RxMulticast = raw.ifi_imcasts;
+                    iface.TxBytes = raw.ifi_obytes;
+                    iface.TxPackets = raw.ifi_opackets;
+                    iface.TxErrors = raw.ifi_oerrors;
+                    iface.TxMulticast = raw.ifi_omcasts;
+                    iface.Collisions = raw.ifi_collisions;
+                    iface.NoProto = raw.ifi_noproto;
                 }
 
                 ptr = ifa.ifa_next;
             }
 
-            entries.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
-            Interfaces = entries;
+            for (var i = _interfaces.Count - 1; i >= 0; i--)
+            {
+                if (!_interfaces[i].Live)
+                {
+                    _interfaces.RemoveAt(i);
+                }
+            }
+
+            if (added)
+            {
+                _interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+            }
+
             UpdateAt = DateTime.Now;
 
             return true;

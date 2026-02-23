@@ -234,7 +234,10 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6a. Network Stats (500ms delta) ###");
 var netStats = PlatformProvider.GetNetworkStats();
-var prevSnapshot = netStats.Interfaces.ToDictionary(x => x.Name);
+// NetworkInterfaceStat はミュータブルなため値をコピー
+var prevSnapshot = netStats.Interfaces.ToDictionary(
+    x => x.Name,
+    x => (x.RxBytes, x.RxPackets, x.RxErrors, x.TxBytes, x.TxPackets, x.TxErrors));
 var netT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 netStats.Update();
@@ -262,7 +265,10 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6b. Disk I/O Stats (500ms delta) ###");
 var diskStats = PlatformProvider.GetDiskStats();
-var prevDiskSnapshot = diskStats.Devices.ToDictionary(x => x.Name);
+// DiskDeviceStat はミュータブルなため値をコピー
+var prevDiskSnapshot = diskStats.Devices.ToDictionary(
+    x => x.Name,
+    x => (x.BytesRead, x.BytesWritten));
 var diskT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 diskStats.Update();

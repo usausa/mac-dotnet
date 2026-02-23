@@ -10,22 +10,30 @@ using static MacDotNet.SystemInfo.NativeMethods;
 /// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
 /// </para>
 /// </summary>
-public readonly record struct DiskDeviceStat(
+public sealed class DiskDeviceStat
+{
+    internal bool Live { get; set; }
+
     /// <summary>BSD デバイス名。例: "disk0"<br/>BSD device name. Example: "disk0"</summary>
-    string Name,
+    public string Name { get; }
 
     /// <summary>累積読み取りバイト数<br/>Cumulative bytes read</summary>
-    ulong BytesRead,
+    public ulong BytesRead { get; internal set; }
 
     /// <summary>累積書き込みバイト数<br/>Cumulative bytes written</summary>
-    ulong BytesWritten,
+    public ulong BytesWritten { get; internal set; }
 
     /// <summary>累積読み取り操作数<br/>Cumulative read operations completed</summary>
-    ulong ReadsCompleted,
+    public ulong ReadsCompleted { get; internal set; }
 
     /// <summary>累積書き込み操作数<br/>Cumulative write operations completed</summary>
-    ulong WritesCompleted
-);
+    public ulong WritesCompleted { get; internal set; }
+
+    internal DiskDeviceStat(string name)
+    {
+        Name = name;
+    }
+}
 
 /// <summary>
 /// 全物理ディスクの累積 I/O 統計を管理するクラス。
@@ -42,6 +50,8 @@ public readonly record struct DiskDeviceStat(
 /// </summary>
 public sealed class DiskStats
 {
+    private readonly List<DiskDeviceStat> _devices = new();
+
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
@@ -50,7 +60,7 @@ public sealed class DiskStats
     /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
     /// <para>List of statistics entries for all physical disks (sorted by name). Values are cumulative since boot.</para>
     /// </summary>
-    public IReadOnlyList<DiskDeviceStat> Devices { get; private set; } = [];
+    public IReadOnlyList<DiskDeviceStat> Devices => _devices;
 
     //--------------------------------------------------------------------------------
     // Constructor / Factory
@@ -78,6 +88,11 @@ public sealed class DiskStats
     /// </summary>
     public bool Update()
     {
+        foreach (var device in _devices)
+        {
+            device.Live = false;
+        }
+
         // IOMedia (Whole=true) を列挙して物理ディスクを取得する
         var iter = IntPtr.Zero;
         var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref iter);
@@ -88,17 +103,42 @@ public sealed class DiskStats
 
         try
         {
-            var results = new List<DiskDeviceStat>();
+            var added = false;
             uint entry;
             while ((entry = IOIteratorNext(iter)) != 0)
             {
                 try
                 {
                     var stat = ReadWholeDiskStat(entry);
-                    if (stat.HasValue)
+                    if (stat is null)
                     {
-                        results.Add(stat.Value);
+                        continue;
                     }
+
+                    var (name, bytesRead, bytesWritten, readsCompleted, writesCompleted) = stat.Value;
+
+                    var device = default(DiskDeviceStat);
+                    foreach (var item in _devices)
+                    {
+                        if (item.Name == name)
+                        {
+                            device = item;
+                            break;
+                        }
+                    }
+
+                    if (device is null)
+                    {
+                        device = new DiskDeviceStat(name);
+                        _devices.Add(device);
+                        added = true;
+                    }
+
+                    device.Live = true;
+                    device.BytesRead = bytesRead;
+                    device.BytesWritten = bytesWritten;
+                    device.ReadsCompleted = readsCompleted;
+                    device.WritesCompleted = writesCompleted;
                 }
                 finally
                 {
@@ -106,8 +146,19 @@ public sealed class DiskStats
                 }
             }
 
-            results.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
-            Devices = results;
+            for (var i = _devices.Count - 1; i >= 0; i--)
+            {
+                if (!_devices[i].Live)
+                {
+                    _devices.RemoveAt(i);
+                }
+            }
+
+            if (added)
+            {
+                _devices.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+            }
+
             UpdateAt = DateTime.Now;
             return true;
         }
@@ -121,7 +172,7 @@ public sealed class DiskStats
     // Private helpers
     //--------------------------------------------------------------------------------
 
-    private static DiskDeviceStat? ReadWholeDiskStat(uint mediaEntry)
+    private static (string Name, ulong BytesRead, ulong BytesWritten, ulong ReadsCompleted, ulong WritesCompleted)? ReadWholeDiskStat(uint mediaEntry)
     {
         // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
@@ -177,7 +228,7 @@ public sealed class DiskStats
                 var bytesWritten = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
                 var readsCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
                 var writesCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
-                return new DiskDeviceStat(bsdName, bytesRead, bytesWritten, readsCompleted, writesCompleted);
+                return (bsdName, bytesRead, bytesWritten, readsCompleted, writesCompleted);
             }
             finally
             {
