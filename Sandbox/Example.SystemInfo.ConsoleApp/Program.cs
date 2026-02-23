@@ -245,7 +245,8 @@ var netElapsed = (DateTime.UtcNow - netT0).TotalSeconds;
 var serviceNames = interfaces.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
 foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
 {
-    Console.WriteLine($"  [{s.Name}]");
+    var displayLabel = s.DisplayName is not null ? $" {s.DisplayName}" : string.Empty;
+    Console.WriteLine($"  [{s.Name}]{displayLabel}");
     var hasPrev = prevSnapshot.TryGetValue(s.Name, out var prev);
     var deltaRxBytes   = hasPrev ? unchecked(s.RxBytes   - prev.RxBytes)   : 0u;
     var deltaRxPackets = hasPrev ? unchecked(s.RxPackets - prev.RxPackets) : 0u;
@@ -262,11 +263,11 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 6b. Disk I/O Stats (500ms delta)
-// 5a と同じ単位 (ユーザー可視ボリューム) で表示する。
-// /dev/disk3s1s1 → 物理ディスク disk3 の I/O にマッピングする。
+// physicalOnly: true で物理メディアのみを列挙し、関連する 5a ボリュームを子項目として表示する。
+// IsPhysicalMedium=false (APFS コンテナ等の仮想ディスク) は除外される。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6b. Disk I/O Stats (500ms delta) ###");
-var diskStats = PlatformProvider.GetDiskStats();
+var diskStats = PlatformProvider.GetDiskStats(physicalOnly: true);
 // DiskDeviceStat はミュータブルなため値をコピー
 var prevDiskSnapshot = diskStats.Devices.ToDictionary(
     x => x.Name,
@@ -275,25 +276,39 @@ var diskT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 diskStats.Update();
 var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
+
+// 5a ボリュームを物理ディスク名でグループ化
 var diskVolumes = PlatformProvider.GetDiskVolumes();
-if (diskVolumes.Count == 0)
-{
-    Console.WriteLine("  No disk volumes found.");
-}
+var volumesByDisk = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 foreach (var vol in diskVolumes)
 {
     var physicalDisk = ExtractPhysicalDiskName(vol.DeviceName);
-    var d = physicalDisk is not null
-        ? diskStats.Devices.FirstOrDefault(x => x.Name == physicalDisk)
-        : null;
-    var diskLabel = physicalDisk is not null && d?.MediaName is not null
-        ? $"{physicalDisk} [{d.MediaName}]"
-        : physicalDisk ?? "?";
-    Console.WriteLine($"  [{vol.MountPoint}] ({vol.DeviceName} → {diskLabel})");
-    if (d is null)
+    if (physicalDisk is not null)
     {
-        Console.WriteLine($"    (I/O stats not available)");
-        continue;
+        if (!volumesByDisk.TryGetValue(physicalDisk, out var volList))
+        {
+            volumesByDisk[physicalDisk] = volList = new List<string>();
+        }
+        volList.Add($"{vol.MountPoint} ({vol.DeviceName})");
+    }
+}
+
+if (diskStats.Devices.Count == 0)
+{
+    Console.WriteLine("  No physical disks found.");
+}
+foreach (var d in diskStats.Devices)
+{
+    var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
+    Console.WriteLine($"  [{deviceLabel}]");
+    if (d.VendorName is not null)
+    {
+        Console.WriteLine($"    Vendor:  {d.VendorName}");
+    }
+    if (d.MediumType is not null)
+    {
+        var removable = d.IsRemovable ? ", Removable" : string.Empty;
+        Console.WriteLine($"    Type:    {d.MediumType}{removable}");
     }
 
     var hasPrevDisk = prevDiskSnapshot.TryGetValue(d.Name, out var prevDisk);
@@ -303,6 +318,14 @@ foreach (var vol in diskVolumes)
     var writeMbps = diskElapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / diskElapsed : 0;
     Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
     Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
+
+    if (volumesByDisk.TryGetValue(d.Name, out var relatedVolumes))
+    {
+        foreach (var volStr in relatedVolumes)
+        {
+            Console.WriteLine($"    Volume: {volStr}");
+        }
+    }
 }
 Console.WriteLine();
 

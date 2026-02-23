@@ -3,10 +3,10 @@ namespace MacDotNet.SystemInfo;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
-/// 1 台のディスクデバイスの累積 I/O 統計スナップショット。
+/// 1 台のディスクデバイスの累積 I/O 統計。
 /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
 /// <para>
-/// Cumulative I/O statistics snapshot for a single disk device.
+/// Cumulative I/O statistics for a single disk device.
 /// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
 /// </para>
 /// </summary>
@@ -29,16 +29,53 @@ public sealed class DiskDeviceStat
     /// <summary>累積書き込み操作数<br/>Cumulative write operations completed</summary>
     public ulong WritesCompleted { get; internal set; }
 
-    /// <summary>
-    /// IOKit から取得したディスクの製品名。例: "APPLE SSD AP0512Q"。
-    /// 取得できない場合は null。
-    /// <para>Disk product name retrieved from IOKit. Null if unavailable.</para>
-    /// </summary>
-    public string? MediaName { get; internal set; }
+    // ---- 静的情報 (インスタンス作成時に一度だけ取得) ----
 
-    internal DiskDeviceStat(string name)
+    /// <summary>
+    /// ディスクの製品名。例: "APPLE SSD AP0512Z"、"RTL9210B-CG"。
+    /// 取得できない場合は null。
+    /// <para>Disk product name (e.g. "APPLE SSD AP0512Z"). Null if unavailable.</para>
+    /// </summary>
+    public string? MediaName { get; }
+
+    /// <summary>
+    /// ディスクのベンダー名。例: "Realtek"。空文字列の場合は null として扱われる。
+    /// <para>Disk vendor name (e.g. "Realtek"). Null if empty or unavailable.</para>
+    /// </summary>
+    public string? VendorName { get; }
+
+    /// <summary>
+    /// メディアの種別。例: "Solid State"、"Rotational"。
+    /// <para>Medium type (e.g. "Solid State", "Rotational"). Null if unavailable.</para>
+    /// </summary>
+    public string? MediumType { get; }
+
+    /// <summary>
+    /// リムーバブルメディアかどうか (IOMedia "Removable" プロパティ)。
+    /// <para>Whether the device is removable (IOMedia "Removable" property).</para>
+    /// </summary>
+    public bool IsRemovable { get; }
+
+    /// <summary>
+    /// 物理ブロックストレージデバイスかどうか。
+    /// true の場合、IOKit の親が IOBlockStorageDriver である実メディア (NVMe、USB NVMe など)。
+    /// false の場合、APFS コンテナ仮想ディスクなど、物理デバイス上に合成された論理ディスク。
+    /// <para>
+    /// Whether this is a physical block storage device.
+    /// True if the IOKit parent is an IOBlockStorageDriver (e.g. NVMe, USB NVMe).
+    /// False for synthesized logical disks such as APFS container virtual disks.
+    /// </para>
+    /// </summary>
+    public bool IsPhysicalMedium { get; }
+
+    internal DiskDeviceStat(string name, bool isPhysicalMedium, string? mediaName, string? vendorName, string? mediumType, bool isRemovable)
     {
         Name = name;
+        IsPhysicalMedium = isPhysicalMedium;
+        MediaName = mediaName;
+        VendorName = string.IsNullOrEmpty(vendorName) ? null : vendorName;
+        MediumType = mediumType;
+        IsRemovable = isRemovable;
     }
 }
 
@@ -58,14 +95,15 @@ public sealed class DiskDeviceStat
 public sealed class DiskStats
 {
     private readonly List<DiskDeviceStat> _devices = new();
+    private readonly bool _physicalOnly;
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
     /// <summary>
-    /// 全物理ディスクの統計エントリ一覧 (名前昇順)。
+    /// 全ディスクの統計エントリ一覧 (名前昇順)。
     /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
-    /// <para>List of statistics entries for all physical disks (sorted by name). Values are cumulative since boot.</para>
+    /// <para>List of statistics entries for all disks (sorted by name). Values are cumulative since boot.</para>
     /// </summary>
     public IReadOnlyList<DiskDeviceStat> Devices => _devices;
 
@@ -73,13 +111,25 @@ public sealed class DiskStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    private DiskStats()
+    private DiskStats(bool physicalOnly)
     {
+        _physicalOnly = physicalOnly;
         Update();
     }
 
-    /// <summary>DiskStats インスタンスを生成する。<br/>Creates a DiskStats instance.</summary>
-    public static DiskStats Create() => new();
+    /// <summary>
+    /// DiskStats インスタンスを生成する。
+    /// <para>Creates a DiskStats instance.</para>
+    /// </summary>
+    /// <param name="physicalOnly">
+    /// true の場合、IOKit の親が IOBlockStorageDriver である物理メディアのみを対象にする。
+    /// APFS コンテナ仮想ディスク (disk3、disk7 等) は除外される。
+    /// <para>
+    /// When true, only physical media whose IOKit parent is IOBlockStorageDriver are included.
+    /// APFS container virtual disks (e.g. disk3, disk7) are excluded.
+    /// </para>
+    /// </param>
+    public static DiskStats Create(bool physicalOnly = false) => new(physicalOnly);
 
     //--------------------------------------------------------------------------------
     // Update
@@ -87,9 +137,11 @@ public sealed class DiskStats
 
     /// <summary>
     /// IOKit から全物理ディスクの I/O 統計を取得して Devices を更新する。
+    /// 静的情報 (MediaName 等) は新規デバイス登録時にのみ取得し、以降は再取得しない。
     /// 成功時は true、IOKit 呼び出し失敗時は false を返す。
     /// <para>
     /// Fetches I/O statistics for all physical disks from IOKit and updates Devices.
+    /// Static info (MediaName etc.) is read only once when a new device is first seen.
     /// Returns true on success, false if the IOKit call fails.
     /// </para>
     /// </summary>
@@ -116,13 +168,19 @@ public sealed class DiskStats
             {
                 try
                 {
-                    var stat = ReadWholeDiskStat(entry);
-                    if (stat is null)
+                    var dynStat = ReadDynamicStats(entry);
+                    if (dynStat is null)
                     {
                         continue;
                     }
 
-                    var (name, bytesRead, bytesWritten, readsCompleted, writesCompleted, mediaName) = stat.Value;
+                    var (name, isPhysicalMedium, bytesRead, bytesWritten, readsCompleted, writesCompleted) = dynStat.Value;
+
+                    // physicalOnly フィルタ
+                    if (_physicalOnly && !isPhysicalMedium)
+                    {
+                        continue;
+                    }
 
                     var device = default(DiskDeviceStat);
                     foreach (var item in _devices)
@@ -136,7 +194,9 @@ public sealed class DiskStats
 
                     if (device is null)
                     {
-                        device = new DiskDeviceStat(name);
+                        // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
+                        var (isRemovable, mediaName, vendorName, mediumType) = ReadStaticDeviceInfo(entry);
+                        device = new DiskDeviceStat(name, isPhysicalMedium, mediaName, vendorName, mediumType, isRemovable);
                         _devices.Add(device);
                         added = true;
                     }
@@ -146,7 +206,6 @@ public sealed class DiskStats
                     device.BytesWritten = bytesWritten;
                     device.ReadsCompleted = readsCompleted;
                     device.WritesCompleted = writesCompleted;
-                    device.MediaName = mediaName;
                 }
                 finally
                 {
@@ -181,57 +240,11 @@ public sealed class DiskStats
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
-    /// "Device Characteristics" 辞書中の "Product Name" を返す。
-    /// 見つからない場合は null。entry 自体は呼び出し元が所有するため release しない。
+    /// IOMedia エントリから動的な I/O 統計を読み取る。
+    /// Whole=true でない場合、BSD 名が取得できない場合、Statistics がない場合は null を返す。
+    /// IsPhysicalMedium は親クラスが IOBlockStorageDriver かどうかで判定する。
     /// </summary>
-    private static string? FindProductName(uint entry)
-    {
-        var current = entry;
-        var shouldReleaseCurrent = false;
-
-        for (var depth = 0; depth < 8; depth++)
-        {
-            if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
-            {
-                break;
-            }
-
-            if (shouldReleaseCurrent)
-            {
-                IOObjectRelease(current);
-            }
-
-            current = parent;
-            shouldReleaseCurrent = true;
-
-            var deviceCharacts = GetIokitDictionary(current, "Device Characteristics");
-            if (deviceCharacts != IntPtr.Zero)
-            {
-                string? name;
-                try
-                {
-                    name = GetIokitDictString(deviceCharacts, "Product Name");
-                }
-                finally
-                {
-                    CFRelease(deviceCharacts);
-                }
-
-                IOObjectRelease(current);
-                return name;
-            }
-        }
-
-        if (shouldReleaseCurrent)
-        {
-            IOObjectRelease(current);
-        }
-
-        return null;
-    }
-
-    private static (string Name, ulong BytesRead, ulong BytesWritten, ulong ReadsCompleted, ulong WritesCompleted, string? MediaName)? ReadWholeDiskStat(uint mediaEntry)
+    private static (string Name, bool IsPhysicalMedium, ulong BytesRead, ulong BytesWritten, ulong ReadsCompleted, ulong WritesCompleted)? ReadDynamicStats(uint mediaEntry)
     {
         // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
@@ -267,7 +280,7 @@ public sealed class DiskStats
             return null;
         }
 
-        // 親エントリ (IOBlockStorageDriver) の Statistics を取得
+        // 親エントリの Statistics を取得
         if (IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
         {
             return null;
@@ -281,29 +294,89 @@ public sealed class DiskStats
                 return null;
             }
 
-            ulong bytesRead, bytesWritten, readsCompleted, writesCompleted;
+            // 親クラスが IOBlockStorageDriver であれば物理メディア
+            var parentClass = GetIokitClassName(parent);
+            var isPhysicalMedium = parentClass == "IOBlockStorageDriver";
+
             try
             {
-                bytesRead = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
-                bytesWritten = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
-                readsCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
-                writesCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
+                var bytesRead = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
+                var bytesWritten = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
+                var readsCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
+                var writesCompleted = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
+                return (bsdName, isPhysicalMedium, bytesRead, bytesWritten, readsCompleted, writesCompleted);
             }
             finally
             {
                 CFRelease(statsDict);
             }
-
-            // 製品名は IOKit 祖先を上方向に辿って "Device Characteristics" から取得する。
-            // APFS 仮想コンテナ (disk3 等) は複数段上に物理デバイスがあるため、
-            // 固定深度ではなく見つかるまで辿る。
-            var mediaName = FindProductName(parent);
-
-            return (bsdName, bytesRead, bytesWritten, readsCompleted, writesCompleted, mediaName);
         }
         finally
         {
             IOObjectRelease(parent);
         }
+    }
+
+    /// <summary>
+    /// IOMedia エントリから静的なデバイス情報を読み取る。新規デバイス登録時に一度だけ呼ばれる。
+    /// </summary>
+    private static (bool IsRemovable, string? MediaName, string? VendorName, string? MediumType) ReadStaticDeviceInfo(uint mediaEntry)
+    {
+        var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
+        var (mediaName, vendorName, mediumType) = FindDeviceCharacteristics(mediaEntry);
+        return (isRemovable, mediaName, vendorName, mediumType);
+    }
+
+    /// <summary>
+    /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
+    /// "Device Characteristics" 辞書中の製品名・ベンダー名・メディア種別を返す。
+    /// entry 自体は呼び出し元が所有するため release しない。
+    /// </summary>
+    private static (string? MediaName, string? VendorName, string? MediumType) FindDeviceCharacteristics(uint entry)
+    {
+        var current = entry;
+        var shouldReleaseCurrent = false;
+
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+            {
+                break;
+            }
+
+            if (shouldReleaseCurrent)
+            {
+                IOObjectRelease(current);
+            }
+
+            current = parent;
+            shouldReleaseCurrent = true;
+
+            var deviceCharacts = GetIokitDictionary(current, "Device Characteristics");
+            if (deviceCharacts != IntPtr.Zero)
+            {
+                string? mediaName, vendorName, mediumType;
+                try
+                {
+                    mediaName = GetIokitDictString(deviceCharacts, "Product Name");
+                    vendorName = GetIokitDictString(deviceCharacts, "Vendor Name");
+                    mediumType = GetIokitDictString(deviceCharacts, "Medium Type");
+                }
+                finally
+                {
+                    CFRelease(deviceCharacts);
+                }
+
+                IOObjectRelease(current);
+                return (mediaName, vendorName, mediumType);
+            }
+        }
+
+        if (shouldReleaseCurrent)
+        {
+            IOObjectRelease(current);
+        }
+
+        return (null, null, null);
     }
 }

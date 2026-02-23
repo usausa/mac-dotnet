@@ -48,8 +48,21 @@ public static class PlatformProvider
     /// <summary>すべてのマウント済みファイルシステムの詳細情報を取得する。<br/>Returns detailed information for all mounted file systems.</summary>
     public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
-    /// <summary>全ディスクデバイスの累積 I/O 統計を取得する。<br/>Returns cumulative I/O statistics for all disk devices.</summary>
-    public static DiskStats GetDiskStats() => DiskStats.Create();
+    /// <summary>
+    /// ディスクデバイスの累積 I/O 統計を取得する。
+    /// <para>Returns cumulative I/O statistics for disk devices.</para>
+    /// </summary>
+    /// <param name="physicalOnly">
+    /// true の場合、IOKit の親が IOBlockStorageDriver である物理メディアのみを返す。
+    /// APFS コンテナ仮想ディスク (disk3、disk7 等) は除外される。
+    /// false (デフォルト) の場合、Whole=true のすべての IOMedia を返す。
+    /// <para>
+    /// When true, only physical media (IOBlockStorageDriver parent) are returned;
+    /// APFS container virtual disks (e.g. disk3, disk7) are excluded.
+    /// When false (default), all Whole=true IOMedia entries are returned.
+    /// </para>
+    /// </param>
+    public static DiskStats GetDiskStats(bool physicalOnly = false) => DiskStats.Create(physicalOnly);
 
     /// <summary>ユーザーから見えるローカルボリュームの一覧を取得する。<br/>Returns user-visible local disk volumes.</summary>
     public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();

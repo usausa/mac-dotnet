@@ -5,10 +5,10 @@ using System.Runtime.InteropServices;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
-/// ネットワークインターフェース 1 本分の統計スナップショット。
+/// ネットワークインターフェース 1 本分の統計。
 /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
 /// <para>
-/// Statistics snapshot for a single network interface.
+/// Statistics for a single network interface.
 /// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
 /// </para>
 /// </summary>
@@ -18,6 +18,24 @@ public sealed class NetworkInterfaceStat
 
     /// <summary>インターフェース名。例: "en0"<br/>Interface name. Example: "en0"</summary>
     public string Name { get; }
+
+    // ---- 静的情報 (インスタンス作成時に一度だけ設定) ----
+
+    /// <summary>
+    /// macOS System Settings のネットワーク設定に表示されるサービス名。
+    /// 例: "Ethernet"、"Wi-Fi"。System Settings に登録されていないインターフェースは null。
+    /// <para>Service name shown in macOS System Settings (e.g. "Ethernet", "Wi-Fi"). Null if not registered.</para>
+    /// </summary>
+    public string? DisplayName { get; }
+
+    /// <summary>
+    /// SCNetworkInterfaceGetInterfaceType() が返す SC レベルのインターフェース種別。
+    /// System Settings に登録されていないインターフェースは Unknown。
+    /// <para>SC-level interface type. Unknown for interfaces not registered in System Settings.</para>
+    /// </summary>
+    public ScNetworkInterfaceType ScNetworkInterfaceType { get; }
+
+    // ---- 動的情報 (Update() で更新) ----
 
     /// <summary>受信バイト数の累積値<br/>Cumulative bytes received</summary>
     public uint RxBytes { get; internal set; }
@@ -42,9 +60,11 @@ public sealed class NetworkInterfaceStat
     /// <summary>未知プロトコルによる受信パケット数の累積値<br/>Cumulative packets received for unknown protocols</summary>
     public uint NoProto { get; internal set; }
 
-    internal NetworkInterfaceStat(string name)
+    internal NetworkInterfaceStat(string name, string? displayName, ScNetworkInterfaceType scType)
     {
         Name = name;
+        DisplayName = displayName;
+        ScNetworkInterfaceType = scType;
     }
 }
 
@@ -80,6 +100,12 @@ public sealed class NetworkStats
     /// </summary>
     private readonly HashSet<string>? _includedInterfaces;
 
+    /// <summary>
+    /// BSD 名 → (DisplayName, ScNetworkInterfaceType) のマップ。
+    /// インスタンス生成時に一度だけ構築し、新規エントリ作成時のみ参照する。
+    /// </summary>
+    private readonly Dictionary<string, (string? displayName, ScNetworkInterfaceType scType)> _serviceMap;
+
     private readonly List<NetworkInterfaceStat> _interfaces = new();
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
@@ -99,6 +125,7 @@ public sealed class NetworkStats
     private NetworkStats(HashSet<string>? includedInterfaces)
     {
         _includedInterfaces = includedInterfaces;
+        _serviceMap = BuildServiceMap();
         Update();
     }
 
@@ -122,6 +149,7 @@ public sealed class NetworkStats
 
     /// <summary>
     /// getifaddrs(3) から全インターフェースの if_data カウンタを取得し、Interfaces を更新する。
+    /// DisplayName 等の静的情報は新規エントリ作成時にのみ設定し、以降は再取得しない。
     /// HiddenConfiguration 除外は Create() 時に決定済みのセットで行い、このメソッドでは再判定しない。
     /// </summary>
     public unsafe bool Update()
@@ -165,7 +193,9 @@ public sealed class NetworkStats
 
                     if (iface is null)
                     {
-                        iface = new NetworkInterfaceStat(name);
+                        // 新規エントリ: サービスマップから静的情報を取得してコンストラクタに渡す
+                        _serviceMap.TryGetValue(name, out var svcInfo);
+                        iface = new NetworkInterfaceStat(name, svcInfo.displayName, svcInfo.scType);
                         _interfaces.Add(iface);
                         added = true;
                     }
@@ -213,6 +243,22 @@ public sealed class NetworkStats
     //--------------------------------------------------------------------------------
     // Private helpers
     //--------------------------------------------------------------------------------
+
+    /// <summary>
+    /// SCNetworkServiceCopyAll から BSD 名 → (DisplayName, ScType) のマップを構築する。
+    /// インスタンス生成時に一度だけ呼ばれる。
+    /// </summary>
+    private static Dictionary<string, (string? displayName, ScNetworkInterfaceType scType)> BuildServiceMap()
+    {
+        var raw = NetworkInfo.GetNetworkServiceMap();
+        var map = new Dictionary<string, (string?, ScNetworkInterfaceType)>(raw.Count, StringComparer.Ordinal);
+        foreach (var (bsdName, info) in raw)
+        {
+            map[bsdName] = (info.serviceName, info.scType);
+        }
+
+        return map;
+    }
 
     /// <summary>
     /// SC preferences から HiddenConfiguration でないインターフェース名のセットを構築する。

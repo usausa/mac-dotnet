@@ -162,7 +162,7 @@ public static class NetworkInfo
     /// SCNetworkServiceCopyAll() から BSD名 → (サービス名, SC種別, 有効) のマップを構築する。
     /// これが macOS System Settings のネットワーク設定に表示されるサービス一覧に相当する。
     /// </summary>
-    private static Dictionary<string, (string serviceName, ScNetworkInterfaceType scType, bool isEnabled)> GetNetworkServiceMap()
+    internal static Dictionary<string, (string serviceName, ScNetworkInterfaceType scType, bool isEnabled)> GetNetworkServiceMap()
     {
         var result = new Dictionary<string, (string, ScNetworkInterfaceType, bool)>(StringComparer.Ordinal);
 
