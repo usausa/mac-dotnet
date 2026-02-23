@@ -27,15 +27,17 @@ public static class PlatformProvider
     // Memory
     //--------------------------------------------------------------------------------
 
-    //public static MemoryStat GetMemoryStat() => new();
+    public static MemoryStat GetMemoryStat() => new();
 
-    //public static SwapUsage GetSwapStat() => new();
+    public static SwapUsage GetSwapUsage() => new();
 
     //--------------------------------------------------------------------------------
     // Storage
     //--------------------------------------------------------------------------------
 
     //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
+
+    public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
 
     //--------------------------------------------------------------------------------
     // Network
@@ -46,6 +48,8 @@ public static class PlatformProvider
     //--------------------------------------------------------------------------------
     // Process
     //--------------------------------------------------------------------------------
+
+    public static ProcessSummary GetProcessSummary() => new();
 
     //public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
 
