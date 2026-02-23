@@ -19,13 +19,6 @@ public sealed class AppleSiliconEnergyCounter
     private IntPtr channels;
     private IntPtr subscription;
 
-    private double _prevCpu;
-    private double _prevGpu;
-    private double _prevAne;
-    private double _prevRam;
-    private double _prevPci;
-    private DateTime _prevTime;
-
     /// <summary>CPU の累積エネルギー消費量 (J)<br/>Cumulative CPU energy consumption (J)</summary>
     public double Cpu { get; private set; }
 
@@ -43,24 +36,6 @@ public sealed class AppleSiliconEnergyCounter
 
     /// <summary>CPU + GPU + ANE + RAM + PCI の累積エネルギー消費量合計 (J)<br/>Total cumulative energy consumption (CPU + GPU + ANE + RAM + PCI) in joules</summary>
     public double Total => Cpu + Gpu + Ane + Ram + Pci;
-
-    /// <summary>CPU の瞬間消費電力 (W)。Update() の呼び出し間隔から算出<br/>Instantaneous CPU power (W), calculated from the interval between Update() calls</summary>
-    public double CpuPower { get; private set; }
-
-    /// <summary>GPU の瞬間消費電力 (W)<br/>Instantaneous GPU power (W)</summary>
-    public double GpuPower { get; private set; }
-
-    /// <summary>ANE の瞬間消費電力 (W)<br/>Instantaneous ANE power (W)</summary>
-    public double AnePower { get; private set; }
-
-    /// <summary>RAM の瞬間消費電力 (W)<br/>Instantaneous RAM power (W)</summary>
-    public double RamPower { get; private set; }
-
-    /// <summary>PCI の瞬間消費電力 (W)<br/>Instantaneous PCI power (W)</summary>
-    public double PciPower { get; private set; }
-
-    /// <summary>CPU + GPU + ANE + RAM + PCI の瞬間消費電力合計 (W)<br/>Total instantaneous power (W)</summary>
-    public double TotalPower => CpuPower + GpuPower + AnePower + RamPower + PciPower;
 
     /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか<br/>Whether IOReport energy monitoring is available (Apple Silicon / ARM64 only)</summary>
     public bool Supported { get; }
@@ -177,27 +152,6 @@ public sealed class AppleSiliconEnergyCounter
                     pciEnergy = joules;
                 }
             }
-
-            var now = DateTime.UtcNow;
-            if (_prevCpu != 0)
-            {
-                var elapsed = (now - _prevTime).TotalSeconds;
-                if (elapsed > 0)
-                {
-                    CpuPower = (cpuEnergy - _prevCpu) / elapsed;
-                    GpuPower = (gpuEnergy - _prevGpu) / elapsed;
-                    AnePower = (aneEnergy - _prevAne) / elapsed;
-                    RamPower = (ramEnergy - _prevRam) / elapsed;
-                    PciPower = (pciEnergy - _prevPci) / elapsed;
-                }
-            }
-
-            _prevCpu = cpuEnergy;
-            _prevGpu = gpuEnergy;
-            _prevAne = aneEnergy;
-            _prevRam = ramEnergy;
-            _prevPci = pciEnergy;
-            _prevTime = now;
 
             Cpu = cpuEnergy;
             Gpu = gpuEnergy;

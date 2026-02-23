@@ -390,8 +390,7 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 // 10. Apple Silicon Energy / Power (IOReport)
 // 累積エネルギー (J) と瞬間消費電力 (W) を表示する。
-// 初回 Update() はベースライン確立のため電力値は 0。
-// 2 回目以降の Update() でデルタから瞬間電力を算出する。
+// 初回スナップショットを保存し、1秒後に差分 / 経過時間で瞬間電力を算出する。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 10. Apple Silicon Energy / Power (IOReport) ###");
 var asPower = PlatformProvider.GetAppleSiliconEnergyCounter();
@@ -399,9 +398,19 @@ if (asPower.Supported)
 {
     // 初回読み取り (ベースライン)
     asPower.Update();
+    var prevCpu = asPower.Cpu;
+    var prevGpu = asPower.Gpu;
+    var prevAne = asPower.Ane;
+    var prevRam = asPower.Ram;
+    var prevPci = asPower.Pci;
+    var prevTime = DateTime.UtcNow;
+
     Thread.Sleep(1000);
-    // 2 回目読み取りで瞬間電力を算出
+
+    // 2 回目読み取り
     asPower.Update();
+    var elapsed = (DateTime.UtcNow - prevTime).TotalSeconds;
+
     Console.WriteLine($"  [Cumulative Energy]");
     Console.WriteLine($"  CPU Energy: {asPower.Cpu:F6} J");
     Console.WriteLine($"  GPU Energy: {asPower.Gpu:F6} J");
@@ -410,13 +419,14 @@ if (asPower.Supported)
     Console.WriteLine($"  PCI Energy: {asPower.Pci:F6} J");
     Console.WriteLine($"  Total:      {asPower.Total:F6} J");
     Console.WriteLine();
-    Console.WriteLine($"  [Instantaneous Power]");
-    Console.WriteLine($"  CPU Power:  {asPower.CpuPower:F2} W");
-    Console.WriteLine($"  GPU Power:  {asPower.GpuPower:F2} W");
-    Console.WriteLine($"  ANE Power:  {asPower.AnePower:F2} W");
-    Console.WriteLine($"  RAM Power:  {asPower.RamPower:F2} W");
-    Console.WriteLine($"  PCI Power:  {asPower.PciPower:F2} W");
-    Console.WriteLine($"  Total:      {asPower.TotalPower:F2} W");
+    Console.WriteLine($"  [Instantaneous Power (over {elapsed:F2}s)]");
+    Console.WriteLine($"  CPU Power:  {(asPower.Cpu - prevCpu) / elapsed:F2} W");
+    Console.WriteLine($"  GPU Power:  {(asPower.Gpu - prevGpu) / elapsed:F2} W");
+    Console.WriteLine($"  ANE Power:  {(asPower.Ane - prevAne) / elapsed:F2} W");
+    Console.WriteLine($"  RAM Power:  {(asPower.Ram - prevRam) / elapsed:F2} W");
+    Console.WriteLine($"  PCI Power:  {(asPower.Pci - prevPci) / elapsed:F2} W");
+    var totalPower = (asPower.Total - (prevCpu + prevGpu + prevAne + prevRam + prevPci)) / elapsed;
+    Console.WriteLine($"  Total:      {totalPower:F2} W");
 }
 else
 {
