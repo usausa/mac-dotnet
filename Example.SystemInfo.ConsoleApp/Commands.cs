@@ -17,6 +17,8 @@ public static class CommandBuilderExtensions
         commands.AddCommand<MemoryCommand>();
         commands.AddCommand<SwapCommand>();
         commands.AddCommand<ProcessCommand>();
+        commands.AddCommand<DiskStatCommand>();
+        commands.AddCommand<PowerStatCommand>();
         //commands.AddCommand<CpuCommand>();
         //commands.AddCommand<CpuLoadCommand>();
         //commands.AddCommand<FileSystemCommand>();
@@ -140,6 +142,121 @@ public sealed class ProcessCommand : ICommandHandler
         var ps = PlatformProvider.GetProcessSummary();
         Console.WriteLine($"Process Count: {ps.ProcessCount}");
         Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+//--------------------------------------------------------------------------------
+// DiskStat
+//--------------------------------------------------------------------------------
+[Command("disk", "Get disk I/O stats (500ms delta)")]
+public sealed class DiskStatCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var diskStats = PlatformProvider.GetDiskStats(physicalOnly: true);
+        if (diskStats.Devices.Count == 0)
+        {
+            Console.WriteLine("No physical disks found.");
+            return ValueTask.CompletedTask;
+        }
+
+        // 1st snapshot
+        var prevSnapshot = diskStats.Devices.ToDictionary(
+            x => x.Name,
+            x => (x.BytesRead, x.BytesWritten));
+        var t0 = DateTime.UtcNow;
+
+        Console.WriteLine("Measuring (500ms)...");
+        Thread.Sleep(500);
+        diskStats.Update();
+        var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
+
+        foreach (var d in diskStats.Devices)
+        {
+            var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
+            Console.WriteLine($"  [{deviceLabel}]");
+            if (d.VendorName is not null)
+            {
+                Console.WriteLine($"    Vendor:  {d.VendorName}");
+            }
+
+            if (d.MediumType is not null)
+            {
+                var removable = d.IsRemovable ? ", Removable" : string.Empty;
+                Console.WriteLine($"    Type:    {d.MediumType}{removable}");
+            }
+
+            var hasPrev = prevSnapshot.TryGetValue(d.Name, out var prev);
+            var deltaRead = hasPrev ? d.BytesRead - prev.BytesRead : 0UL;
+            var deltaWritten = hasPrev ? d.BytesWritten - prev.BytesWritten : 0UL;
+            var readMbps = elapsed > 0 ? deltaRead / (1024.0 * 1024.0) / elapsed : 0;
+            var writeMbps = elapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / elapsed : 0;
+            Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
+            Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
+        _ => $"{bytes} B"
+    };
+}
+
+//--------------------------------------------------------------------------------
+// PowerStat
+//--------------------------------------------------------------------------------
+[Command("power", "Get Apple Silicon power info (IOReport)")]
+public sealed class PowerStatCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var power = PlatformProvider.GetPowerStat();
+        if (!power.Supported)
+        {
+            Console.WriteLine("Apple Silicon power reporting not supported (requires ARM64).");
+            return ValueTask.CompletedTask;
+        }
+
+        // 1st snapshot (baseline)
+        power.Update();
+        var prevCpu = power.Cpu;
+        var prevGpu = power.Gpu;
+        var prevAne = power.Ane;
+        var prevRam = power.Ram;
+        var prevPci = power.Pci;
+        var prevTotal = power.Total;
+        var prevTime = DateTime.UtcNow;
+
+        Console.WriteLine("Sampling (1000ms)...");
+        Thread.Sleep(1000);
+
+        // 2nd snapshot
+        power.Update();
+        var elapsed = (DateTime.UtcNow - prevTime).TotalSeconds;
+
+        Console.WriteLine($"[Cumulative Energy]");
+        Console.WriteLine($"  CPU Energy: {power.Cpu:F6} J");
+        Console.WriteLine($"  GPU Energy: {power.Gpu:F6} J");
+        Console.WriteLine($"  ANE Energy: {power.Ane:F6} J");
+        Console.WriteLine($"  RAM Energy: {power.Ram:F6} J");
+        Console.WriteLine($"  PCI Energy: {power.Pci:F6} J");
+        Console.WriteLine($"  Total:      {power.Total:F6} J");
+        Console.WriteLine();
+        Console.WriteLine($"[Instantaneous Power (over {elapsed:F2}s)]");
+        Console.WriteLine($"  CPU Power:  {(power.Cpu - prevCpu) / elapsed:F2} W");
+        Console.WriteLine($"  GPU Power:  {(power.Gpu - prevGpu) / elapsed:F2} W");
+        Console.WriteLine($"  ANE Power:  {(power.Ane - prevAne) / elapsed:F2} W");
+        Console.WriteLine($"  RAM Power:  {(power.Ram - prevRam) / elapsed:F2} W");
+        Console.WriteLine($"  PCI Power:  {(power.Pci - prevPci) / elapsed:F2} W");
+        Console.WriteLine($"  Total:      {(power.Total - prevTotal) / elapsed:F2} W");
 
         return ValueTask.CompletedTask;
     }

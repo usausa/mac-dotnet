@@ -555,6 +555,9 @@ internal static class NativeMethods
     public static extern unsafe int IORegistryEntryGetName(uint entry, byte* name);
 
     [DllImport(IOKitLib)]
+    public static extern unsafe int IOObjectGetClass(uint @object, byte* className);
+
+    [DllImport(IOKitLib)]
     public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
 
     [DllImport(IOKitLib)]
@@ -750,6 +753,19 @@ internal static class NativeMethods
     //------------------------------------------------------------------------
 
     /// <summary>
+    /// IOKit オブジェクトのクラス名を取得する。失敗時は null を返す。
+    /// <para>Returns the IOKit class name of an object. Returns null on failure.</para>
+    /// </summary>
+    public static unsafe string? GetIokitClassName(uint @object)
+    {
+        const int IO_NAME_LENGTH = 128;
+        byte* buf = stackalloc byte[IO_NAME_LENGTH];
+        return IOObjectGetClass(@object, buf) == KERN_SUCCESS
+            ? Marshal.PtrToStringUTF8((IntPtr)buf)
+            : null;
+    }
+
+    /// <summary>
     /// IOKit エントリから CFString プロパティを取得してマネージ文字列に変換する。
     /// プロパティが存在しないか CFString 以外の型の場合は null を返す。
     /// <para>
@@ -757,7 +773,7 @@ internal static class NativeMethods
     /// Returns null if the property is absent or is not a CFString.
     /// </para>
     /// </summary>
-    public static string? GetIokitString(uint entry, string key)
+    public static unsafe string? GetIokitString(uint entry, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -781,6 +797,40 @@ internal static class NativeMethods
             {
                 CFRelease(val);
             }
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// IOKit エントリから CFBoolean プロパティを取得する。
+    /// プロパティが存在しないか CFBoolean 以外の型の場合は false を返す。
+    /// <para>
+    /// Retrieves a CFBoolean property from an IOKit entry.
+    /// Returns false if the property is absent or is not a CFBoolean.
+    /// </para>
+    /// </summary>
+    public static bool GetIokitBoolean(uint entry, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        try
+        {
+            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
+            if (val == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var result = CFBooleanGetValue(val);
+            CFRelease(val);
+            return result;
         }
         finally
         {
@@ -951,6 +1001,38 @@ internal static class NativeMethods
             long result = 0;
             CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
             return result;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// CFDictionary から CFString 値をマネージ文字列として取得する。
+    /// キーが存在しないか CFString 以外の型の場合は null を返す。
+    /// <para>
+    /// Retrieves a CFString value from a CFDictionary as a managed string.
+    /// Returns null if the key is absent or the value is not a CFString.
+    /// </para>
+    /// </summary>
+    public static string? GetIokitDictString(IntPtr dict, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            var val = CFDictionaryGetValue(dict, cfKey);
+            if (val == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
         }
         finally
         {

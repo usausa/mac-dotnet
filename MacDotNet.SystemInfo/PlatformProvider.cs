@@ -60,8 +60,16 @@ public static class PlatformProvider
     //public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
 
     //--------------------------------------------------------------------------------
+    // Disk
+    //--------------------------------------------------------------------------------
+
+    public static DiskStats GetDiskStats(bool physicalOnly = false) => DiskStats.Create(physicalOnly);
+
+    //--------------------------------------------------------------------------------
     // Power
     //--------------------------------------------------------------------------------
+
+    public static PowerStat GetPowerStat() => PowerStat.Create();
 
     //public static Battery GetBattery() => new();
 
