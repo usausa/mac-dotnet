@@ -88,24 +88,7 @@ public sealed class NetworkInterfaceStat
 /// </summary>
 public sealed class NetworkStats
 {
-    /// <summary>
-    /// HiddenConfiguration 除外が有効な場合、対象インターフェース名のセット。
-    /// null の場合はフィルタリングなし (全インターフェースを対象)。
-    /// インスタンス生成時に一度だけ構築し、Update() では使い回す。
-    /// <para>
-    /// Set of included interface names when HiddenConfiguration filtering is enabled.
-    /// Null means no filtering (all interfaces included).
-    /// Built once at construction time and reused in each Update() call.
-    /// </para>
-    /// </summary>
-    private readonly HashSet<string>? _includedInterfaces;
-
-    /// <summary>
-    /// BSD 名 → (DisplayName, ScNetworkInterfaceType) のマップ。
-    /// インスタンス生成時に一度だけ構築し、新規エントリ作成時のみ参照する。
-    /// </summary>
-    private readonly Dictionary<string, (string? displayName, ScNetworkInterfaceType scType)> _serviceMap;
-
+    private readonly bool _excludeHiddenConfiguration;
     private readonly List<NetworkInterfaceStat> _interfaces = new();
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
@@ -122,10 +105,9 @@ public sealed class NetworkStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    private NetworkStats(HashSet<string>? includedInterfaces)
+    private NetworkStats(bool excludeHiddenConfiguration)
     {
-        _includedInterfaces = includedInterfaces;
-        _serviceMap = BuildServiceMap();
+        _excludeHiddenConfiguration = excludeHiddenConfiguration;
         Update();
     }
 
@@ -135,13 +117,10 @@ public sealed class NetworkStats
     /// <param name="excludeHiddenConfiguration">
     /// true の場合、macOS System Settings のネットワーク画面に表示されない
     /// HiddenConfiguration なインターフェース (Thunderbolt ポート用 Ethernet Adapter 等) を除外する。
-    /// 対象インターフェースの決定はインスタンス生成時に一度だけ行われ、Update() では使い回される。
+    /// 対象インターフェースの決定は新規インターフェース出現時に行われ、Update() でも同じ判定基準が使われる。
     /// </param>
     public static NetworkStats Create(bool excludeHiddenConfiguration = true)
-    {
-        var includedInterfaces = excludeHiddenConfiguration ? BuildNonHiddenInterfaceSet() : null;
-        return new NetworkStats(includedInterfaces);
-    }
+        => new(excludeHiddenConfiguration);
 
     //--------------------------------------------------------------------------------
     // Update
@@ -149,8 +128,8 @@ public sealed class NetworkStats
 
     /// <summary>
     /// getifaddrs(3) から全インターフェースの if_data カウンタを取得し、Interfaces を更新する。
-    /// DisplayName 等の静的情報は新規エントリ作成時にのみ設定し、以降は再取得しない。
-    /// HiddenConfiguration 除外は Create() 時に決定済みのセットで行い、このメソッドでは再判定しない。
+    /// DisplayName 等の静的情報は新規エントリ作成時にのみ SC を参照して取得し、以降は再取得しない。
+    /// SC への問い合わせは新規インターフェース出現時のみ行い、1 回の Update() 呼び出しにつき最大 1 回のみ SC を開く。
     /// </summary>
     public unsafe bool Update()
     {
@@ -164,6 +143,7 @@ public sealed class NetworkStats
             iface.Live = false;
         }
 
+        ScServiceSession? session = null;
         try
         {
             var added = false;
@@ -176,8 +156,7 @@ public sealed class NetworkStats
                 if (name is not null
                     && ifa.ifa_addr != IntPtr.Zero
                     && ((sockaddr*)ifa.ifa_addr)->sa_family == AF_LINK
-                    && ifa.ifa_data != IntPtr.Zero
-                    && (_includedInterfaces is null || _includedInterfaces.Contains(name)))
+                    && ifa.ifa_data != IntPtr.Zero)
                 {
                     var raw = *(if_data*)ifa.ifa_data;
 
@@ -193,9 +172,14 @@ public sealed class NetworkStats
 
                     if (iface is null)
                     {
-                        // 新規エントリ: サービスマップから静的情報を取得してコンストラクタに渡す
-                        _serviceMap.TryGetValue(name, out var svcInfo);
-                        iface = new NetworkInterfaceStat(name, svcInfo.displayName, svcInfo.scType);
+                        session ??= new ScServiceSession();
+                        iface = CreateInterfaceStat(name, session);
+                        if (iface is null)
+                        {
+                            ptr = ifa.ifa_next;
+                            continue;
+                        }
+
                         _interfaces.Add(iface);
                         added = true;
                     }
@@ -245,86 +229,213 @@ public sealed class NetworkStats
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// SCNetworkServiceCopyAll から BSD 名 → (DisplayName, ScType) のマップを構築する。
-    /// インスタンス生成時に一度だけ呼ばれる。
+    /// SC サービス情報の検索結果。<see cref="ScServiceSession.LookupService"/> が返す。
     /// </summary>
-    private static Dictionary<string, (string? displayName, ScNetworkInterfaceType scType)> BuildServiceMap()
+    private readonly struct ServiceInfo
     {
-        var raw = NetworkInfo.GetNetworkServiceMap();
-        var map = new Dictionary<string, (string?, ScNetworkInterfaceType)>(raw.Count, StringComparer.Ordinal);
-        foreach (var (bsdName, info) in raw)
-        {
-            map[bsdName] = (info.serviceName, info.scType);
-        }
-
-        return map;
+        /// <summary>SC 接続に失敗した。フィルタリング不可のため全インターフェースを対象とする</summary>
+        public bool ScUnavailable { get; init; }
+        /// <summary>SC サービスとして登録されている</summary>
+        public bool Registered { get; init; }
+        /// <summary>HiddenConfiguration = true のサービス (Registered=true の場合のみ有効)</summary>
+        public bool IsHidden { get; init; }
+        /// <summary>SC サービス名 (Registered=true かつ IsHidden=false の場合のみ有効)</summary>
+        public string? DisplayName { get; init; }
+        /// <summary>SC インターフェース種別 (Registered=true かつ IsHidden=false の場合のみ有効)</summary>
+        public ScNetworkInterfaceType ScType { get; init; }
     }
 
     /// <summary>
-    /// SC preferences から HiddenConfiguration でないインターフェース名のセットを構築する。
-    /// このメソッドはインスタンス生成時に一度だけ呼ばれる。
+    /// <see cref="ScServiceSession.LookupService"/> の結果をもとに新規インターフェースの
+    /// <see cref="NetworkInterfaceStat"/> を生成して返す。
+    /// null を返した場合はそのインターフェースを Interfaces に追加しない。
     /// </summary>
-    private static HashSet<string>? BuildNonHiddenInterfaceSet()
+    private NetworkInterfaceStat? CreateInterfaceStat(string bsdName, ScServiceSession session)
     {
-        var result = new HashSet<string>(StringComparer.Ordinal);
+        var info = session.LookupService(bsdName);
 
-        var appName = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
-        var prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero);
-        NativeMethods.CFRelease(appName);
-
-        if (prefs == IntPtr.Zero)
+        if (info.ScUnavailable)
         {
-            return null;
+            // SC 接続失敗: フィルタリングできないため SC 情報なしで全インターフェースを対象とする
+            return new NetworkInterfaceStat(bsdName, null, ScNetworkInterfaceType.Unknown);
         }
 
-        try
+        if (!info.Registered || info.IsHidden)
         {
-            var services = NativeMethods.SCNetworkServiceCopyAll(prefs);
-            if (services == IntPtr.Zero)
+            // 未登録または HiddenConfiguration: excludeHiddenConfiguration=true の場合は除外 (null)
+            return _excludeHiddenConfiguration
+                ? null
+                : new NetworkInterfaceStat(bsdName, null, ScNetworkInterfaceType.Unknown);
+        }
+
+        return new NetworkInterfaceStat(bsdName, info.DisplayName, info.ScType);
+    }
+
+    //--------------------------------------------------------------------------------
+    // ScServiceSession
+    //--------------------------------------------------------------------------------
+
+    /// <summary>
+    /// 1 回の Update() 呼び出し中に使用する SC サービスマップのキャッシュ。
+    /// コンストラクタで SC を開き BSD 名 → <see cref="ServiceInfo"/> の辞書を構築する。
+    /// prefs はマップ構築後すぐ解放するためメンバ変数に保持しない。
+    /// <see cref="LookupService"/> は辞書引きのみで完結する。
+    /// </summary>
+    private sealed class ScServiceSession
+    {
+        private readonly Dictionary<string, ServiceInfo>? _serviceMap;
+
+        public ScServiceSession()
+        {
+            var appNameRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
+            IntPtr prefs;
+            try
             {
-                return null;
+                prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero);
+            }
+            finally
+            {
+                NativeMethods.CFRelease(appNameRef);
+            }
+
+            if (prefs == IntPtr.Zero)
+            {
+                return;
             }
 
             try
             {
-                var count = NativeMethods.CFArrayGetCount(services);
-                for (var i = 0L; i < count; i++)
+                var services = NativeMethods.SCNetworkServiceCopyAll(prefs);
+                if (services == IntPtr.Zero)
                 {
-                    var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
-                    if (service == IntPtr.Zero)
-                    {
-                        continue;
-                    }
+                    return;
+                }
 
-                    if (NetworkInfo.IsHiddenConfiguration(prefs, service))
-                    {
-                        continue;
-                    }
-
-                    var iface = NativeMethods.SCNetworkServiceGetInterface(service);
-                    if (iface == IntPtr.Zero)
-                    {
-                        continue;
-                    }
-
-                    var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
-                    var bsdName = NativeMethods.CfStringToManaged(bsdNameRef);
-                    if (bsdName is not null)
-                    {
-                        result.Add(bsdName);
-                    }
+                try
+                {
+                    _serviceMap = BuildServiceMap(prefs, services);
+                }
+                finally
+                {
+                    NativeMethods.CFRelease(services);
                 }
             }
             finally
             {
-                NativeMethods.CFRelease(services);
+                NativeMethods.CFRelease(prefs);
             }
         }
-        finally
+
+        /// <summary>
+        /// BSD 名に対応する <see cref="ServiceInfo"/> を辞書から返す。
+        /// </summary>
+        public ServiceInfo LookupService(string bsdName)
         {
-            NativeMethods.CFRelease(prefs);
+            if (_serviceMap is null)
+            {
+                return new ServiceInfo { ScUnavailable = true };
+            }
+
+            return _serviceMap.TryGetValue(bsdName, out var info)
+                ? info
+                : new ServiceInfo { Registered = false };
         }
 
-        return result;
+        /// <summary>
+        /// SC サービス一覧を走査して BSD 名 → <see cref="ServiceInfo"/> の辞書を構築する。
+        /// </summary>
+        private static Dictionary<string, ServiceInfo> BuildServiceMap(IntPtr prefs, IntPtr services)
+        {
+            var map = new Dictionary<string, ServiceInfo>(StringComparer.Ordinal);
+
+            var count = NativeMethods.CFArrayGetCount(services);
+            for (var i = 0L; i < count; i++)
+            {
+                var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
+                if (service == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                var iface = NativeMethods.SCNetworkServiceGetInterface(service);
+                if (iface == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                var bsdName = NativeMethods.CfStringToManaged(NativeMethods.SCNetworkInterfaceGetBSDName(iface));
+                if (bsdName is null)
+                {
+                    continue;
+                }
+
+                if (IsHiddenConfiguration(prefs, service))
+                {
+                    map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsHidden = true });
+                    continue;
+                }
+
+                var displayName = NativeMethods.CfStringToManaged(NativeMethods.SCNetworkServiceGetName(service));
+                var scType = ParseScInterfaceType(NativeMethods.CfStringToManaged(NativeMethods.SCNetworkInterfaceGetInterfaceType(iface)));
+                map.TryAdd(bsdName, new ServiceInfo { Registered = true, DisplayName = displayName, ScType = scType });
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// SC preferences で Interface.HiddenConfiguration = True が設定されたサービスかどうかを返す。
+        /// このフラグが True のサービスは macOS System Settings のネットワーク画面に表示されない
+        /// 自動管理の隠しサービス (Thunderbolt ポート用 Ethernet Adapter 等)。
+        /// </summary>
+        private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
+        {
+            var serviceId = NativeMethods.CfStringToManaged(NativeMethods.SCNetworkServiceGetServiceID(service));
+            if (serviceId is null)
+            {
+                return false;
+            }
+
+            var pathRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, $"/NetworkServices/{serviceId}/Interface", NativeMethods.kCFStringEncodingUTF8);
+            IntPtr ifaceDict;
+            try
+            {
+                ifaceDict = NativeMethods.SCPreferencesPathGetValue(prefs, pathRef);
+            }
+            finally
+            {
+                NativeMethods.CFRelease(pathRef);
+            }
+
+            if (ifaceDict == IntPtr.Zero)
+            {
+                return false;
+            }
+
+            var hiddenKeyRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "HiddenConfiguration", NativeMethods.kCFStringEncodingUTF8);
+            IntPtr hiddenRef;
+            try
+            {
+                hiddenRef = NativeMethods.CFDictionaryGetValue(ifaceDict, hiddenKeyRef);
+            }
+            finally
+            {
+                NativeMethods.CFRelease(hiddenKeyRef);
+            }
+
+            return hiddenRef != IntPtr.Zero && NativeMethods.CFBooleanGetValue(hiddenRef);
+        }
+
+        private static ScNetworkInterfaceType ParseScInterfaceType(string? scType) => scType switch
+        {
+            "Ethernet" => ScNetworkInterfaceType.Ethernet,
+            "IEEE80211" => ScNetworkInterfaceType.WiFi,
+            "Bridge" => ScNetworkInterfaceType.Bridge,
+            "Bond" => ScNetworkInterfaceType.Bond,
+            "VLAN" => ScNetworkInterfaceType.Vlan,
+            "PPP" => ScNetworkInterfaceType.Ppp,
+            "VPN" => ScNetworkInterfaceType.Vpn,
+            _ => ScNetworkInterfaceType.Unknown,
+        };
     }
 }
