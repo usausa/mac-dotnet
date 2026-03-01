@@ -43,7 +43,7 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    //public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces() => NetworkInfo.GetNetworkInterfaces();
+    public static NetworkStats GetNetworkStats(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Process
