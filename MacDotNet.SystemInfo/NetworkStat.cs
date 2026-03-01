@@ -171,6 +171,8 @@ public sealed class NetworkStat
 
     private readonly struct ServiceInfo
     {
+        public bool Unavailable { get; init; }
+
         public bool Registered { get; init; }
 
         public bool IsEnabled { get; init; }
@@ -186,12 +188,12 @@ public sealed class NetworkStat
     {
         var info = session.LookupService(bsdName);
 
-        if (!info.Registered)
+        if (info.Unavailable)
         {
             return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown);
         }
 
-        if (!info.IsEnabled || info.IsHidden)
+        if (!info.Registered || !info.IsEnabled || info.IsHidden)
         {
             return includeAll ? new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown) : null;
         }
@@ -252,7 +254,7 @@ public sealed class NetworkStat
         {
             if (serviceMap is null)
             {
-                return new ServiceInfo { Registered = false };
+                return new ServiceInfo { Unavailable = true };
             }
 
             return serviceMap.TryGetValue(bsdName, out var info) ? info : new ServiceInfo { Registered = false };
