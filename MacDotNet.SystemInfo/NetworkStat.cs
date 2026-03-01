@@ -52,7 +52,7 @@ public sealed class NetworkStatEntry
     }
 }
 
-public sealed class NetworkStats
+public sealed class NetworkStat
 {
     private readonly bool includeAll;
 
@@ -66,7 +66,7 @@ public sealed class NetworkStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    internal NetworkStats(bool includeAll)
+    internal NetworkStat(bool includeAll)
     {
         this.includeAll = includeAll;
         Update();
@@ -93,18 +93,16 @@ public sealed class NetworkStats
             var added = false;
             var session = default(ServiceSession);
 
-            for (var ptr = ifap; ptr != IntPtr.Zero;)
+            for (var ifa = (ifaddrs*)ifap; ifa != null; ifa = (ifaddrs*)ifa->ifa_next)
             {
-                // TODO Unsafe?
-                var ifa = Marshal.PtrToStructure<ifaddrs>(ptr);
-                var name = Marshal.PtrToStringUTF8(ifa.ifa_name);
+                var name = Marshal.PtrToStringUTF8(ifa->ifa_name);
 
                 if ((name is not null) &&
-                    (ifa.ifa_addr != IntPtr.Zero) &&
-                    (((sockaddr*)ifa.ifa_addr)->sa_family == AF_LINK) &&
-                    (ifa.ifa_data != IntPtr.Zero))
+                    (ifa->ifa_addr != IntPtr.Zero) &&
+                    (((sockaddr*)ifa->ifa_addr)->sa_family == AF_LINK) &&
+                    (ifa->ifa_data != IntPtr.Zero))
                 {
-                    var raw = *(if_data*)ifa.ifa_data;
+                    var raw = *(if_data*)ifa->ifa_data;
 
                     var iface = default(NetworkStatEntry);
                     foreach (var item in interfaces)
@@ -122,7 +120,6 @@ public sealed class NetworkStats
                         iface = CreateInterfaceStat(name, session);
                         if (iface is null)
                         {
-                            ptr = ifa.ifa_next;
                             continue;
                         }
 
@@ -143,8 +140,6 @@ public sealed class NetworkStats
                     iface.Collisions = raw.ifi_collisions;
                     iface.NoProto = raw.ifi_noproto;
                 }
-
-                ptr = ifa.ifa_next;
             }
 
             for (var i = interfaces.Count - 1; i >= 0; i--)

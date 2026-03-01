@@ -43,7 +43,7 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    public static NetworkStats GetNetworkStats(bool includeAll = false) => new(includeAll);
+    public static NetworkStat GetNetworkStat(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Process

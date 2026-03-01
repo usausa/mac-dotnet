@@ -122,7 +122,7 @@ public sealed class DiskDeviceStat
 /// IOKit の IOMedia (Whole) サービスから BSD 名を取得し、
 /// 親の IOBlockStorageDriver の Statistics ディクショナリを読み取る。
 /// <see cref="Create()"/> でインスタンスを生成し、<see cref="Update()"/> を呼ぶたびに
-/// 最新の累積値を更新する。<see cref="NetworkStats"/> と同じパターン。
+/// 最新の累積値を更新する。<see cref="NetworkStat"/> と同じパターン。
 /// <para>
 /// Manages cumulative I/O statistics for all physical disks.
 /// Retrieves BSD device names from IOMedia (Whole) services and reads Statistics from

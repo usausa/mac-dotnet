@@ -17,6 +17,7 @@ public static class CommandBuilderExtensions
         commands.AddCommand<MemoryCommand>();
         commands.AddCommand<SwapCommand>();
         commands.AddCommand<ProcessCommand>();
+        commands.AddCommand<NetworkStatCommand>();
         commands.AddCommand<DiskStatCommand>();
         commands.AddCommand<PowerStatCommand>();
         //commands.AddCommand<CpuCommand>();
@@ -142,6 +143,36 @@ public sealed class ProcessCommand : ICommandHandler
         var ps = PlatformProvider.GetProcessSummary();
         Console.WriteLine($"Process Count: {ps.ProcessCount}");
         Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+//--------------------------------------------------------------------------------
+// NetworkStat
+//--------------------------------------------------------------------------------
+[Command("network", "Get network stat")]
+public sealed class NetworkStatCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var network = PlatformProvider.GetNetworkStat();
+        foreach (var nif in network.Interfaces)
+        {
+            var name = nif.DisplayName is not null ? $"{nif.Name} {nif.DisplayName}" : nif.Name;
+            Console.WriteLine($"Interface:    {name} ({nif.InterfaceType})");
+            Console.WriteLine($"RxBytes:      {nif.RxBytes}");
+            Console.WriteLine($"RxPackets:    {nif.RxPackets}");
+            Console.WriteLine($"RxErrors:     {nif.RxErrors}");
+            Console.WriteLine($"RxDrops:      {nif.RxDrops}");
+            Console.WriteLine($"RxMulticast:  {nif.RxMulticast}");
+            Console.WriteLine($"TxBytes:      {nif.TxBytes}");
+            Console.WriteLine($"TxPackets:    {nif.TxPackets}");
+            Console.WriteLine($"TxErrors:     {nif.TxErrors}");
+            Console.WriteLine($"TxMulticast:  {nif.TxMulticast}");
+            Console.WriteLine($"Collisions:   {nif.Collisions}");
+            Console.WriteLine($"NoProto:      {nif.NoProto}");
+        }
 
         return ValueTask.CompletedTask;
     }
