@@ -69,7 +69,7 @@ public static class PlatformProvider
     // Power
     //--------------------------------------------------------------------------------
 
-    public static PowerStat GetPowerStat() => PowerStat.Create();
+    public static PowerStat GetPowerStat() => new();
 
     //public static Battery GetBattery() => new();
 

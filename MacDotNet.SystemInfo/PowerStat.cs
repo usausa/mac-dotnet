@@ -4,75 +4,41 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-/// <summary>
-/// Apple Silicon 専用の IOReport エネルギーカウンター。
-/// CPU・GPU・ANE・RAM の累積エネルギー消費量をジュール単位で提供する。
-/// ARM64 以外の環境では Supported = false となり Update() は常に false を返す。
-/// <para>
-/// Apple Silicon-specific IOReport energy counter.
-/// Reports cumulative energy consumption in joules for CPU, GPU, ANE, and RAM.
-/// On non-ARM64 platforms, Supported = false and Update() always returns false.
-/// </para>
-/// </summary>
 public sealed class PowerStat
 {
-    /// <summary>CPU の累積エネルギー消費量 (J)<br/>Cumulative CPU energy consumption (J)</summary>
+    public bool Supported { get; }
+
+    // Cumulative CPU energy consumption (J)
     public double Cpu { get; private set; }
 
-    /// <summary>GPU の累積エネルギー消費量 (J)<br/>Cumulative GPU energy consumption (J)</summary>
+    // Cumulative GPU energy consumption (J)
     public double Gpu { get; private set; }
 
-    /// <summary>ANE (Apple Neural Engine) の累積エネルギー消費量 (J)<br/>Cumulative ANE (Apple Neural Engine) energy consumption (J)</summary>
+    // Cumulative ANE (Apple Neural Engine) energy consumption (J)
     public double Ane { get; private set; }
 
-    /// <summary>RAM の累積エネルギー消費量 (J)<br/>Cumulative RAM energy consumption (J)</summary>
+    // Cumulative RAM energy consumption (J)
     public double Ram { get; private set; }
 
-    /// <summary>PCI の累積エネルギー消費量 (J)<br/>Cumulative PCI energy consumption (J)</summary>
+    // Cumulative PCI energy consumption (J)
     public double Pci { get; private set; }
 
-    /// <summary>CPU + GPU + ANE + RAM + PCI の累積エネルギー消費量合計 (J)<br/>Total cumulative energy consumption (CPU + GPU + ANE + RAM + PCI) in joules</summary>
     public double Total => Cpu + Gpu + Ane + Ram + Pci;
-
-    /// <summary>Apple Silicon の IOReport エネルギーモニタリングが利用可能かどうか<br/>Whether IOReport energy monitoring is available (Apple Silicon / ARM64 only)</summary>
-    public bool Supported { get; }
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    private PowerStat()
+    internal PowerStat()
     {
         Supported = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
         Update();
     }
 
     //--------------------------------------------------------------------------------
-    // Factory
-    //--------------------------------------------------------------------------------
-
-    /// <summary>
-    /// PowerStat インスタンスを生成する。
-    /// ARM64 以外または IOReport が利用不可な場合は Supported = false のインスタンスを返す。
-    /// <para>
-    /// Creates an PowerStat instance.
-    /// Returns an instance with Supported = false on non-ARM64 or when IOReport is unavailable.
-    /// </para>
-    /// </summary>
-    public static PowerStat Create() => new();
-
-    //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
-    /// <summary>
-    /// IOReport からエネルギーサンプルを取得して各プロパティを更新する。
-    /// 成功時は true、Supported が false またはサンプル取得失敗時は false を返す。
-    /// <para>
-    /// Fetches an energy sample from IOReport and updates each property.
-    /// Returns true on success, false when Supported is false or sampling fails.
-    /// </para>
-    /// </summary>
     public bool Update()
     {
         if (!Supported)
@@ -137,12 +103,16 @@ public sealed class PowerStat
         var channelsArray = CFDictionaryGetValue(samples, channelsKey);
         CFRelease(channelsKey);
 
-        if (channelsArray == IntPtr.Zero || CFGetTypeID(channelsArray) != CFArrayGetTypeID())
+        if ((channelsArray == IntPtr.Zero) || (CFGetTypeID(channelsArray) != CFArrayGetTypeID()))
         {
             return false;
         }
 
-        double cpuEnergy = 0, gpuEnergy = 0, aneEnergy = 0, ramEnergy = 0, pciEnergy = 0;
+        var cpuEnergy = 0d;
+        var gpuEnergy = 0d;
+        var aneEnergy = 0d;
+        var ramEnergy = 0d;
+        var pciEnergy = 0d;
 
         var count = CFArrayGetCount(channelsArray);
         for (var i = 0L; i < count; i++)
@@ -162,7 +132,7 @@ public sealed class PowerStat
 
             var channelNamePtr = IOReportChannelGetChannelName(item);
             var channelName = channelNamePtr != IntPtr.Zero ? CfStringToManaged(channelNamePtr) : null;
-            if (string.IsNullOrEmpty(channelName))
+            if (String.IsNullOrEmpty(channelName))
             {
                 continue;
             }
@@ -252,8 +222,7 @@ public sealed class PowerStat
         {
             "mJ" => value / 1000.0,
             "uJ" => value / 1_000_000.0,
-            "nJ" => value / 1_000_000_000.0,
-            _ => value / 1_000_000_000.0,
+            _ => value / 1_000_000_000.0
         };
     }
 }

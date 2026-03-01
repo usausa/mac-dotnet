@@ -759,7 +759,7 @@ internal static class NativeMethods
     public static unsafe string? GetIokitClassName(uint @object)
     {
         const int IO_NAME_LENGTH = 128;
-        byte* buf = stackalloc byte[IO_NAME_LENGTH];
+        var buf = stackalloc byte[IO_NAME_LENGTH];
         return IOObjectGetClass(@object, buf) == KERN_SUCCESS
             ? Marshal.PtrToStringUTF8((IntPtr)buf)
             : null;
