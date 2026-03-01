@@ -171,9 +171,9 @@ public sealed class NetworkStat
 
     private readonly struct ServiceInfo
     {
-        public bool ScUnavailable { get; init; }
-
         public bool Registered { get; init; }
+
+        public bool IsEnabled { get; init; }
 
         public bool IsHidden { get; init; }
 
@@ -186,12 +186,12 @@ public sealed class NetworkStat
     {
         var info = session.LookupService(bsdName);
 
-        if (info.ScUnavailable)
+        if (!info.Registered)
         {
             return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown);
         }
 
-        if (!info.Registered || info.IsHidden)
+        if (!info.IsEnabled || info.IsHidden)
         {
             return includeAll ? new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown) : null;
         }
@@ -252,12 +252,10 @@ public sealed class NetworkStat
         {
             if (serviceMap is null)
             {
-                return new ServiceInfo { ScUnavailable = true };
+                return new ServiceInfo { Registered = false };
             }
 
-            return serviceMap.TryGetValue(bsdName, out var info)
-                ? info
-                : new ServiceInfo { Registered = false };
+            return serviceMap.TryGetValue(bsdName, out var info) ? info : new ServiceInfo { Registered = false };
         }
 
         private static Dictionary<string, ServiceInfo> BuildServiceMap(IntPtr prefs, IntPtr services)
@@ -292,8 +290,9 @@ public sealed class NetworkStat
                 }
 
                 var displayName = CfStringToManaged(SCNetworkServiceGetName(service));
+                var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
                 var interfaceType = ParseInterfaceType(CfStringToManaged(SCNetworkInterfaceGetInterfaceType(iface)));
-                map.TryAdd(bsdName, new ServiceInfo { Registered = true, DisplayName = displayName, InterfaceType = interfaceType });
+                map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsEnabled = isEnabled, DisplayName = displayName, InterfaceType = interfaceType });
             }
 
             return map;
