@@ -239,6 +239,8 @@ public sealed class NetworkStats
         public bool Registered { get; init; }
         /// <summary>HiddenConfiguration = true のサービス (Registered=true の場合のみ有効)</summary>
         public bool IsHidden { get; init; }
+        /// <summary>macOS System Settings でサービスが有効かどうか (SCNetworkServiceGetEnabled)。Registered=true かつ IsHidden=false の場合のみ有効</summary>
+        public bool IsEnabled { get; init; }
         /// <summary>SC サービス名 (Registered=true かつ IsHidden=false の場合のみ有効)</summary>
         public string? DisplayName { get; init; }
         /// <summary>SC インターフェース種別 (Registered=true かつ IsHidden=false の場合のみ有効)</summary>
@@ -260,9 +262,9 @@ public sealed class NetworkStats
             return new NetworkInterfaceStat(bsdName, null, ScNetworkInterfaceType.Unknown);
         }
 
-        if (!info.Registered || info.IsHidden)
+        if (!info.Registered || info.IsHidden || !info.IsEnabled)
         {
-            // 未登録または HiddenConfiguration: excludeHiddenConfiguration=true の場合は除外 (null)
+            // 未登録、HiddenConfiguration、または無効サービス: excludeHiddenConfiguration=true の場合は除外 (null)
             return _excludeHiddenConfiguration
                 ? null
                 : new NetworkInterfaceStat(bsdName, null, ScNetworkInterfaceType.Unknown);
@@ -377,7 +379,8 @@ public sealed class NetworkStats
 
                 var displayName = NativeMethods.CfStringToManaged(NativeMethods.SCNetworkServiceGetName(service));
                 var scType = ParseScInterfaceType(NativeMethods.CfStringToManaged(NativeMethods.SCNetworkInterfaceGetInterfaceType(iface)));
-                map.TryAdd(bsdName, new ServiceInfo { Registered = true, DisplayName = displayName, ScType = scType });
+                var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
+                map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsEnabled = isEnabled, DisplayName = displayName, ScType = scType });
             }
 
             return map;
