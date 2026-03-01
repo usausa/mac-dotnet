@@ -117,7 +117,7 @@ public sealed class NetworkStat
                     if (iface is null)
                     {
                         session ??= new ServiceSession();
-                        iface = CreateInterfaceStat(name, session);
+                        iface = CreateInterfaceStat(session, name);
                         if (iface is null)
                         {
                             continue;
@@ -184,7 +184,7 @@ public sealed class NetworkStat
         public NetworkInterfaceType InterfaceType { get; init; }
     }
 
-    private NetworkStatEntry? CreateInterfaceStat(string bsdName, ServiceSession session)
+    private NetworkStatEntry? CreateInterfaceStat(ServiceSession session, string bsdName)
     {
         var info = session.LookupService(bsdName);
 
