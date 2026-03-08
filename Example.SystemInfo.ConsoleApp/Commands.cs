@@ -172,6 +172,7 @@ public sealed class NetworkStatCommand : ICommandHandler
             Console.WriteLine($"TxMulticast:  {nif.TxMulticast}");
             Console.WriteLine($"Collisions:   {nif.Collisions}");
             Console.WriteLine($"NoProto:      {nif.NoProto}");
+            Console.WriteLine();
         }
 
         return ValueTask.CompletedTask;
@@ -181,64 +182,44 @@ public sealed class NetworkStatCommand : ICommandHandler
 //--------------------------------------------------------------------------------
 // DiskStat
 //--------------------------------------------------------------------------------
-[Command("disk", "Get disk I/O stats (1000ms delta)")]
+[Command("disk", "Get disk I/O stat")]
 public sealed class DiskStatCommand : ICommandHandler
 {
-    public async ValueTask ExecuteAsync(CommandContext context)
+    [Option<bool>("--all", "-a", Description = "All")]
+    public bool All { get; set; }
+
+    public ValueTask ExecuteAsync(CommandContext context)
     {
         var diskStats = PlatformProvider.GetDiskStat();
-        if (diskStats.Devices.Count == 0)
-        {
-            Console.WriteLine("No physical disks found.");
-            return;
-        }
-
-        // 1st snapshot
-        var prevSnapshot = diskStats.Devices.ToDictionary(
-            x => x.Name,
-            x => (x.BytesRead, x.BytesWrite));
-        var t0 = DateTime.UtcNow;
-
-        Console.WriteLine("Measuring (1000ms)...");
-
-        await Task.Delay(1000);
-
-        diskStats.Update();
-        var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
-
-        foreach (var d in diskStats.Devices)
+        foreach (var d in diskStats.Devices.Where(x => All || x.IsPhysical))
         {
             var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
-            Console.WriteLine($"  [{deviceLabel}]");
+            Console.WriteLine($"Device:          {deviceLabel}");
             if (d.VendorName is not null)
             {
-                Console.WriteLine($"    Vendor:  {d.VendorName}");
+                Console.WriteLine($"Vendor:          {d.VendorName}");
             }
 
             if (d.MediumType is not null)
             {
-                var removable = d.IsRemovable ? ", Removable" : string.Empty;
-                Console.WriteLine($"    Type:    {d.MediumType}{removable}");
+                Console.WriteLine($"MediumType:      {d.MediumType}");
             }
 
-            var hasPrev = prevSnapshot.TryGetValue(d.Name, out var prev);
-            var deltaRead = hasPrev ? d.BytesRead - prev.BytesRead : 0UL;
-            var deltaWritten = hasPrev ? d.BytesWrite - prev.BytesWrite : 0UL;
-            var readMbps = elapsed > 0 ? deltaRead / (1024.0 * 1024.0) / elapsed : 0;
-            var writeMbps = elapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / elapsed : 0;
-            Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
-            Console.WriteLine($"    Write: {FormatBytes(d.BytesWrite),12} total  {writeMbps,8:F2} MB/s");
+            Console.WriteLine($"BusType:         {d.BusType}");
+            Console.WriteLine($"IsPhysical:      {d.IsPhysical}");
+            Console.WriteLine($"IsRemovable:     {d.IsRemovable}");
+            Console.WriteLine($"DiskSize:        {d.DiskSize}");
+            Console.WriteLine($"BytesRead:       {d.BytesRead}");
+            Console.WriteLine($"BytesWrite:      {d.BytesWrite}");
+            Console.WriteLine($"ReadsCompleted:  {d.ReadsCompleted}");
+            Console.WriteLine($"WritesCompleted: {d.WritesCompleted}");
+            Console.WriteLine($"ErrorsRead:      {d.ErrorsRead}");
+            Console.WriteLine($"ErrorsWrite:     {d.ErrorsWrite}");
+            Console.WriteLine();
         }
-    }
 
-    private static string FormatBytes(ulong bytes) => bytes switch
-    {
-        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B"
-    };
+        return ValueTask.CompletedTask;
+    }
 }
 
 //--------------------------------------------------------------------------------

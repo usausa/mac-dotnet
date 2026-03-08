@@ -7,21 +7,19 @@ public static class PlatformProvider
     // System
     //--------------------------------------------------------------------------------
 
+    // TODO
     //public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
+    // TODO
     //public static KernelInfo GetKernel() => KernelInfo.Create();
 
     public static Uptime GetUptime() => new();
-
-    //public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
 
     //--------------------------------------------------------------------------------
     // Load
     //--------------------------------------------------------------------------------
 
     public static LoadAverage GetLoadAverage() => new();
-
-    //public static CpuUsage GetCpuUsageStat() => CpuUsage.Create();
 
     //--------------------------------------------------------------------------------
     // Memory
@@ -35,6 +33,9 @@ public static class PlatformProvider
     // Storage
     //--------------------------------------------------------------------------------
 
+    public static DiskStat GetDiskStat() => new();
+
+    // TODO ?
     //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
     public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
@@ -51,31 +52,27 @@ public static class PlatformProvider
 
     public static ProcessSummary GetProcessSummary() => new();
 
+    // TODO 1
     //public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
+
+    //--------------------------------------------------------------------------------
+    // CPU
+    //--------------------------------------------------------------------------------
+
+    // TODO CPU ?
 
     //--------------------------------------------------------------------------------
     // GPU
     //--------------------------------------------------------------------------------
 
+    // TODO
     //public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
-
-    //--------------------------------------------------------------------------------
-    // Disk
-    //--------------------------------------------------------------------------------
-
-    public static DiskStat GetDiskStat() => new();
 
     //--------------------------------------------------------------------------------
     // Power
     //--------------------------------------------------------------------------------
 
     public static PowerStat GetPowerStat() => new();
-
-    //public static Battery GetBattery() => new();
-
-    //public static BatteryDetail GetBatteryDetail() => BatteryDetail.Create();
-
-    //public static AppleSiliconPower GetAppleSiliconPower() => AppleSiliconPower.Create();
 
     //--------------------------------------------------------------------------------
     // Sensor

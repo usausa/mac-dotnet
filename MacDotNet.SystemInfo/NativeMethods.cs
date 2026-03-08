@@ -68,10 +68,6 @@ internal static class NativeMethods
     public const int MNT_WAIT = 1;    // 同期: ファイルシステム統計の更新を待つ / Synchronous: wait for filesystem stats update
     public const int MNT_NOWAIT = 2;  // 非同期: キャッシュ値を即返す / Asynchronous: return cached values immediately
 
-    // マウントフラグ (sys/mount.h) / Mount flags
-    public const uint MNT_RDONLY = 0x00000001;  // 読み取り専用 / Read-only filesystem
-    public const uint MNT_LOCAL = 0x00001000;   // ローカルFS / Local filesystem (not network)
-
     // アドレスファミリー定数 (sys/socket.h) / Address family constants
     public const byte AF_INET = 2;   // IPv4
     public const byte AF_LINK = 18;  // BSD データリンク / BSD data-link layer
