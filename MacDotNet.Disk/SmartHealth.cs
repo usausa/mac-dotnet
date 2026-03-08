@@ -28,5 +28,5 @@ public enum SmartHealthStatus
     /// 重大な問題あり。データ損失のリスクがある。即時バックアップを推奨する。
     /// <para>Critical issues detected. Risk of data loss exists. Immediate backup is strongly recommended.</para>
     /// </summary>
-    Critical,
+    Critical
 }

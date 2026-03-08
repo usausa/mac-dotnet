@@ -1,6 +1,5 @@
 namespace MacDotNet.Disk;
 
-using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
 // ATA SMARTセッション

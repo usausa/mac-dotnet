@@ -274,7 +274,7 @@ public sealed class PowerStatCommand : ICommandHandler
         power.Update();
         var elapsed = (DateTime.UtcNow - prevTime).TotalSeconds;
 
-        Console.WriteLine($"[Cumulative Energy]");
+        Console.WriteLine("[Cumulative Energy]");
         Console.WriteLine($"  CPU Energy: {power.Cpu:F6} J");
         Console.WriteLine($"  GPU Energy: {power.Gpu:F6} J");
         Console.WriteLine($"  ANE Energy: {power.Ane:F6} J");

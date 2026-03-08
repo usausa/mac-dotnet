@@ -156,7 +156,7 @@ public static class DiskInfoExtensions
                     AvailableSize = ptr[i].f_bavail * blockSize,
                     UsagePercent = totalBlocks > 0
                         ? (double)(totalBlocks - ptr[i].f_bavail) / totalBlocks
-                        : 0,
+                        : 0
                 });
             }
         }
@@ -338,8 +338,7 @@ public static class DiskInfoExtensions
     /// <summary>IOKit オブジェクトのクラス名を取得する。</summary>
     private static unsafe string? GetIokitClassName(uint @object)
     {
-        const int nameLen = 128;
-        byte* buf = stackalloc byte[nameLen];
+        var buf = stackalloc byte[128];
         return IOObjectGetClass(@object, buf) == KERN_SUCCESS
             ? Marshal.PtrToStringUTF8((IntPtr)buf)
             : null;
@@ -391,7 +390,7 @@ public static class DiskInfoExtensions
         {
             SmartType.Nvme when disk.Smart is ISmartNvme nvme => EvaluateNvmeHealth(nvme),
             SmartType.Generic when disk.Smart is ISmartGeneric ata => EvaluateAtaHealth(ata),
-            _ => SmartHealthStatus.Unknown,
+            _ => SmartHealthStatus.Unknown
         };
     }
 
