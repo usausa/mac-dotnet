@@ -2,6 +2,19 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+public enum DiskBusType
+{
+    Unknown,
+    Sata,
+    PciExpress,
+    Usb,
+    Thunderbolt,
+    FireWire,
+    Sas,
+    Sd,
+    AppleFabric
+}
+
 public sealed class DiskDeviceStat
 {
     internal bool Live { get; set; }
@@ -44,7 +57,7 @@ public sealed class DiskDeviceStat
 
     public bool IsRemovable { get; }
 
-    public string? BusType { get; }
+    public DiskBusType BusType { get; }
 
     public ulong DiskSize { get; }
 
@@ -54,9 +67,8 @@ public sealed class DiskDeviceStat
 
     public string? MediumType { get; }
 
-    internal DiskDeviceStat(ulong registryEntryId, string name, bool isPhysicalMedium, string? mediaName, string? vendorName, string? mediumType, bool isRemovable, ulong diskSize, string? busType)
+    internal DiskDeviceStat(ulong registryEntryId, string name, bool isPhysicalMedium, bool isRemovable, DiskBusType busType, ulong diskSize, string? mediaName, string? vendorName, string? mediumType)
     {
-        // TODO 順序見直し
         RegistryEntryId = registryEntryId;
         Name = name;
         IsPhysical = isPhysicalMedium;
@@ -112,12 +124,6 @@ public sealed class DiskStats
             {
                 try
                 {
-                    var bsdName = GetBsdNameIfWhole(entry);
-                    if (bsdName is null)
-                    {
-                        continue;
-                    }
-
                     var parent = GetParentEntry(entry);
                     if (parent == 0)
                     {
@@ -143,10 +149,11 @@ public sealed class DiskStats
 
                         if (device is null)
                         {
-                            // TODO NetworkStats と同様にCreateEntryにまとめる、プロパティの取得はそれ単位でメソッドにする
-                            var isPhysical = IsPhysical(parent);
-                            var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
-                            device = new DiskDeviceStat(entryId, bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
+                            device = CreateEntry(entryId, entry, parent);
+                            if (device is null)
+                            {
+                                continue;
+                            }
                             devices.Add(device);
                             added = true;
                         }
@@ -185,6 +192,25 @@ public sealed class DiskStats
         {
             _ = IOObjectRelease(iter);
         }
+    }
+
+    /// <summary>
+    /// 新規デバイス検出時に IOKit から静的情報を取得してエントリを生成する。
+    /// IOMedia エントリが Whole でない場合は null を返す。
+    /// </summary>
+    private static DiskDeviceStat? CreateEntry(ulong registryEntryId, uint mediaEntry, uint parentEntry)
+    {
+        var bsdName = GetBsdNameIfWhole(mediaEntry);
+        if (bsdName is null)
+        {
+            return null;
+        }
+
+        var isPhysical = IsPhysical(parentEntry);
+        var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
+        var diskSize = GetIokitUInt64(mediaEntry, "Size");
+        var (mediaName, vendorName, mediumType, busTypeStr) = FindDeviceCharacteristics(mediaEntry);
+        return new DiskDeviceStat(registryEntryId, bsdName, isPhysical, isRemovable, ParseBusType(busTypeStr), diskSize, mediaName, vendorName, mediumType);
     }
 
     private static void ReadStatistics(uint parentEntry, DiskDeviceStat device)
@@ -276,16 +302,19 @@ public sealed class DiskStats
         return GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
     }
 
-    /// <summary>
-    /// IOMedia エントリから静的なデバイス情報を読み取る。新規デバイス登録時に一度だけ呼ばれる。
-    /// </summary>
-    private static (bool IsRemovable, string? MediaName, string? VendorName, string? MediumType, ulong DiskSize, string? BusType) ReadStaticDeviceInfo(uint mediaEntry)
-    {
-        var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
-        var diskSize = GetIokitUInt64(mediaEntry, "Size");
-        var (mediaName, vendorName, mediumType, busType) = FindDeviceCharacteristics(mediaEntry);
-        return (isRemovable, mediaName, vendorName, mediumType, diskSize, busType);
-    }
+    private static DiskBusType ParseBusType(string? busType) =>
+        busType switch
+        {
+            "SATA" => DiskBusType.Sata,
+            "PCI-Express" => DiskBusType.PciExpress,
+            "USB" => DiskBusType.Usb,
+            "Thunderbolt" => DiskBusType.Thunderbolt,
+            "FireWire" => DiskBusType.FireWire,
+            "SAS" => DiskBusType.Sas,
+            "SD" => DiskBusType.Sd,
+            "Apple Fabric" => DiskBusType.AppleFabric,
+            _ => DiskBusType.Unknown
+        };
 
     /// <summary>
     /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
