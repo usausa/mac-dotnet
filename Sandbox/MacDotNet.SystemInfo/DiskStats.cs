@@ -2,202 +2,101 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-/// <summary>
-/// 1 台のディスクデバイスの累積 I/O 統計。
-/// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
-/// <para>
-/// Cumulative I/O statistics for a single disk device.
-/// Values are cumulative since kernel boot. The caller is responsible for computing deltas.
-/// </para>
-/// </summary>
 public sealed class DiskDeviceStat
 {
     internal bool Live { get; set; }
 
-    /// <summary>
-    /// 親エントリ (IOBlockStorageDriver) の IOKit レジストリ ID。
-    /// 同一ブート中に同じ Statistics カウンタを追跡するためのキー。
-    /// デバイスが抜き差しされると新しいエントリが生成され、ID が変わる。
-    /// <para>
-    /// IOKit registry ID of the parent entry (IOBlockStorageDriver).
-    /// Used as the identity key to track the same Statistics counter within a single boot.
-    /// The ID changes when a device is removed and re-inserted.
-    /// </para>
-    /// </summary>
     internal ulong RegistryEntryId { get; }
 
-    /// <summary>BSD デバイス名。例: "disk0"<br/>BSD device name. Example: "disk0"</summary>
+    // Interface
+
     public string Name { get; }
 
-    /// <summary>累積読み取りバイト数<br/>Cumulative bytes read</summary>
+    // Statistics
+
     public ulong BytesRead { get; internal set; }
 
-    /// <summary>累積書き込みバイト数<br/>Cumulative bytes written</summary>
-    public ulong BytesWritten { get; internal set; }
+    public ulong BytesWrite { get; internal set; }
 
-    /// <summary>累積読み取り操作数<br/>Cumulative read operations completed</summary>
     public ulong ReadsCompleted { get; internal set; }
 
-    /// <summary>累積書き込み操作数<br/>Cumulative write operations completed</summary>
     public ulong WritesCompleted { get; internal set; }
 
-    /// <summary>読み取り合計時間 (ナノ秒)<br/>Total read time in nanoseconds</summary>
     public ulong TotalTimeRead { get; internal set; }
 
-    /// <summary>書き込み合計時間 (ナノ秒)<br/>Total write time in nanoseconds</summary>
-    public ulong TotalTimeWritten { get; internal set; }
+    public ulong TotalTimeWrite { get; internal set; }
 
-    /// <summary>読み取りリトライ回数<br/>Number of read retries</summary>
     public ulong RetriesRead { get; internal set; }
 
-    /// <summary>書き込みリトライ回数<br/>Number of write retries</summary>
-    public ulong RetriesWritten { get; internal set; }
+    public ulong RetriesWrite { get; internal set; }
 
-    /// <summary>読み取りエラー回数<br/>Number of read errors</summary>
     public ulong ErrorsRead { get; internal set; }
 
-    /// <summary>書き込みエラー回数<br/>Number of write errors</summary>
-    public ulong ErrorsWritten { get; internal set; }
+    public ulong ErrorsWrite { get; internal set; }
 
-    /// <summary>読み取りレイテンシ (ナノ秒)<br/>Read latency in nanoseconds</summary>
     public ulong LatencyTimeRead { get; internal set; }
 
-    /// <summary>書き込みレイテンシ (ナノ秒)<br/>Write latency in nanoseconds</summary>
-    public ulong LatencyTimeWritten { get; internal set; }
+    public ulong LatencyTimeWrite { get; internal set; }
 
     // ---- 静的情報 (インスタンス作成時に一度だけ取得) ----
 
-    /// <summary>
-    /// ディスクの製品名。例: "APPLE SSD AP0512Z"、"RTL9210B-CG"。
-    /// 取得できない場合は null。
-    /// <para>Disk product name (e.g. "APPLE SSD AP0512Z"). Null if unavailable.</para>
-    /// </summary>
-    public string? MediaName { get; }
+    public bool IsPhysical { get; }
 
-    /// <summary>
-    /// ディスクのベンダー名。例: "Realtek"。空文字列の場合は null として扱われる。
-    /// <para>Disk vendor name (e.g. "Realtek"). Null if empty or unavailable.</para>
-    /// </summary>
-    public string? VendorName { get; }
-
-    /// <summary>
-    /// メディアの種別。例: "Solid State"、"Rotational"。
-    /// <para>Medium type (e.g. "Solid State", "Rotational"). Null if unavailable.</para>
-    /// </summary>
-    public string? MediumType { get; }
-
-    /// <summary>
-    /// リムーバブルメディアかどうか (IOMedia "Removable" プロパティ)。
-    /// <para>Whether the device is removable (IOMedia "Removable" property).</para>
-    /// </summary>
     public bool IsRemovable { get; }
 
-    /// <summary>
-    /// 物理ブロックストレージデバイスかどうか。
-    /// true の場合、IOKit の親が IOBlockStorageDriver である実メディア (NVMe、USB NVMe など)。
-    /// false の場合、APFS コンテナ仮想ディスクなど、物理デバイス上に合成された論理ディスク。
-    /// <para>
-    /// Whether this is a physical block storage device.
-    /// True if the IOKit parent is an IOBlockStorageDriver (e.g. NVMe, USB NVMe).
-    /// False for synthesized logical disks such as APFS container virtual disks.
-    /// </para>
-    /// </summary>
-    public bool IsPhysicalMedium { get; }
+    public string? BusType { get; }
 
-    /// <summary>
-    /// ディスク容量 (バイト)。IOMedia "Size" プロパティから取得。取得できない場合は 0。
-    /// <para>Disk capacity in bytes from the IOMedia "Size" property. 0 if unavailable.</para>
-    /// </summary>
     public ulong DiskSize { get; }
 
-    /// <summary>
-    /// バス接続種別の文字列。例: "NVMe"、"Apple Fabric"、"SATA"。取得できない場合は null。
-    /// <para>Physical bus interconnect string. Example: "NVMe", "Apple Fabric", "SATA". Null if unavailable.</para>
-    /// </summary>
-    public string? BusType { get; }
+    public string? MediaName { get; }
+
+    public string? VendorName { get; }
+
+    public string? MediumType { get; }
 
     internal DiskDeviceStat(ulong registryEntryId, string name, bool isPhysicalMedium, string? mediaName, string? vendorName, string? mediumType, bool isRemovable, ulong diskSize, string? busType)
     {
+        // TODO 順序見直し
         RegistryEntryId = registryEntryId;
         Name = name;
-        IsPhysicalMedium = isPhysicalMedium;
-        MediaName = mediaName;
-        VendorName = string.IsNullOrEmpty(vendorName) ? null : vendorName;
-        MediumType = mediumType;
+        IsPhysical = isPhysicalMedium;
         IsRemovable = isRemovable;
-        DiskSize = diskSize;
         BusType = busType;
+        DiskSize = diskSize;
+        MediaName = mediaName;
+        VendorName = vendorName;
+        MediumType = mediumType;
     }
 }
 
-/// <summary>
-/// 全ディスクデバイスの累積 I/O 統計を管理するクラス。
-/// IOKit の IOMedia (Whole) サービスから BSD 名を取得し、
-/// 親の IOBlockStorageDriver の Statistics ディクショナリを読み取る。
-/// <see cref="Create()"/> でインスタンスを生成し、<see cref="Update()"/> を呼ぶたびに
-/// 最新の累積値を更新する。<see cref="NetworkStats"/> と同じパターン。
-/// 物理ディスクのみ対象にする場合は <see cref="DiskDeviceStat.IsPhysicalMedium"/> で呼び出し側でフィルタする。
-/// <para>
-/// Manages cumulative I/O statistics for all disk devices.
-/// Retrieves BSD device names from IOMedia (Whole) services and reads Statistics from
-/// the parent IOBlockStorageDriver. Create via <see cref="Create()"/>; call <see cref="Update()"/> to refresh.
-/// Values are cumulative since boot; the caller is responsible for computing deltas.
-/// Use <see cref="DiskDeviceStat.IsPhysicalMedium"/> to filter for physical disks only.
-/// </para>
-/// </summary>
 public sealed class DiskStats
 {
-    private readonly List<DiskDeviceStat> _devices = new();
+    private readonly List<DiskDeviceStat> devices = new();
 
-    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
-    /// <summary>
-    /// 全ディスクの統計エントリ一覧 (名前昇順)。
-    /// 値はカーネル起動からの累積値。差分が必要な場合は呼び出し元で計算する。
-    /// <para>List of statistics entries for all disks (sorted by name). Values are cumulative since boot.</para>
-    /// </summary>
-    public IReadOnlyList<DiskDeviceStat> Devices => _devices;
+    public IReadOnlyList<DiskDeviceStat> Devices => devices;
 
     //--------------------------------------------------------------------------------
-    // Constructor / Factory
+    // Constructor
     //--------------------------------------------------------------------------------
 
-    private DiskStats()
+    internal DiskStats()
     {
         Update();
     }
-
-    /// <summary>
-    /// DiskStats インスタンスを生成する。すべての IOMedia (Whole) デバイスを対象にする。
-    /// 物理ディスクのみを対象にする場合は <see cref="DiskDeviceStat.IsPhysicalMedium"/> で呼び出し側でフィルタする。
-    /// <para>Creates a DiskStats instance covering all IOMedia (Whole) devices.
-    /// To target physical disks only, filter by <see cref="DiskDeviceStat.IsPhysicalMedium"/> on the caller side.</para>
-    /// </summary>
-    public static DiskStats Create() => new();
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
-    /// <summary>
-    /// IOKit から全物理ディスクの I/O 統計を取得して Devices を更新する。
-    /// 静的情報 (MediaName 等) は新規デバイス登録時にのみ取得し、以降は再取得しない。
-    /// 成功時は true、IOKit 呼び出し失敗時は false を返す。
-    /// <para>
-    /// Fetches I/O statistics for all physical disks from IOKit and updates Devices.
-    /// Static info (MediaName etc.) is read only once when a new device is first seen.
-    /// Returns true on success, false if the IOKit call fails.
-    /// </para>
-    /// </summary>
     public bool Update()
     {
-        foreach (var device in _devices)
+        foreach (var device in devices)
         {
             device.Live = false;
         }
 
-        // IOMedia (Whole=true) を列挙して物理ディスクを取得する
         var iter = IntPtr.Zero;
         var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref iter);
         if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
@@ -227,17 +126,13 @@ public sealed class DiskStats
 
                     try
                     {
-                        // Statistics カウンタを保持している親エントリの ID で同一判定する。
-                        // BSD 名はデバイス抜き差し後に再利用される可能性があるが、
-                        // Registry Entry ID はエントリが生存している間だけ有効で、
-                        // 再挿入時は新しい ID が付与されるため、同一カウンタの追跡に適している。
                         if (IORegistryEntryGetRegistryEntryID(parent, out var entryId) != KERN_SUCCESS)
                         {
                             continue;
                         }
 
                         var device = default(DiskDeviceStat);
-                        foreach (var item in _devices)
+                        foreach (var item in devices)
                         {
                             if (item.RegistryEntryId == entryId)
                             {
@@ -248,39 +143,39 @@ public sealed class DiskStats
 
                         if (device is null)
                         {
-                            // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
-                            var isPhysical = IsPhysicalMedium(parent);
+                            // TODO NetworkStats と同様にCreateEntryにまとめる、プロパティの取得はそれ単位でメソッドにする
+                            var isPhysical = IsPhysical(parent);
                             var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
                             device = new DiskDeviceStat(entryId, bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
-                            _devices.Add(device);
+                            devices.Add(device);
                             added = true;
                         }
 
                         device.Live = true;
-                        ReadStats(parent, device);
+                        ReadStatistics(parent, device);
                     }
                     finally
                     {
-                        IOObjectRelease(parent);
+                        _ = IOObjectRelease(parent);
                     }
                 }
                 finally
                 {
-                    IOObjectRelease(entry);
+                    _ = IOObjectRelease(entry);
                 }
             }
 
-            for (var i = _devices.Count - 1; i >= 0; i--)
+            for (var i = devices.Count - 1; i >= 0; i--)
             {
-                if (!_devices[i].Live)
+                if (!devices[i].Live)
                 {
-                    _devices.RemoveAt(i);
+                    devices.RemoveAt(i);
                 }
             }
 
             if (added)
             {
-                _devices.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
             }
 
             UpdateAt = DateTime.Now;
@@ -288,7 +183,36 @@ public sealed class DiskStats
         }
         finally
         {
-            IOObjectRelease(iter);
+            _ = IOObjectRelease(iter);
+        }
+    }
+
+    private static void ReadStatistics(uint parentEntry, DiskDeviceStat device)
+    {
+        var statsDict = GetIokitDictionary(parentEntry, "Statistics");
+        if (statsDict == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            device.BytesRead = GetIokitDictUInt64(statsDict, "Bytes (Read)");
+            device.BytesWrite = GetIokitDictUInt64(statsDict, "Bytes (Write)");
+            device.ReadsCompleted = GetIokitDictUInt64(statsDict, "Operations (Read)");
+            device.WritesCompleted = GetIokitDictUInt64(statsDict, "Operations (Write)");
+            device.TotalTimeRead = GetIokitDictUInt64(statsDict, "Total Time (Read)");
+            device.TotalTimeWrite = GetIokitDictUInt64(statsDict, "Total Time (Write)");
+            device.RetriesRead = GetIokitDictUInt64(statsDict, "Retries (Read)");
+            device.RetriesWrite = GetIokitDictUInt64(statsDict, "Retries (Write)");
+            device.ErrorsRead = GetIokitDictUInt64(statsDict, "Errors (Read)");
+            device.ErrorsWrite = GetIokitDictUInt64(statsDict, "Errors (Write)");
+            device.LatencyTimeRead = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
+            device.LatencyTimeWrite = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
+        }
+        finally
+        {
+            CFRelease(statsDict);
         }
     }
 
@@ -347,41 +271,9 @@ public sealed class DiskStats
     /// true の場合、物理ブロックストレージデバイス (NVMe、USB NVMe など)。
     /// false の場合、APFS コンテナ仮想ディスクなど合成された論理ディスク。
     /// </summary>
-    private static bool IsPhysicalMedium(uint parentEntry)
+    private static bool IsPhysical(uint parentEntry)
     {
         return GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
-    }
-
-    /// <summary>
-    /// 親エントリの Statistics ディクショナリを読み取り、device のプロパティを直接更新する。
-    /// </summary>
-    private static void ReadStats(uint parentEntry, DiskDeviceStat device)
-    {
-        var statsDict = GetIokitDictionary(parentEntry, "Statistics");
-        if (statsDict == IntPtr.Zero)
-        {
-            return;
-        }
-
-        try
-        {
-            device.BytesRead          = GetIokitDictUInt64(statsDict, "Bytes (Read)");
-            device.BytesWritten       = GetIokitDictUInt64(statsDict, "Bytes (Write)");
-            device.ReadsCompleted     = GetIokitDictUInt64(statsDict, "Operations (Read)");
-            device.WritesCompleted    = GetIokitDictUInt64(statsDict, "Operations (Write)");
-            device.TotalTimeRead      = GetIokitDictUInt64(statsDict, "Total Time (Read)");
-            device.TotalTimeWritten   = GetIokitDictUInt64(statsDict, "Total Time (Write)");
-            device.RetriesRead        = GetIokitDictUInt64(statsDict, "Retries (Read)");
-            device.RetriesWritten     = GetIokitDictUInt64(statsDict, "Retries (Write)");
-            device.ErrorsRead         = GetIokitDictUInt64(statsDict, "Errors (Read)");
-            device.ErrorsWritten      = GetIokitDictUInt64(statsDict, "Errors (Write)");
-            device.LatencyTimeRead    = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
-            device.LatencyTimeWritten = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
-        }
-        finally
-        {
-            CFRelease(statsDict);
-        }
     }
 
     /// <summary>

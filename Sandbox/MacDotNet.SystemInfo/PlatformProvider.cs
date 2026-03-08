@@ -54,7 +54,7 @@ public static class PlatformProvider
     /// <para>Returns cumulative I/O statistics for disk devices (all Whole IOMedia entries).
     /// Use <see cref="DiskDeviceStat.IsPhysicalMedium"/> to filter for physical disks only.</para>
     /// </summary>
-    public static DiskStats GetDiskStats() => DiskStats.Create();
+    public static DiskStats GetDiskStats() => new();
 
     /// <summary>ユーザーから見えるローカルボリュームの一覧を取得する。<br/>Returns user-visible local disk volumes.</summary>
     public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();

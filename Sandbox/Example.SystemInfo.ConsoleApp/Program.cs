@@ -276,7 +276,7 @@ var diskStats = PlatformProvider.GetDiskStats();
 // DiskDeviceStat はミュータブルなため値をコピー
 var prevDiskSnapshot = diskStats.Devices.ToDictionary(
     x => x.Name,
-    x => (x.BytesRead, x.BytesWritten));
+    x => (x.BytesRead, x.BytesWrite));
 var diskT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 diskStats.Update();
@@ -298,7 +298,7 @@ foreach (var vol in diskVolumes)
     }
 }
 
-var physicalDisks = diskStats.Devices.Where(d => d.IsPhysicalMedium).ToList();
+var physicalDisks = diskStats.Devices.Where(d => d.IsPhysical).ToList();
 Console.WriteLine($"  Total: {diskStats.Devices.Count} devices found, {physicalDisks.Count} displayed");
 if (physicalDisks.Count == 0)
 {
@@ -320,11 +320,11 @@ foreach (var d in physicalDisks)
 
     var hasPrevDisk = prevDiskSnapshot.TryGetValue(d.Name, out var prevDisk);
     var deltaRead    = hasPrevDisk ? d.BytesRead    - prevDisk.BytesRead    : 0UL;
-    var deltaWritten = hasPrevDisk ? d.BytesWritten - prevDisk.BytesWritten : 0UL;
+    var deltaWritten = hasPrevDisk ? d.BytesWrite- prevDisk.BytesWrite : 0UL;
     var readMbps  = diskElapsed > 0 ? deltaRead    / (1024.0 * 1024.0) / diskElapsed : 0;
     var writeMbps = diskElapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / diskElapsed : 0;
     Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
-    Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
+    Console.WriteLine($"    Write: {FormatBytes(d.BytesWrite),12} total  {writeMbps,8:F2} MB/s");
 
     if (volumesByDisk.TryGetValue(d.Name, out var relatedVolumes))
     {
