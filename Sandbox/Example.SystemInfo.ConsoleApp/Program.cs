@@ -156,30 +156,41 @@ Console.WriteLine($"  Encrypted:        {swap.IsEncrypted}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5. File Systems
+// 5. File Systems (GetFileSystems)
+// getfsstat(2) が返すすべてのマウント済みファイルシステム。
+// APFS 内部ボリューム (/System/Volumes/*) や devfs、autofs 等の仮想 FS を含む全エントリ。
+// GetDiskVolumes は本リストのサブセット ([V] でマーク)。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 5. File Systems ###");
+Console.WriteLine("### 5. File Systems (GetFileSystems) ###");
 var fileSystems = PlatformProvider.GetFileSystems();
+var diskVolumes = fileSystems.Where(fs => fs.IsUserVisible).ToList();
+Console.WriteLine($"  Source : getfsstat(2) — 仮想・内部 FS を含む全マウント済みエントリ");
+Console.WriteLine($"  Total  : {fileSystems.Count} file systems  ({diskVolumes.Count} are user-visible volumes [V])");
+Console.WriteLine();
 foreach (var fs in fileSystems)
 {
-    Console.WriteLine($"  {fs.MountPoint} ({fs.TypeName})");
-    Console.WriteLine($"    Device:    {fs.DeviceName}");
-    Console.WriteLine($"    Total:     {FormatBytes(fs.TotalSize)}");
-    Console.WriteLine($"    Available: {FormatBytes(fs.AvailableSize)}  ({fs.UsagePercent:P1} used)");
-    Console.WriteLine($"    ReadOnly:  {fs.IsReadOnly}, Local: {fs.IsLocal}");
+    var marker = fs.IsUserVisible ? "[V]" : "   ";
+    Console.WriteLine($"  {marker} {fs.MountPoint} ({fs.TypeName})");
+    Console.WriteLine($"       Device:    {fs.DeviceName}");
+    Console.WriteLine($"       Local:     {fs.IsLocal}, ReadOnly: {fs.IsReadOnly}");
+    if (fs.TotalSize > 0)
+    {
+        Console.WriteLine($"       Size:      {FormatBytes(fs.TotalSize)}, Available: {FormatBytes(fs.AvailableSize)} ({fs.UsagePercent:P1} used)");
+    }
 }
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5a. Disk Volumes (macOS ストレージ設定に表示されるユーザー可視ボリューム)
-// Linux の GetPartitions() + GetFileSystemUsage() に相当する機能。
-// "/" (Macintosh HD) および "/Volumes/*" のみを表示し、
-// "/System/Volumes/*" 等のAPFS内部システムボリュームは除外する。
+// 5a. Disk Volumes (GetDiskVolumes)
+// GetFileSystems のサブセット: "/" (Macintosh HD) と "/Volumes/*" のみ。
+// "/System/Volumes/*" 等の APFS 内部ボリュームや ".timemachine" 等の隠しディレクトリは除外。
+// Linux の /proc/mounts でマウント済みパーティションを列挙するのに相当する用途向け。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 5a. Disk Volumes ###");
-var volumes = PlatformProvider.GetDiskVolumes();
-Console.WriteLine($"  Total: {fileSystems.Count} file systems found, {volumes.Count} displayed");
-foreach (var vol in volumes)
+Console.WriteLine("### 5a. Disk Volumes (GetDiskVolumes) ###");
+Console.WriteLine($"  Source : GetFileSystems のサブセット — \"/\" と \"/Volumes/*\" のみ (隠しディレクトリ除外)");
+Console.WriteLine($"  Total  : {diskVolumes.Count} of {fileSystems.Count} file systems");
+Console.WriteLine();
+foreach (var vol in diskVolumes)
 {
     var usage = PlatformProvider.GetFileSystemUsage(vol.MountPoint);
     Console.WriteLine($"  {vol.MountPoint} ({vol.TypeName})");
@@ -283,7 +294,6 @@ diskStats.Update();
 var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
 
 // 5a ボリュームを物理ディスク名でグループ化
-var diskVolumes = PlatformProvider.GetDiskVolumes();
 var volumesByDisk = new Dictionary<string, List<string>>(StringComparer.Ordinal);
 foreach (var vol in diskVolumes)
 {

@@ -68,50 +68,16 @@ public sealed record FileSystemEntry
     public bool IsLocal => (Flags & MNT_LOCAL) != 0;
 
     /// <summary>
-    /// DeviceName から物理ディスクの BSD 名を返す。
-    /// 例: "/dev/disk3s1s1" → "disk3"、取得できない場合は null。
-    /// <para>Returns the physical disk BSD name extracted from DeviceName.
-    /// Example: "/dev/disk3s1s1" → "disk3". Returns null if unavailable.</para>
+    /// ユーザーから見えるボリュームかどうか。
+    /// ローカル FS のうち "/" (Macintosh HD) および "/Volumes/*" (隠しディレクトリ除外) のみ true。
+    /// "/System/Volumes/*" 等の APFS 内部ボリュームや "/Volumes/.timemachine" 等は false。
+    /// <para>
+    /// Whether this is a user-visible volume.
+    /// True only for local file systems mounted at "/" or "/Volumes/*" (excluding hidden directories).
+    /// False for APFS internal volumes such as /System/Volumes/* and hidden mounts like /Volumes/.timemachine.
+    /// </para>
     /// </summary>
-    public string? PhysicalDiskName
-    {
-        get
-        {
-            const string prefix = "/dev/disk";
-            if (!DeviceName.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            var span = DeviceName.AsSpan(prefix.Length);
-            var n = 0;
-            while (n < span.Length && char.IsAsciiDigit(span[n]))
-            {
-                n++;
-            }
-
-            return n > 0 ? string.Concat("disk", span[..n]) : null;
-        }
-    }
-}
-
-/// <summary>
-/// ユーザーから見えるボリューム情報 (ルートと /Volumes/ 配下のみ)。
-/// <para>User-visible volume information (root and /Volumes/ only).</para>
-/// </summary>
-public sealed record DiskVolume
-{
-    /// <summary>マウントポイントのパス。例: "/"、"/Volumes/Macintosh HD"<br/>Mount point path. Example: "/", "/Volumes/Macintosh HD"</summary>
-    public required string MountPoint { get; init; }
-
-    /// <summary>ファイルシステムの種類。例: "apfs"、"hfs"、"exfat"<br/>File system type name. Example: "apfs", "hfs", "exfat"</summary>
-    public required string TypeName { get; init; }
-
-    /// <summary>マウントされているデバイスのパス。例: "/dev/disk3s1s1"<br/>Path of the mounted device. Example: "/dev/disk3s1s1"</summary>
-    public required string DeviceName { get; init; }
-
-    /// <summary>読み取り専用でマウントされているかどうか<br/>Whether the volume is mounted read-only</summary>
-    public required bool IsReadOnly { get; init; }
+    public required bool IsUserVisible { get; init; }
 
     /// <summary>
     /// DeviceName から物理ディスクの BSD 名を返す。
@@ -142,80 +108,19 @@ public sealed record DiskVolume
 }
 
 /// <summary>
-/// ファイルシステムおよびディスクボリュームの列挙ユーティリティ。
-/// <para>Utility class for enumerating file systems and disk volumes.</para>
+/// ファイルシステムの列挙ユーティリティ。
+/// <para>Utility class for enumerating file systems.</para>
 /// </summary>
 public static class FileSystemInfo
 {
     /// <summary>
-    /// ユーザーから見えるローカルボリューム (ルートおよび /Volumes/ 配下) の一覧を返す。
-    /// /System/Volumes/* などの APFS 内部ボリュームや TimeMachine バックアップは除外する。
-    /// <para>
-    /// Returns user-visible local volumes (root and /Volumes/ mounts).
-    /// Excludes APFS internal system volumes such as /System/Volumes/* and Time Machine backups.
-    /// </para>
-    /// </summary>
-    public static unsafe DiskVolume[] GetDiskVolumes()
-    {
-        var count = getfsstat(null, 0, MNT_NOWAIT);
-        if (count <= 0)
-        {
-            return [];
-        }
-
-        var buffer = new statfs[count];
-        fixed (statfs* ptr = buffer)
-        {
-            var bufsize = count * sizeof(statfs);
-            var actual = getfsstat(ptr, bufsize, MNT_NOWAIT);
-            if (actual <= 0)
-            {
-                return [];
-            }
-
-            var resultCount = Math.Min(actual, count);
-            var result = new List<DiskVolume>(resultCount);
-            for (var i = 0; i < resultCount; i++)
-            {
-                if ((ptr[i].f_flags & MNT_LOCAL) == 0)
-                {
-                    continue;
-                }
-
-                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty;
-
-                // ユーザーが見えるボリュームのみを返す:
-                // - "/" (ルート/ブートボリューム = Macintosh HD)
-                // - "/Volumes/Name" (追加ボリューム。"." で始まる隠しディレクトリは除外)
-                // "/System/Volumes/*" 等のAPFS内部システムボリュームは除外する
-                // "/Volumes/.timemachine/*" 等のTimeMachineバックアップボリュームは除外する
-                var isRoot = mountPoint == "/";
-                var isUserVolume = mountPoint.StartsWith("/Volumes/", StringComparison.Ordinal)
-                    && !mountPoint["/Volumes/".Length..].StartsWith(".", StringComparison.Ordinal);
-                if (!isRoot && !isUserVolume)
-                {
-                    continue;
-                }
-
-                result.Add(new DiskVolume
-                {
-                    MountPoint = mountPoint,
-                    TypeName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
-                    DeviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty,
-                    IsReadOnly = (ptr[i].f_flags & MNT_RDONLY) != 0,
-                });
-            }
-
-            return [.. result];
-        }
-    }
-
-    /// <summary>
     /// getfsstat(2) が返すすべてのマウント済みファイルシステムの詳細情報を返す。
     /// 仮想・ネットワーク・内部ボリュームを含む全エントリが対象。
+    /// ユーザーから見えるボリューム ("/" および "/Volumes/*") は <see cref="FileSystemEntry.IsUserVisible"/> が true。
     /// <para>
     /// Returns detailed information for all mounted file systems reported by getfsstat(2).
     /// Includes virtual, network, and internal volumes.
+    /// Entries visible to users ("/" and "/Volumes/*") have <see cref="FileSystemEntry.IsUserVisible"/> set to true.
     /// </para>
     /// </summary>
     public static unsafe FileSystemEntry[] GetFileSystems()
@@ -241,9 +146,15 @@ public static class FileSystemInfo
 
             for (var i = 0; i < resultCount; i++)
             {
+                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty;
+                var isRoot = mountPoint == "/";
+                var isUserVolume = mountPoint.StartsWith("/Volumes/", StringComparison.Ordinal)
+                    && !mountPoint["/Volumes/".Length..].StartsWith(".", StringComparison.Ordinal);
+                var isUserVisible = (ptr[i].f_flags & MNT_LOCAL) != 0 && (isRoot || isUserVolume);
+
                 result[i] = new FileSystemEntry
                 {
-                    MountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty,
+                    MountPoint = mountPoint,
                     TypeName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
                     DeviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty,
                     BlockSize = ptr[i].f_bsize,
@@ -256,6 +167,7 @@ public static class FileSystemInfo
                     Flags = ptr[i].f_flags,
                     SubType = ptr[i].f_fssubtype,
                     OwnerUid = ptr[i].f_owner,
+                    IsUserVisible = isUserVisible,
                 };
             }
 

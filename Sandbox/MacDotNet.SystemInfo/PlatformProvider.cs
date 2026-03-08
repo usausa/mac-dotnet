@@ -33,8 +33,6 @@ public static class PlatformProvider
 
     public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
 
-    public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();
-
     public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
 
     //--------------------------------------------------------------------------------

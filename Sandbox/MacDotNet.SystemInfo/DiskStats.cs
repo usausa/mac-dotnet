@@ -127,8 +127,7 @@ public sealed class DiskStats
                 continue;
             }
 
-            var rawParent = GetParentEntry(entry);
-            if (rawParent == 0)
+            if (IORegistryEntryGetParentEntry(entry, "IOService", out var rawParent) != KERN_SUCCESS || rawParent == 0)
             {
                 continue;
             }
@@ -213,17 +212,6 @@ public sealed class DiskStats
         var (mediaName, vendorName, mediumType, busTypeStr) = FindDeviceCharacteristics(entry);
         var busType = ParseBusType(busTypeStr);
         return new DiskDeviceStat(registryEntryId, bsdName, busType, isPhysical, isRemovable, diskSize, mediaName, vendorName, mediumType);
-    }
-
-    // TODO
-
-    /// <summary>
-    /// IOMedia エントリの IOService プレーンにおける親エントリを返す。
-    /// 取得失敗時は 0 を返す。戻り値が非 0 の場合、呼び出し元が IOObjectRelease しなければならない。
-    /// </summary>
-    private static uint GetParentEntry(IOObj mediaEntry)
-    {
-        return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0 ? parent : 0;
     }
 
     private static DiskBusType ParseBusType(string? busType) =>
