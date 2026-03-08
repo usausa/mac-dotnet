@@ -97,7 +97,7 @@ public static class PlatformProvider
     /// The caller is responsible for computing deltas.
     /// </para>
     /// </summary>
-    public static NetworkStats GetNetworkStats() => NetworkStats.Create();
+    public static NetworkStat GetNetworkStats() => new(false);
 
     //--------------------------------------------------------------------------------
     // Process / プロセス
