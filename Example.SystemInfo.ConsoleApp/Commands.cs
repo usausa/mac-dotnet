@@ -186,7 +186,7 @@ public sealed class DiskStatCommand : ICommandHandler
 {
     public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var diskStats = PlatformProvider.GetDiskStats();
+        var diskStats = PlatformProvider.GetDiskStat();
         if (diskStats.Devices.Count == 0)
         {
             Console.WriteLine("No physical disks found.");
