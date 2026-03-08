@@ -131,22 +131,23 @@ public sealed class DiskDeviceStat
 }
 
 /// <summary>
-/// 全物理ディスクの累積 I/O 統計を管理するクラス。
+/// 全ディスクデバイスの累積 I/O 統計を管理するクラス。
 /// IOKit の IOMedia (Whole) サービスから BSD 名を取得し、
 /// 親の IOBlockStorageDriver の Statistics ディクショナリを読み取る。
 /// <see cref="Create()"/> でインスタンスを生成し、<see cref="Update()"/> を呼ぶたびに
 /// 最新の累積値を更新する。<see cref="NetworkStats"/> と同じパターン。
+/// 物理ディスクのみ対象にする場合は <see cref="DiskDeviceStat.IsPhysicalMedium"/> で呼び出し側でフィルタする。
 /// <para>
-/// Manages cumulative I/O statistics for all physical disks.
+/// Manages cumulative I/O statistics for all disk devices.
 /// Retrieves BSD device names from IOMedia (Whole) services and reads Statistics from
 /// the parent IOBlockStorageDriver. Create via <see cref="Create()"/>; call <see cref="Update()"/> to refresh.
 /// Values are cumulative since boot; the caller is responsible for computing deltas.
+/// Use <see cref="DiskDeviceStat.IsPhysicalMedium"/> to filter for physical disks only.
 /// </para>
 /// </summary>
 public sealed class DiskStats
 {
     private readonly List<DiskDeviceStat> _devices = new();
-    private readonly bool _includeAll;
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
@@ -162,25 +163,18 @@ public sealed class DiskStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    private DiskStats(bool includeAll)
+    private DiskStats()
     {
-        _includeAll = includeAll;
         Update();
     }
 
     /// <summary>
-    /// DiskStats インスタンスを生成する。
-    /// <para>Creates a DiskStats instance.</para>
+    /// DiskStats インスタンスを生成する。すべての IOMedia (Whole) デバイスを対象にする。
+    /// 物理ディスクのみを対象にする場合は <see cref="DiskDeviceStat.IsPhysicalMedium"/> で呼び出し側でフィルタする。
+    /// <para>Creates a DiskStats instance covering all IOMedia (Whole) devices.
+    /// To target physical disks only, filter by <see cref="DiskDeviceStat.IsPhysicalMedium"/> on the caller side.</para>
     /// </summary>
-    /// <param name="includeAll">
-    /// true の場合、APFS コンテナ仮想ディスク (disk3、disk7 等) を含むすべてのディスクを対象にする。
-    /// false (デフォルト) の場合、IOKit の親が IOBlockStorageDriver である物理メディアのみを対象にする。
-    /// <para>
-    /// When true, all disks are included, including APFS container virtual disks (e.g. disk3, disk7).
-    /// When false (default), only physical media whose IOKit parent is IOBlockStorageDriver are included.
-    /// </para>
-    /// </param>
-    public static DiskStats Create(bool includeAll = false) => new(includeAll);
+    public static DiskStats Create() => new();
 
     //--------------------------------------------------------------------------------
     // Update
@@ -233,14 +227,6 @@ public sealed class DiskStats
 
                     try
                     {
-                        var isPhysical = IsPhysicalMedium(parent);
-
-                        // includeAll=false (デフォルト) の場合、物理メディアのみを対象にする
-                        if (!_includeAll && !isPhysical)
-                        {
-                            continue;
-                        }
-
                         // Statistics カウンタを保持している親エントリの ID で同一判定する。
                         // BSD 名はデバイス抜き差し後に再利用される可能性があるが、
                         // Registry Entry ID はエントリが生存している間だけ有効で、
@@ -263,6 +249,7 @@ public sealed class DiskStats
                         if (device is null)
                         {
                             // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
+                            var isPhysical = IsPhysicalMedium(parent);
                             var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
                             device = new DiskDeviceStat(entryId, bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
                             _devices.Add(device);

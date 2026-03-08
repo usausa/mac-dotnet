@@ -242,8 +242,8 @@ var netT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 netStats.Update();
 var netElapsed = (DateTime.UtcNow - netT0).TotalSeconds;
-var serviceNames = interfaces.Select(i => i.Name).ToHashSet(StringComparer.Ordinal);
-foreach (var s in netStats.Interfaces.Where(x => serviceNames.Contains(x.Name)))
+// IsRegistered && IsEnabled && !IsHidden で System Settings に表示されるサービスのみを表示
+foreach (var s in netStats.Interfaces.Where(x => x.IsRegistered && x.IsEnabled && !x.IsHidden))
 {
     var displayLabel = s.DisplayName is not null ? $" {s.DisplayName}" : string.Empty;
     Console.WriteLine($"  [{s.Name}]{displayLabel}");
@@ -263,11 +263,11 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 6b. Disk I/O Stats (500ms delta)
-// physicalOnly: true で物理メディアのみを列挙し、関連する 5a ボリュームを子項目として表示する。
-// IsPhysicalMedium=false (APFS コンテナ等の仮想ディスク) は除外される。
+// IsPhysicalMedium=true の物理メディアのみを列挙し、関連する 5a ボリュームを子項目として表示する。
+// IsPhysicalMedium=false (APFS コンテナ等の仮想ディスク) は呼び出し側で除外する。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6b. Disk I/O Stats (500ms delta) ###");
-var diskStats = PlatformProvider.GetDiskStats(physicalOnly: true);
+var diskStats = PlatformProvider.GetDiskStats();
 // DiskDeviceStat はミュータブルなため値をコピー
 var prevDiskSnapshot = diskStats.Devices.ToDictionary(
     x => x.Name,
@@ -293,11 +293,12 @@ foreach (var vol in diskVolumes)
     }
 }
 
-if (diskStats.Devices.Count == 0)
+var physicalDisks = diskStats.Devices.Where(d => d.IsPhysicalMedium).ToList();
+if (physicalDisks.Count == 0)
 {
     Console.WriteLine("  No physical disks found.");
 }
-foreach (var d in diskStats.Devices)
+foreach (var d in physicalDisks)
 {
     var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
     Console.WriteLine($"  [{deviceLabel}]");

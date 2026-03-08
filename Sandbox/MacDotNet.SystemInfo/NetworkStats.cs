@@ -28,6 +28,17 @@ public sealed class NetworkStatEntry
 
     public NetworkInterfaceType InterfaceType { get; }
 
+    // SC service metadata (for caller-side filtering)
+
+    /// <summary>macOS System Settings に SC サービスとして登録されているか。<br/>Whether this interface has a registered SC network service.</summary>
+    public bool IsRegistered { get; }
+
+    /// <summary>SC サービスが有効か。Update() のたびに更新される。<br/>Whether the SC service is enabled. Updated on each Update() call.</summary>
+    public bool IsEnabled { get; internal set; }
+
+    /// <summary>HiddenConfiguration フラグが立っているか (System Settings 非表示)。<br/>Whether the interface has the HiddenConfiguration flag set.</summary>
+    public bool IsHidden { get; }
+
     // Cumulative bytes
 
     public uint RxBytes { get; internal set; }
@@ -44,18 +55,19 @@ public sealed class NetworkStatEntry
     public uint Collisions { get; internal set; }
     public uint NoProto { get; internal set; }
 
-    internal NetworkStatEntry(string name, string? displayName, NetworkInterfaceType scType)
+    internal NetworkStatEntry(string name, string? displayName, NetworkInterfaceType scType, bool isRegistered, bool isEnabled, bool isHidden)
     {
         Name = name;
         DisplayName = displayName;
         InterfaceType = scType;
+        IsRegistered = isRegistered;
+        IsEnabled = isEnabled;
+        IsHidden = isHidden;
     }
 }
 
 public sealed class NetworkStat
 {
-    private readonly bool includeAll;
-
     private readonly List<NetworkStatEntry> interfaces = new();
 
     public DateTime UpdateAt { get; private set; }
@@ -66,9 +78,8 @@ public sealed class NetworkStat
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    internal NetworkStat(bool includeAll)
+    internal NetworkStat()
     {
-        this.includeAll = includeAll;
         Update();
     }
 
@@ -118,13 +129,13 @@ public sealed class NetworkStat
                     {
                         session ??= new ServiceSession();
                         iface = CreateInterfaceStat(session, name);
-                        if (iface is null)
-                        {
-                            continue;
-                        }
-
                         interfaces.Add(iface);
                         added = true;
+                    }
+                    else
+                    {
+                        session ??= new ServiceSession();
+                        UpdateInterfaceEnabled(session, iface);
                     }
 
                     iface.Live = true;
@@ -184,21 +195,30 @@ public sealed class NetworkStat
         public NetworkInterfaceType InterfaceType { get; init; }
     }
 
-    private NetworkStatEntry? CreateInterfaceStat(ServiceSession session, string bsdName)
+    private static NetworkStatEntry CreateInterfaceStat(ServiceSession session, string bsdName)
     {
         var info = session.LookupService(bsdName);
 
-        if (info.Unavailable)
+        if (info.Unavailable || !info.Registered)
         {
-            return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown);
+            return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown, isRegistered: false, isEnabled: false, isHidden: false);
         }
 
-        if (!info.Registered || !info.IsEnabled || info.IsHidden)
+        if (info.IsHidden)
         {
-            return includeAll ? new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown) : null;
+            return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown, isRegistered: true, isEnabled: false, isHidden: true);
         }
 
-        return new NetworkStatEntry(bsdName, info.DisplayName, info.InterfaceType);
+        return new NetworkStatEntry(bsdName, info.DisplayName, info.InterfaceType, isRegistered: true, isEnabled: info.IsEnabled, isHidden: false);
+    }
+
+    private static void UpdateInterfaceEnabled(ServiceSession session, NetworkStatEntry iface)
+    {
+        var info = session.LookupService(iface.Name);
+        if (!info.Unavailable && info.Registered && !info.IsHidden)
+        {
+            iface.IsEnabled = info.IsEnabled;
+        }
     }
 
     //--------------------------------------------------------------------------------
