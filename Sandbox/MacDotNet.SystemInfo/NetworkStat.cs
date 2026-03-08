@@ -20,6 +20,8 @@ public sealed class NetworkStatEntry
 {
     internal bool Live { get; set; }
 
+    internal bool Target { get; set; }
+
     // Interface
 
     public string Name { get; }
@@ -66,16 +68,21 @@ public sealed class NetworkStat
 {
     private readonly List<NetworkStatEntry> interfaces = new();
 
+    private readonly bool includeAll;
+
+    private readonly List<NetworkStatEntry> filteredInterfaces = new();
+
     public DateTime UpdateAt { get; private set; }
 
-    public IReadOnlyList<NetworkStatEntry> Interfaces => interfaces;
+    public IReadOnlyList<NetworkStatEntry> Interfaces => includeAll ? interfaces : filteredInterfaces;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal NetworkStat()
+    internal NetworkStat(bool includeAll = false)
     {
+        this.includeAll = includeAll;
         Update();
     }
 
@@ -124,21 +131,29 @@ public sealed class NetworkStat
                     {
                         iface = CreateEntry(name);
                         interfaces.Add(iface);
+                        iface.Target = includeAll || (iface.IsRegistered && !iface.IsHidden);
+                        if (iface.Target)
+                        {
+                            filteredInterfaces.Add(iface);
+                        }
                         added = true;
                     }
 
                     iface.Live = true;
-                    iface.RxBytes = raw.ifi_ibytes;
-                    iface.RxPackets = raw.ifi_ipackets;
-                    iface.RxErrors = raw.ifi_ierrors;
-                    iface.RxDrops = raw.ifi_iqdrops;
-                    iface.RxMulticast = raw.ifi_imcasts;
-                    iface.TxBytes = raw.ifi_obytes;
-                    iface.TxPackets = raw.ifi_opackets;
-                    iface.TxErrors = raw.ifi_oerrors;
-                    iface.TxMulticast = raw.ifi_omcasts;
-                    iface.Collisions = raw.ifi_collisions;
-                    iface.NoProto = raw.ifi_noproto;
+                    if (iface.Target)
+                    {
+                        iface.RxBytes = raw.ifi_ibytes;
+                        iface.RxPackets = raw.ifi_ipackets;
+                        iface.RxErrors = raw.ifi_ierrors;
+                        iface.RxDrops = raw.ifi_iqdrops;
+                        iface.RxMulticast = raw.ifi_imcasts;
+                        iface.TxBytes = raw.ifi_obytes;
+                        iface.TxPackets = raw.ifi_opackets;
+                        iface.TxErrors = raw.ifi_oerrors;
+                        iface.TxMulticast = raw.ifi_omcasts;
+                        iface.Collisions = raw.ifi_collisions;
+                        iface.NoProto = raw.ifi_noproto;
+                    }
                 }
             }
 
@@ -146,6 +161,10 @@ public sealed class NetworkStat
             {
                 if (!interfaces[i].Live)
                 {
+                    if (interfaces[i].Target)
+                    {
+                        filteredInterfaces.Remove(interfaces[i]);
+                    }
                     interfaces.RemoveAt(i);
                 }
             }
@@ -153,6 +172,7 @@ public sealed class NetworkStat
             if (added)
             {
                 interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
             }
 
             RefreshEnabledState();

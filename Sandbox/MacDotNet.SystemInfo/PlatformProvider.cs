@@ -41,7 +41,7 @@ public static class PlatformProvider
 
     public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces(bool includeAll = false) => NetworkInfo.GetNetworkInterfaces(includeAll);
 
-    public static NetworkStat GetNetworkStats() => new();
+    public static NetworkStat GetNetworkStats(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Process
@@ -63,7 +63,7 @@ public static class PlatformProvider
     // Disk
     //--------------------------------------------------------------------------------
 
-    public static DiskStats GetDiskStats() => new();
+    public static DiskStats GetDiskStats(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Power / Battery

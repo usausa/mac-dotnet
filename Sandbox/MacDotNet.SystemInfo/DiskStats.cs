@@ -20,6 +20,8 @@ public sealed class DiskDeviceStat
 {
     internal bool Live { get; set; }
 
+    internal bool Target { get; set; }
+
     internal ulong RegistryEntryId { get; }
 
     // Interface
@@ -86,16 +88,21 @@ public sealed class DiskStats
 {
     private readonly List<DiskDeviceStat> devices = new();
 
+    private readonly bool includeAll;
+
+    private readonly List<DiskDeviceStat> filteredDevices = new();
+
     public DateTime UpdateAt { get; private set; }
 
-    public IReadOnlyList<DiskDeviceStat> Devices => devices;
+    public IReadOnlyList<DiskDeviceStat> Devices => includeAll ? devices : filteredDevices;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal DiskStats()
+    internal DiskStats(bool includeAll = false)
     {
+        this.includeAll = includeAll;
         Update();
     }
 
@@ -153,17 +160,29 @@ public sealed class DiskStats
             {
                 device = CreateEntry(entryId, entry, parent);
                 devices.Add(device);
+                device.Target = includeAll || (device.IsPhysical && device.BusType != DiskBusType.VirtualInterface);
+                if (device.Target)
+                {
+                    filteredDevices.Add(device);
+                }
                 added = true;
             }
 
             device.Live = true;
-            ReadStatistics(parent, device);
+            if (device.Target)
+            {
+                ReadStatistics(parent, device);
+            }
         }
 
         for (var i = devices.Count - 1; i >= 0; i--)
         {
             if (!devices[i].Live)
             {
+                if (devices[i].Target)
+                {
+                    filteredDevices.Remove(devices[i]);
+                }
                 devices.RemoveAt(i);
             }
         }
@@ -171,6 +190,7 @@ public sealed class DiskStats
         if (added)
         {
             devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
         }
 
         UpdateAt = DateTime.Now;

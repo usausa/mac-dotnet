@@ -256,8 +256,7 @@ var netT0 = DateTime.UtcNow;
 Thread.Sleep(500);
 netStats.Update();
 var netElapsed = (DateTime.UtcNow - netT0).TotalSeconds;
-// IsRegistered && IsEnabled && !IsHidden で System Settings に表示されるサービスのみを表示
-var activeInterfaces = netStats.Interfaces.Where(x => x.IsRegistered && x.IsEnabled && !x.IsHidden).ToList();
+var activeInterfaces = netStats.Interfaces.Where(x => x.IsEnabled).ToList();
 Console.WriteLine($"  Total: {netStats.Interfaces.Count} interfaces found, {activeInterfaces.Count} displayed");
 foreach (var s in activeInterfaces)
 {
@@ -293,17 +292,12 @@ Thread.Sleep(500);
 diskStats.Update();
 var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
 
-// IsPhysical=true かつ実在のバス接続を持つものに絞る。
-// Disk Image は "Virtual Interface" を返すため VirtualInterface で除外できる。
-var physicalDisks = diskStats.Devices
-    .Where(d => d.IsPhysical && d.BusType != DiskBusType.VirtualInterface)
-    .ToList();
-Console.WriteLine($"  Total: {diskStats.Devices.Count} devices found, {physicalDisks.Count} displayed");
-if (physicalDisks.Count == 0)
+Console.WriteLine($"  Total: {diskStats.Devices.Count} devices found");
+if (diskStats.Devices.Count == 0)
 {
     Console.WriteLine("  No physical disks found.");
 }
-foreach (var d in physicalDisks)
+foreach (var d in diskStats.Devices)
 {
     var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
     Console.WriteLine($"  [{deviceLabel}]");
