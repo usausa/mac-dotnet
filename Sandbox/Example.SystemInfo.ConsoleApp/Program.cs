@@ -178,6 +178,7 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 5a. Disk Volumes ###");
 var volumes = PlatformProvider.GetDiskVolumes();
+Console.WriteLine($"  Total: {fileSystems.Count} file systems found, {volumes.Count} displayed");
 foreach (var vol in volumes)
 {
     var usage = PlatformProvider.GetFileSystemUsage(vol.MountPoint);
@@ -197,6 +198,8 @@ Console.WriteLine();
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 6. Network Interfaces ###");
 var interfaces = PlatformProvider.GetNetworkInterfaces();
+var allInterfaces = PlatformProvider.GetNetworkInterfaces(includeAll: true);
+Console.WriteLine($"  Total: {allInterfaces.Count} interfaces found, {interfaces.Count} displayed");
 // System.Net.NetworkInformation から補完情報を取得
 var dotnetIfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
     .ToDictionary(ni => ni.Name, StringComparer.Ordinal);
@@ -243,7 +246,9 @@ Thread.Sleep(500);
 netStats.Update();
 var netElapsed = (DateTime.UtcNow - netT0).TotalSeconds;
 // IsRegistered && IsEnabled && !IsHidden で System Settings に表示されるサービスのみを表示
-foreach (var s in netStats.Interfaces.Where(x => x.IsRegistered && x.IsEnabled && !x.IsHidden))
+var activeInterfaces = netStats.Interfaces.Where(x => x.IsRegistered && x.IsEnabled && !x.IsHidden).ToList();
+Console.WriteLine($"  Total: {netStats.Interfaces.Count} interfaces found, {activeInterfaces.Count} displayed");
+foreach (var s in activeInterfaces)
 {
     var displayLabel = s.DisplayName is not null ? $" {s.DisplayName}" : string.Empty;
     Console.WriteLine($"  [{s.Name}]{displayLabel}");
@@ -294,6 +299,7 @@ foreach (var vol in diskVolumes)
 }
 
 var physicalDisks = diskStats.Devices.Where(d => d.IsPhysicalMedium).ToList();
+Console.WriteLine($"  Total: {diskStats.Devices.Count} devices found, {physicalDisks.Count} displayed");
 if (physicalDisks.Count == 0)
 {
     Console.WriteLine("  No physical disks found.");
