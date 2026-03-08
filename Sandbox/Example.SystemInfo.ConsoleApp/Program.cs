@@ -161,14 +161,15 @@ Console.WriteLine();
 // フラグだけで isUserVisible を判定できるか確認する。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 5. File Systems — Full Attributes ###");
+var allFileSystems = PlatformProvider.GetFileSystems(includeAll: true);
 var fileSystems = PlatformProvider.GetFileSystems();
-var diskVolumes = fileSystems.Where(fs => fs.Flags.HasFlag(MountFlags.Local) && !fs.Flags.HasFlag(MountFlags.DontBrowse)).ToList();
-Console.WriteLine($"  Total: {fileSystems.Count} file systems  ({diskVolumes.Count} user-visible [V])");
+Console.WriteLine($"  Total: {allFileSystems.Count} file systems (all)  /  {fileSystems.Count} user-visible [V] (Local && !DontBrowse)");
 Console.WriteLine();
-foreach (var fs in fileSystems)
+foreach (var fs in allFileSystems)
 {
-    var marker = fs.Flags.HasFlag(MountFlags.Local) && !fs.Flags.HasFlag(MountFlags.DontBrowse) ? "[V]" : "   ";
-    Console.WriteLine($"  {marker} {fs.MountPoint} ({fs.TypeName})");
+    var isVisible = fs.Flags.HasFlag(MountOption.Local) && !fs.Flags.HasFlag(MountOption.DontBrowse);
+    var marker = isVisible ? "[V]" : "   ";
+    Console.WriteLine($"  {marker} {fs.MountPoint} ({fs.FileSystem})");
     Console.WriteLine($"       Device   : {fs.DeviceName}");
     Console.WriteLine($"       Flags    : 0x{(uint)fs.Flags:X8}  {fs.Flags}");
     Console.WriteLine($"       SubType  : {fs.SubType}");
@@ -176,27 +177,28 @@ foreach (var fs in fileSystems)
     Console.WriteLine($"       BlockSize: {fs.BlockSize}, IOSize: {fs.IOSize}");
     if (fs.TotalSize > 0)
     {
-        Console.WriteLine($"       Size     : {FormatBytes(fs.TotalSize)}, Available: {FormatBytes(fs.AvailableSize)} ({fs.UsagePercent:P1} used)");
+        var usagePct = fs.TotalBlocks > 0 ? 100.0 * (fs.TotalBlocks - fs.AvailableBlocks) / fs.TotalBlocks : 0;
+        Console.WriteLine($"       Size     : {FormatBytes(fs.TotalSize)}, Available: {FormatBytes(fs.AvailableSize)} ({usagePct:F1}% used)");
         Console.WriteLine($"       Inodes   : {fs.TotalFiles} total, {fs.FreeFiles} free");
     }
 }
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5a. Disk Volumes (IsUserVisible == true のエントリ)
+// 5a. Disk Volumes (user-visible: Local && !DontBrowse)
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 5a. Disk Volumes (IsUserVisible) ###");
-Console.WriteLine($"  Total: {diskVolumes.Count} of {fileSystems.Count} file systems");
+Console.WriteLine("### 5a. Disk Volumes (user-visible) ###");
+Console.WriteLine($"  Total: {fileSystems.Count} of {allFileSystems.Count} file systems");
 Console.WriteLine();
-foreach (var vol in diskVolumes)
+foreach (var vol in fileSystems)
 {
     var usage = PlatformProvider.GetFileSystemUsage(vol.MountPoint);
-    Console.WriteLine($"  {vol.MountPoint} ({vol.TypeName})");
+    Console.WriteLine($"  {vol.MountPoint} ({vol.FileSystem})");
     Console.WriteLine($"    Device:    {vol.DeviceName}");
     Console.WriteLine($"    Total:     {FormatBytes(usage.TotalSize)}");
     Console.WriteLine($"    Used:      {FormatBytes(usage.TotalSize - usage.AvailableSize)}  ({usage.UsagePercent:P1} used)");
     Console.WriteLine($"    Available: {FormatBytes(usage.AvailableSize)}");
-    Console.WriteLine($"    ReadOnly:  {vol.Flags.HasFlag(MountFlags.ReadOnly)}");
+    Console.WriteLine($"    ReadOnly:  {vol.Flags.HasFlag(MountOption.ReadOnly)}");
 }
 Console.WriteLine();
 
@@ -293,7 +295,7 @@ var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
 
 // 5a ボリュームを物理ディスク名でグループ化
 var volumesByDisk = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-foreach (var vol in diskVolumes)
+foreach (var vol in fileSystems)
 {
     var physicalDisk = ExtractPhysicalDiskName(vol.DeviceName);
     if (physicalDisk is not null)

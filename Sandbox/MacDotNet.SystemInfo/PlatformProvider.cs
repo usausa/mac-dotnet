@@ -31,7 +31,7 @@ public static class PlatformProvider
     // Storage
     //--------------------------------------------------------------------------------
 
-    public static IReadOnlyList<FileSystemInfo> GetFileSystems() => FileSystemInfo.GetAll();
+    public static IReadOnlyList<FileSystemInfo> GetFileSystems(bool includeAll = false) => FileSystemInfo.GetFileSystems(includeAll);
 
     public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
 
