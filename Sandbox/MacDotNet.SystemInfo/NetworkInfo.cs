@@ -2,6 +2,7 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 
@@ -166,71 +167,55 @@ public static class NetworkInfo
     {
         var result = new Dictionary<string, (string, ScNetworkInterfaceType, bool)>(StringComparer.Ordinal);
 
-        var appName = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", NativeMethods.kCFStringEncodingUTF8);
-        var prefs = NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero);
-        NativeMethods.CFRelease(appName);
-
-        if (prefs == IntPtr.Zero)
+        using var appName = CFRef.CreateString("MacDotNet.SystemInfo");
+        using var prefs = new CFRef(NativeMethods.SCPreferencesCreate(IntPtr.Zero, appName, IntPtr.Zero));
+        if (!prefs.IsValid)
         {
             return result;
         }
 
-        try
+        using var services = new CFRef(NativeMethods.SCNetworkServiceCopyAll(prefs));
+        if (!services.IsValid)
         {
-            var services = NativeMethods.SCNetworkServiceCopyAll(prefs);
-            if (services == IntPtr.Zero)
-            {
-                return result;
-            }
-
-            try
-            {
-                var count = NativeMethods.CFArrayGetCount(services);
-                for (var i = 0L; i < count; i++)
-                {
-                    var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
-                    if (service == IntPtr.Zero)
-                    {
-                        continue;
-                    }
-
-                    // GetInterface / GetName の戻り値は所有権が移らないため CFRelease 不要
-                    var iface = NativeMethods.SCNetworkServiceGetInterface(service);
-                    if (iface == IntPtr.Zero)
-                    {
-                        continue;
-                    }
-
-                    var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
-                    var serviceNameRef = NativeMethods.SCNetworkServiceGetName(service);
-                    var scTypeRef = NativeMethods.SCNetworkInterfaceGetInterfaceType(iface);
-                    var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
-
-                    // Interface.HiddenConfiguration = True のサービスは System Settings に表示されない隠しサービス
-                    // (Thunderbolt ポート経由の自動追加 Ethernet Adapter など)
-                    if (IsHiddenConfiguration(prefs, service))
-                    {
-                        continue;
-                    }
-
-                    var bsdName = NativeMethods.CfStringToManaged(bsdNameRef);
-                    var serviceName = NativeMethods.CfStringToManaged(serviceNameRef);
-                    var scType = ParseScInterfaceType(NativeMethods.CfStringToManaged(scTypeRef));
-
-                    if (bsdName is not null && serviceName is not null)
-                    {
-                        result.TryAdd(bsdName, (serviceName, scType, isEnabled));
-                    }
-                }
-            }
-            finally
-            {
-                NativeMethods.CFRelease(services);
-            }
+            return result;
         }
-        finally
+
+        var count = NativeMethods.CFArrayGetCount(services);
+        for (var i = 0L; i < count; i++)
         {
-            NativeMethods.CFRelease(prefs);
+            var service = NativeMethods.CFArrayGetValueAtIndex(services, i);
+            if (service == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            // GetInterface / GetName の戻り値は所有権が移らないため CFRelease 不要
+            var iface = NativeMethods.SCNetworkServiceGetInterface(service);
+            if (iface == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            var bsdNameRef = NativeMethods.SCNetworkInterfaceGetBSDName(iface);
+            var serviceNameRef = NativeMethods.SCNetworkServiceGetName(service);
+            var scTypeRef = NativeMethods.SCNetworkInterfaceGetInterfaceType(iface);
+            var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
+
+            // Interface.HiddenConfiguration = True のサービスは System Settings に表示されない隠しサービス
+            // (Thunderbolt ポート経由の自動追加 Ethernet Adapter など)
+            if (IsHiddenConfiguration(prefs, service))
+            {
+                continue;
+            }
+
+            var bsdName = CfStringToManaged(bsdNameRef);
+            var serviceName = CfStringToManaged(serviceNameRef);
+            var scType = ParseScInterfaceType(CfStringToManaged(scTypeRef));
+
+            if (bsdName is not null && serviceName is not null)
+            {
+                result.TryAdd(bsdName, (serviceName, scType, isEnabled));
+            }
         }
 
         return result;
@@ -244,26 +229,21 @@ public static class NetworkInfo
     internal static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
     {
         var serviceIdRef = NativeMethods.SCNetworkServiceGetServiceID(service);
-        var serviceId = NativeMethods.CfStringToManaged(serviceIdRef);
+        var serviceId = CfStringToManaged(serviceIdRef);
         if (serviceId is null)
         {
             return false;
         }
 
-        var pathStr = $"/NetworkServices/{serviceId}/Interface";
-        var pathRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, pathStr, NativeMethods.kCFStringEncodingUTF8);
+        using var pathRef = CFRef.CreateString($"/NetworkServices/{serviceId}/Interface");
         var ifaceDict = NativeMethods.SCPreferencesPathGetValue(prefs, pathRef);
-        NativeMethods.CFRelease(pathRef);
-
         if (ifaceDict == IntPtr.Zero)
         {
             return false;
         }
 
-        var hiddenKeyRef = NativeMethods.CFStringCreateWithCString(IntPtr.Zero, "HiddenConfiguration", NativeMethods.kCFStringEncodingUTF8);
+        using var hiddenKeyRef = CFRef.CreateString("HiddenConfiguration");
         var hiddenRef = NativeMethods.CFDictionaryGetValue(ifaceDict, hiddenKeyRef);
-        NativeMethods.CFRelease(hiddenKeyRef);
-
         return hiddenRef != IntPtr.Zero && NativeMethods.CFBooleanGetValue(hiddenRef);
     }
 

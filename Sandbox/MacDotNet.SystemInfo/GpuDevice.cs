@@ -1,5 +1,6 @@
 namespace MacDotNet.SystemInfo;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -94,38 +95,26 @@ public sealed class GpuDevice
     /// </summary>
     public static GpuDevice[] GetDevices()
     {
-        var iter = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iter);
-        if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
+        var iterPtr = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iterPtr);
+        if (kr != KERN_SUCCESS || iterPtr == IntPtr.Zero)
         {
             return [];
         }
 
-        try
+        using var iter = new IORef(iterPtr);
+        var results = new List<GpuDevice>();
+        uint raw;
+        while ((raw = IOIteratorNext(iter)) != 0)
         {
-            var results = new List<GpuDevice>();
-            uint entry;
-            while ((entry = IOIteratorNext(iter)) != 0)
-            {
-                try
-                {
-                    var name = GetIokitString(entry, "IOClass") ?? "(unknown)";
-                    var device = new GpuDevice(name);
-                    device.UpdateFromEntry(entry);
-                    results.Add(device);
-                }
-                finally
-                {
-                    IOObjectRelease(entry);
-                }
-            }
+            using var entry = new IOObj(raw);
+            var name = GetIokitString(entry, "IOClass") ?? "(unknown)";
+            var device = new GpuDevice(name);
+            device.UpdateFromEntry(entry);
+            results.Add(device);
+        }
 
-            return [.. results];
-        }
-        finally
-        {
-            IOObjectRelease(iter);
-        }
+        return [.. results];
     }
 
     //--------------------------------------------------------------------------------
@@ -142,39 +131,27 @@ public sealed class GpuDevice
     /// </summary>
     public bool Update()
     {
-        var iter = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iter);
-        if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
+        var iterPtr = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iterPtr);
+        if (kr != KERN_SUCCESS || iterPtr == IntPtr.Zero)
         {
             return false;
         }
 
-        try
+        using var iter = new IORef(iterPtr);
+        uint raw;
+        while ((raw = IOIteratorNext(iter)) != 0)
         {
-            uint entry;
-            while ((entry = IOIteratorNext(iter)) != 0)
+            using var entry = new IOObj(raw);
+            var ioClass = GetIokitString(entry, "IOClass");
+            if (string.Equals(ioClass, Name, StringComparison.Ordinal))
             {
-                try
-                {
-                    var ioClass = GetIokitString(entry, "IOClass");
-                    if (string.Equals(ioClass, Name, StringComparison.Ordinal))
-                    {
-                        UpdateFromEntry(entry);
-                        return true;
-                    }
-                }
-                finally
-                {
-                    IOObjectRelease(entry);
-                }
+                UpdateFromEntry(entry);
+                return true;
             }
+        }
 
-            return false;
-        }
-        finally
-        {
-            IOObjectRelease(iter);
-        }
+        return false;
     }
 
     //--------------------------------------------------------------------------------
@@ -189,36 +166,29 @@ public sealed class GpuDevice
         int? memoryClock = null;
         bool? powerState = null;
 
-        var perfDict = GetIokitDictionary(entry, "PerformanceStatistics");
-        if (perfDict != IntPtr.Zero)
+        using var perfDict = GetIokitDictionary(entry, "PerformanceStatistics");
+        if (perfDict.IsValid)
         {
-            try
-            {
-                DeviceUtilization = GetIokitDictInt64(perfDict, "Device Utilization %");
-                RendererUtilization = GetIokitDictInt64(perfDict, "Renderer Utilization %");
-                TilerUtilization = GetIokitDictInt64(perfDict, "Tiler Utilization %");
-                AllocSystemMemory = GetIokitDictInt64(perfDict, "Alloc system memory");
-                InUseSystemMemory = GetIokitDictInt64(perfDict, "In use system memory");
-                InUseSystemMemoryDriver = GetIokitDictInt64(perfDict, "In use system memory (driver)");
-                TiledSceneBytes = GetIokitDictInt64(perfDict, "TiledSceneBytes");
-                AllocatedPBSize = GetIokitDictInt64(perfDict, "Allocated PB Size");
-                RecoveryCount = GetIokitDictInt64(perfDict, "recoveryCount");
-                SplitSceneCount = GetIokitDictInt64(perfDict, "SplitSceneCount");
+            DeviceUtilization = GetIokitDictInt64(perfDict, "Device Utilization %");
+            RendererUtilization = GetIokitDictInt64(perfDict, "Renderer Utilization %");
+            TilerUtilization = GetIokitDictInt64(perfDict, "Tiler Utilization %");
+            AllocSystemMemory = GetIokitDictInt64(perfDict, "Alloc system memory");
+            InUseSystemMemory = GetIokitDictInt64(perfDict, "In use system memory");
+            InUseSystemMemoryDriver = GetIokitDictInt64(perfDict, "In use system memory (driver)");
+            TiledSceneBytes = GetIokitDictInt64(perfDict, "TiledSceneBytes");
+            AllocatedPBSize = GetIokitDictInt64(perfDict, "Allocated PB Size");
+            RecoveryCount = GetIokitDictInt64(perfDict, "recoveryCount");
+            SplitSceneCount = GetIokitDictInt64(perfDict, "SplitSceneCount");
 
-                var rawTemp = GetIokitDictInt64(perfDict, "Temperature(C)");
-                var rawFan = GetIokitDictInt64(perfDict, "Fan Speed(%)");
-                var rawCore = GetIokitDictInt64(perfDict, "Core Clock(MHz)");
-                var rawMem = GetIokitDictInt64(perfDict, "Memory Clock(MHz)");
+            var rawTemp = GetIokitDictInt64(perfDict, "Temperature(C)");
+            var rawFan = GetIokitDictInt64(perfDict, "Fan Speed(%)");
+            var rawCore = GetIokitDictInt64(perfDict, "Core Clock(MHz)");
+            var rawMem = GetIokitDictInt64(perfDict, "Memory Clock(MHz)");
 
-                temperature = rawTemp > 0 && rawTemp < 128 ? (int)rawTemp : null;
-                fanSpeed = rawFan > 0 ? (int)rawFan : null;
-                coreClock = rawCore > 0 ? (int)rawCore : null;
-                memoryClock = rawMem > 0 ? (int)rawMem : null;
-            }
-            finally
-            {
-                CFRelease(perfDict);
-            }
+            temperature = rawTemp > 0 && rawTemp < 128 ? (int)rawTemp : null;
+            fanSpeed = rawFan > 0 ? (int)rawFan : null;
+            coreClock = rawCore > 0 ? (int)rawCore : null;
+            memoryClock = rawMem > 0 ? (int)rawMem : null;
         }
         else
         {
@@ -234,12 +204,11 @@ public sealed class GpuDevice
             SplitSceneCount = 0;
         }
 
-        var agcInfo = GetIokitDictionary(entry, "AGCInfo");
-        if (agcInfo != IntPtr.Zero)
+        using var agcInfo = GetIokitDictionary(entry, "AGCInfo");
+        if (agcInfo.IsValid)
         {
             var poweredOff = GetIokitDictInt64(agcInfo, "poweredOffByAGC");
             powerState = poweredOff == 0;
-            CFRelease(agcInfo);
         }
 
         if (temperature is null)

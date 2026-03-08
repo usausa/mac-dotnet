@@ -2,6 +2,7 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -170,142 +171,107 @@ public sealed class BatteryGeneric
 
     private unsafe bool UpdateFromPowerSources()
     {
-        var blob = IOPSCopyPowerSourcesInfo();
-        if (blob == IntPtr.Zero)
+        using var blob = new CFRef(IOPSCopyPowerSourcesInfo());
+        if (!blob.IsValid)
         {
             Supported = false;
             return false;
         }
 
-        try
+        using var sources = new CFRef(IOPSCopyPowerSourcesList(blob));
+        if (!sources.IsValid)
         {
-            var sources = IOPSCopyPowerSourcesList(blob);
-            if (sources == IntPtr.Zero)
-            {
-                Supported = false;
-                return false;
-            }
-
-            try
-            {
-                var count = CFArrayGetCount(sources);
-                if (count == 0)
-                {
-                    Supported = false;
-                    return false;
-                }
-
-                var ps = CFArrayGetValueAtIndex(sources, 0);
-                var desc = IOPSGetPowerSourceDescription(blob, ps);
-                if (desc == IntPtr.Zero)
-                {
-                    Supported = false;
-                    return false;
-                }
-
-                Supported = true;
-                Name = PsGetString(desc, kIOPSNameKey) ?? "Unknown";
-                Type = PsGetString(desc, kIOPSTypeKey) ?? "Unknown";
-                TransportType = PsGetString(desc, kIOPSTransportTypeKey);
-                HardwareSerialNumber = PsGetString(desc, kIOPSHardwareSerialNumberKey);
-                IsPresent = PsGetBool(desc, kIOPSIsPresentKey);
-                PowerSourceState = PsGetString(desc, kIOPSPowerSourceStateKey) ?? "Unknown";
-                IsCharging = PsGetBool(desc, kIOPSIsChargingKey);
-                IsCharged = PsGetBool(desc, kIOPSIsChargedKey);
-                TimeToEmpty = PsGetInt(desc, kIOPSTimeToEmptyKey, -1);
-                TimeToFullCharge = PsGetInt(desc, kIOPSTimeToFullChargeKey, -1);
-                BatteryHealth = PsGetString(desc, kIOPSBatteryHealthKey);
-                BatteryHealthCondition = PsGetString(desc, kIOPSBatteryHealthConditionKey);
-                DesignCycleCount = PsGetInt(desc, kIOPSDesignCycleCountKey, -1);
-
-                // Capacity is also read from IOPowerSources as fallback when DetailSupported is false
-                if (!DetailSupported)
-                {
-                    CurrentCapacity = PsGetInt(desc, kIOPSCurrentCapacityKey);
-                    MaxCapacity = PsGetInt(desc, kIOPSMaxCapacityKey);
-                }
-
-                return true;
-            }
-            finally
-            {
-                CFRelease(sources);
-            }
+            Supported = false;
+            return false;
         }
-        finally
+
+        var count = CFArrayGetCount(sources);
+        if (count == 0)
         {
-            CFRelease(blob);
+            Supported = false;
+            return false;
         }
+
+        var ps = CFArrayGetValueAtIndex(sources, 0);
+        var desc = IOPSGetPowerSourceDescription(blob, ps);
+        if (desc == IntPtr.Zero)
+        {
+            Supported = false;
+            return false;
+        }
+
+        Supported = true;
+        Name = PsGetString(desc, kIOPSNameKey) ?? "Unknown";
+        Type = PsGetString(desc, kIOPSTypeKey) ?? "Unknown";
+        TransportType = PsGetString(desc, kIOPSTransportTypeKey);
+        HardwareSerialNumber = PsGetString(desc, kIOPSHardwareSerialNumberKey);
+        IsPresent = PsGetBool(desc, kIOPSIsPresentKey);
+        PowerSourceState = PsGetString(desc, kIOPSPowerSourceStateKey) ?? "Unknown";
+        IsCharging = PsGetBool(desc, kIOPSIsChargingKey);
+        IsCharged = PsGetBool(desc, kIOPSIsChargedKey);
+        TimeToEmpty = PsGetInt(desc, kIOPSTimeToEmptyKey, -1);
+        TimeToFullCharge = PsGetInt(desc, kIOPSTimeToFullChargeKey, -1);
+        BatteryHealth = PsGetString(desc, kIOPSBatteryHealthKey);
+        BatteryHealthCondition = PsGetString(desc, kIOPSBatteryHealthConditionKey);
+        DesignCycleCount = PsGetInt(desc, kIOPSDesignCycleCountKey, -1);
+
+        // Capacity is also read from IOPowerSources as fallback when DetailSupported is false
+        if (!DetailSupported)
+        {
+            CurrentCapacity = PsGetInt(desc, kIOPSCurrentCapacityKey);
+            MaxCapacity = PsGetInt(desc, kIOPSMaxCapacityKey);
+        }
+
+        return true;
     }
 
     private static unsafe string? PsGetString(IntPtr dict, string keyName)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return null;
         }
 
-        try
+        var value = CFDictionaryGetValue(dict, key);
+        if (value == IntPtr.Zero)
         {
-            var value = CFDictionaryGetValue(dict, key);
-            if (value == IntPtr.Zero)
-            {
-                return null;
-            }
+            return null;
+        }
 
-            var buffer = stackalloc byte[256];
-            return CFStringGetCString(value, buffer, 256, kCFStringEncodingUTF8)
-                ? Marshal.PtrToStringUTF8((IntPtr)buffer)
-                : null;
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        var buffer = stackalloc byte[256];
+        return CFStringGetCString(value, buffer, 256, kCFStringEncodingUTF8)
+            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
+            : null;
     }
 
     private static int PsGetInt(IntPtr dict, string keyName, int defaultValue = 0)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return defaultValue;
         }
 
-        try
+        var value = CFDictionaryGetValue(dict, key);
+        if (value == IntPtr.Zero)
         {
-            var value = CFDictionaryGetValue(dict, key);
-            if (value == IntPtr.Zero)
-            {
-                return defaultValue;
-            }
+            return defaultValue;
+        }
 
-            return CFNumberGetValue(value, kCFNumberSInt32Type, out var result) ? result : defaultValue;
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        return CFNumberGetValue(value, kCFNumberSInt32Type, out var result) ? result : defaultValue;
     }
 
     private static bool PsGetBool(IntPtr dict, string keyName)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return false;
         }
 
-        try
-        {
-            var value = CFDictionaryGetValue(dict, key);
-            return value != IntPtr.Zero && CFBooleanGetValue(value);
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        var value = CFDictionaryGetValue(dict, key);
+        return value != IntPtr.Zero && CFBooleanGetValue(value);
     }
 
     //--------------------------------------------------------------------------------
@@ -350,28 +316,17 @@ public sealed class BatteryGeneric
 
     private int RegGetInt(string name)
     {
-        var keyPtr = CFStringCreateWithCString(IntPtr.Zero, name, kCFStringEncodingUTF8);
-        var valuePtr = IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0);
-        CFRelease(keyPtr);
-
-        if (valuePtr == IntPtr.Zero)
+        using var keyPtr = CFRef.CreateString(name);
+        using var valuePtr = new CFRef(IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0));
+        if (!valuePtr.IsValid)
         {
             return 0;
         }
 
-        try
+        if (CFGetTypeID(valuePtr) == CFNumberGetTypeID() &&
+            CFNumberGetValue(valuePtr, kCFNumberSInt32Type, out var result))
         {
-            if (CFGetTypeID(valuePtr) == CFNumberGetTypeID())
-            {
-                if (CFNumberGetValue(valuePtr, kCFNumberSInt32Type, out var result))
-                {
-                    return result;
-                }
-            }
-        }
-        finally
-        {
-            CFRelease(valuePtr);
+            return result;
         }
 
         return 0;
@@ -379,34 +334,25 @@ public sealed class BatteryGeneric
 
     private double RegGetDouble(string name)
     {
-        var keyPtr = CFStringCreateWithCString(IntPtr.Zero, name, kCFStringEncodingUTF8);
-        var valuePtr = IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0);
-        CFRelease(keyPtr);
-
-        if (valuePtr == IntPtr.Zero)
+        using var keyPtr = CFRef.CreateString(name);
+        using var valuePtr = new CFRef(IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0));
+        if (!valuePtr.IsValid)
         {
             return 0;
         }
 
-        try
+        if (CFGetTypeID(valuePtr) == CFNumberGetTypeID())
         {
-            if (CFGetTypeID(valuePtr) == CFNumberGetTypeID())
+            var result = 0.0;
+            if (CFNumberGetValue(valuePtr, kCFNumberFloat64Type, ref result))
             {
-                var result = 0.0;
-                if (CFNumberGetValue(valuePtr, kCFNumberFloat64Type, ref result))
-                {
-                    return result;
-                }
-
-                if (CFNumberGetValue(valuePtr, kCFNumberSInt32Type, out var intResult))
-                {
-                    return intResult;
-                }
+                return result;
             }
-        }
-        finally
-        {
-            CFRelease(valuePtr);
+
+            if (CFNumberGetValue(valuePtr, kCFNumberSInt32Type, out var intResult))
+            {
+                return intResult;
+            }
         }
 
         return 0;
@@ -414,44 +360,33 @@ public sealed class BatteryGeneric
 
     private (int current, int voltage)? GetChargerData()
     {
-        var keyPtr = CFStringCreateWithCString(IntPtr.Zero, "ChargerData", kCFStringEncodingUTF8);
-        var valuePtr = IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0);
-        CFRelease(keyPtr);
-
-        if (valuePtr == IntPtr.Zero)
+        using var keyPtr = CFRef.CreateString("ChargerData");
+        using var valuePtr = new CFRef(IORegistryEntryCreateCFProperty(batteryService, keyPtr, IntPtr.Zero, 0));
+        if (!valuePtr.IsValid)
         {
             return null;
         }
 
-        try
+        if (CFGetTypeID(valuePtr) == CFDictionaryGetTypeID())
         {
-            if (CFGetTypeID(valuePtr) == CFDictionaryGetTypeID())
+            using var currentKey = CFRef.CreateString("ChargingCurrent");
+            var currentPtr = CFDictionaryGetValue(valuePtr, currentKey);
+
+            using var voltageKey = CFRef.CreateString("ChargingVoltage");
+            var voltagePtr = CFDictionaryGetValue(valuePtr, voltageKey);
+
+            int current = 0, voltage = 0;
+            if (currentPtr != IntPtr.Zero && CFNumberGetValue(currentPtr, kCFNumberSInt32Type, out var c))
             {
-                var currentKey = CFStringCreateWithCString(IntPtr.Zero, "ChargingCurrent", kCFStringEncodingUTF8);
-                var currentPtr = CFDictionaryGetValue(valuePtr, currentKey);
-                CFRelease(currentKey);
-
-                var voltageKey = CFStringCreateWithCString(IntPtr.Zero, "ChargingVoltage", kCFStringEncodingUTF8);
-                var voltagePtr = CFDictionaryGetValue(valuePtr, voltageKey);
-                CFRelease(voltageKey);
-
-                int current = 0, voltage = 0;
-                if (currentPtr != IntPtr.Zero && CFNumberGetValue(currentPtr, kCFNumberSInt32Type, out var c))
-                {
-                    current = c;
-                }
-
-                if (voltagePtr != IntPtr.Zero && CFNumberGetValue(voltagePtr, kCFNumberSInt32Type, out var v))
-                {
-                    voltage = v;
-                }
-
-                return (current, voltage);
+                current = c;
             }
-        }
-        finally
-        {
-            CFRelease(valuePtr);
+
+            if (voltagePtr != IntPtr.Zero && CFNumberGetValue(voltagePtr, kCFNumberSInt32Type, out var v))
+            {
+                voltage = v;
+            }
+
+            return (current, voltage);
         }
 
         return null;
@@ -459,29 +394,17 @@ public sealed class BatteryGeneric
 
     private static int GetAcAdapterWatts()
     {
-        var adapterDetails = IOPSCopyExternalPowerAdapterDetails();
-        if (adapterDetails == IntPtr.Zero)
+        using var adapterDetails = new CFRef(IOPSCopyExternalPowerAdapterDetails());
+        if (!adapterDetails.IsValid)
         {
             return 0;
         }
 
-        try
-        {
-            var wattsKey = CFStringCreateWithCString(IntPtr.Zero, kIOPSPowerAdapterWattsKey, kCFStringEncodingUTF8);
-            var wattsPtr = CFDictionaryGetValue(adapterDetails, wattsKey);
-            CFRelease(wattsKey);
-
-            if (wattsPtr != IntPtr.Zero && CFNumberGetValue(wattsPtr, kCFNumberSInt32Type, out var watts))
-            {
-                return watts;
-            }
-        }
-        finally
-        {
-            CFRelease(adapterDetails);
-        }
-
-        return 0;
+        using var wattsKey = CFRef.CreateString(kIOPSPowerAdapterWattsKey);
+        var wattsPtr = CFDictionaryGetValue(adapterDetails, wattsKey);
+        return wattsPtr != IntPtr.Zero && CFNumberGetValue(wattsPtr, kCFNumberSInt32Type, out var watts)
+            ? watts
+            : 0;
     }
 
     private static bool IsArmMac() =>

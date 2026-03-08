@@ -1,5 +1,6 @@
 namespace MacDotNet.SystemInfo;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 public enum DiskBusType
@@ -109,90 +110,72 @@ public sealed class DiskStats
             device.Live = false;
         }
 
-        var iter = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref iter);
-        if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
+        var iterPtr = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref iterPtr);
+        if (kr != KERN_SUCCESS || iterPtr == IntPtr.Zero)
         {
             return false;
         }
 
-        try
+        using var iter = new IORef(iterPtr);
+        var added = false;
+        uint rawEntry;
+        while ((rawEntry = IOIteratorNext(iter)) != 0)
         {
-            var added = false;
-            uint entry;
-            while ((entry = IOIteratorNext(iter)) != 0)
+            using var entry = new IOObj(rawEntry);
+            if (!IsWhole(entry))
             {
-                try
+                continue;
+            }
+
+            var rawParent = GetParentEntry(entry);
+            if (rawParent == 0)
+            {
+                continue;
+            }
+
+            using var parent = new IOObj(rawParent);
+            if (IORegistryEntryGetRegistryEntryID(parent, out var entryId) != KERN_SUCCESS)
+            {
+                continue;
+            }
+
+            var device = default(DiskDeviceStat);
+            foreach (var item in devices)
+            {
+                if (item.RegistryEntryId == entryId)
                 {
-                    if (!IsWhole(entry))
-                    {
-                        continue;
-                    }
-
-                    var parent = GetParentEntry(entry);
-                    if (parent == 0)
-                    {
-                        continue;
-                    }
-
-                    try
-                    {
-                        if (IORegistryEntryGetRegistryEntryID(parent, out var entryId) != KERN_SUCCESS)
-                        {
-                            continue;
-                        }
-
-                        var device = default(DiskDeviceStat);
-                        foreach (var item in devices)
-                        {
-                            if (item.RegistryEntryId == entryId)
-                            {
-                                device = item;
-                                break;
-                            }
-                        }
-
-                        if (device is null)
-                        {
-                            device = CreateEntry(entryId, entry, parent);
-                            devices.Add(device);
-                            added = true;
-                        }
-
-                        device.Live = true;
-                        ReadStatistics(parent, device);
-                    }
-                    finally
-                    {
-                        _ = IOObjectRelease(parent);
-                    }
-                }
-                finally
-                {
-                    _ = IOObjectRelease(entry);
+                    device = item;
+                    break;
                 }
             }
 
-            for (var i = devices.Count - 1; i >= 0; i--)
+            if (device is null)
             {
-                if (!devices[i].Live)
-                {
-                    devices.RemoveAt(i);
-                }
+                device = CreateEntry(entryId, entry, parent);
+                devices.Add(device);
+                added = true;
             }
 
-            if (added)
-            {
-                devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
-            }
-
-            UpdateAt = DateTime.Now;
-            return true;
+            device.Live = true;
+            ReadStatistics(parent, device);
         }
-        finally
+
+        for (var i = devices.Count - 1; i >= 0; i--)
         {
-            _ = IOObjectRelease(iter);
+            if (!devices[i].Live)
+            {
+                devices.RemoveAt(i);
+            }
         }
+
+        if (added)
+        {
+            devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+        }
+
+        UpdateAt = DateTime.Now;
+        return true;
     }
 
     /// <summary>
@@ -211,31 +194,24 @@ public sealed class DiskStats
 
     private static void ReadStatistics(uint parentEntry, DiskDeviceStat device)
     {
-        var statsDict = GetIokitDictionary(parentEntry, "Statistics");
-        if (statsDict == IntPtr.Zero)
+        using var statsDict = GetIokitDictionary(parentEntry, "Statistics");
+        if (!statsDict.IsValid)
         {
             return;
         }
 
-        try
-        {
-            device.BytesRead = GetIokitDictUInt64(statsDict, "Bytes (Read)");
-            device.BytesWrite = GetIokitDictUInt64(statsDict, "Bytes (Write)");
-            device.ReadsCompleted = GetIokitDictUInt64(statsDict, "Operations (Read)");
-            device.WritesCompleted = GetIokitDictUInt64(statsDict, "Operations (Write)");
-            device.TotalTimeRead = GetIokitDictUInt64(statsDict, "Total Time (Read)");
-            device.TotalTimeWrite = GetIokitDictUInt64(statsDict, "Total Time (Write)");
-            device.RetriesRead = GetIokitDictUInt64(statsDict, "Retries (Read)");
-            device.RetriesWrite = GetIokitDictUInt64(statsDict, "Retries (Write)");
-            device.ErrorsRead = GetIokitDictUInt64(statsDict, "Errors (Read)");
-            device.ErrorsWrite = GetIokitDictUInt64(statsDict, "Errors (Write)");
-            device.LatencyTimeRead = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
-            device.LatencyTimeWrite = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
-        }
-        finally
-        {
-            CFRelease(statsDict);
-        }
+        device.BytesRead = GetIokitDictUInt64(statsDict, "Bytes (Read)");
+        device.BytesWrite = GetIokitDictUInt64(statsDict, "Bytes (Write)");
+        device.ReadsCompleted = GetIokitDictUInt64(statsDict, "Operations (Read)");
+        device.WritesCompleted = GetIokitDictUInt64(statsDict, "Operations (Write)");
+        device.TotalTimeRead = GetIokitDictUInt64(statsDict, "Total Time (Read)");
+        device.TotalTimeWrite = GetIokitDictUInt64(statsDict, "Total Time (Write)");
+        device.RetriesRead = GetIokitDictUInt64(statsDict, "Retries (Read)");
+        device.RetriesWrite = GetIokitDictUInt64(statsDict, "Retries (Write)");
+        device.ErrorsRead = GetIokitDictUInt64(statsDict, "Errors (Read)");
+        device.ErrorsWrite = GetIokitDictUInt64(statsDict, "Errors (Write)");
+        device.LatencyTimeRead = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
+        device.LatencyTimeWrite = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
     }
 
     //--------------------------------------------------------------------------------
@@ -247,28 +223,14 @@ public sealed class DiskStats
     /// </summary>
     private static bool IsWhole(uint mediaEntry)
     {
-        var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
-        if (wholeKey == IntPtr.Zero)
+        using var wholeKey = CFRef.CreateString("Whole");
+        if (!wholeKey.IsValid)
         {
             return false;
         }
 
-        try
-        {
-            var wholeProp = IORegistryEntryCreateCFProperty(mediaEntry, wholeKey, IntPtr.Zero, 0);
-            if (wholeProp == IntPtr.Zero)
-            {
-                return false;
-            }
-
-            var isWhole = CFBooleanGetValue(wholeProp);
-            CFRelease(wholeProp);
-            return isWhole;
-        }
-        finally
-        {
-            CFRelease(wholeKey);
-        }
+        using var wholeProp = new CFRef(IORegistryEntryCreateCFProperty(mediaEntry, wholeKey, IntPtr.Zero, 0));
+        return wholeProp.IsValid && CFBooleanGetValue(wholeProp);
     }
 
     /// <summary>
@@ -314,57 +276,39 @@ public sealed class DiskStats
     /// </summary>
     private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(uint entry)
     {
-        var current = entry;
-        var shouldReleaseCurrent = false;
+        var currentRaw = entry;
+        var currentOwned = IOObj.Zero;
 
         string? mediaName = null, vendorName = null, mediumType = null, busType = null;
 
         for (var depth = 0; depth < 8; depth++)
         {
-            if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+            if (IORegistryEntryGetParentEntry(currentRaw, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
             {
                 break;
             }
 
-            if (shouldReleaseCurrent)
-            {
-                IOObjectRelease(current);
-            }
-
-            current = parent;
-            shouldReleaseCurrent = true;
+            currentOwned.Dispose();
+            currentOwned = new IOObj(parent);
+            currentRaw = parent;
 
             if (mediaName is null)
             {
-                var deviceCharacts = GetIokitDictionary(current, "Device Characteristics");
-                if (deviceCharacts != IntPtr.Zero)
+                using var deviceCharacts = GetIokitDictionary(currentRaw, "Device Characteristics");
+                if (deviceCharacts.IsValid)
                 {
-                    try
-                    {
-                        mediaName = GetIokitDictString(deviceCharacts, "Product Name");
-                        vendorName = GetIokitDictString(deviceCharacts, "Vendor Name");
-                        mediumType = GetIokitDictString(deviceCharacts, "Medium Type");
-                    }
-                    finally
-                    {
-                        CFRelease(deviceCharacts);
-                    }
+                    mediaName = GetIokitDictString(deviceCharacts, "Product Name");
+                    vendorName = GetIokitDictString(deviceCharacts, "Vendor Name");
+                    mediumType = GetIokitDictString(deviceCharacts, "Medium Type");
                 }
             }
 
             if (busType is null)
             {
-                var protoCharacts = GetIokitDictionary(current, "Protocol Characteristics");
-                if (protoCharacts != IntPtr.Zero)
+                using var protoCharacts = GetIokitDictionary(currentRaw, "Protocol Characteristics");
+                if (protoCharacts.IsValid)
                 {
-                    try
-                    {
-                        busType = GetIokitDictString(protoCharacts, "Physical Interconnect");
-                    }
-                    finally
-                    {
-                        CFRelease(protoCharacts);
-                    }
+                    busType = GetIokitDictString(protoCharacts, "Physical Interconnect");
                 }
             }
 
@@ -375,10 +319,7 @@ public sealed class DiskStats
             }
         }
 
-        if (shouldReleaseCurrent)
-        {
-            IOObjectRelease(current);
-        }
+        currentOwned.Dispose();
 
         return (mediaName, vendorName, mediumType, busType);
     }

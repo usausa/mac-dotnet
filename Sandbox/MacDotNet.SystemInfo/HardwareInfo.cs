@@ -1,5 +1,6 @@
 namespace MacDotNet.SystemInfo;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -221,35 +222,23 @@ public sealed class HardwareInfo
     /// <summary>システムに搭載されているすべての GPU の静的ハードウェア情報を返す。<br/>Returns static hardware information for all GPUs in the system.</summary>
     public static GpuInfo[] GetGpus()
     {
-        var iter = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iter);
-        if (kr != KERN_SUCCESS || iter == IntPtr.Zero)
+        var iterPtr = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref iterPtr);
+        if (kr != KERN_SUCCESS || iterPtr == IntPtr.Zero)
         {
             return [];
         }
 
-        try
+        using var iter = new IORef(iterPtr);
+        var results = new List<GpuInfo>();
+        uint raw;
+        while ((raw = IOIteratorNext(iter)) != 0)
         {
-            var results = new List<GpuInfo>();
-            uint entry;
-            while ((entry = IOIteratorNext(iter)) != 0)
-            {
-                try
-                {
-                    results.Add(ReadGpuInfo(entry));
-                }
-                finally
-                {
-                    IOObjectRelease(entry);
-                }
-            }
+            using var entry = new IOObj(raw);
+            results.Add(ReadGpuInfo(entry));
+        }
 
-            return [.. results];
-        }
-        finally
-        {
-            IOObjectRelease(iter);
-        }
+        return [.. results];
     }
 
     private static GpuInfo ReadGpuInfo(uint entry)
@@ -267,28 +256,21 @@ public sealed class HardwareInfo
 
     private static GpuConfiguration? ReadGpuConfiguration(uint entry)
     {
-        var dict = GetIokitDictionary(entry, "GPUConfigurationVariable");
-        if (dict == IntPtr.Zero)
+        using var dict = GetIokitDictionary(entry, "GPUConfigurationVariable");
+        if (!dict.IsValid)
         {
             return null;
         }
 
-        try
+        return new GpuConfiguration
         {
-            return new GpuConfiguration
-            {
-                GpuGeneration = (int)GetIokitDictInt64(dict, "gpu_gen"),
-                NumCores = (int)GetIokitDictInt64(dict, "num_cores"),
-                NumGPs = (int)GetIokitDictInt64(dict, "num_gps"),
-                NumFragments = (int)GetIokitDictInt64(dict, "num_frags"),
-                NumMGpus = (int)GetIokitDictInt64(dict, "num_mgpus"),
-                UscGeneration = (int)GetIokitDictInt64(dict, "usc_gen"),
-            };
-        }
-        finally
-        {
-            CFRelease(dict);
-        }
+            GpuGeneration = (int)GetIokitDictInt64(dict, "gpu_gen"),
+            NumCores = (int)GetIokitDictInt64(dict, "num_cores"),
+            NumGPs = (int)GetIokitDictInt64(dict, "num_gps"),
+            NumFragments = (int)GetIokitDictInt64(dict, "num_frags"),
+            NumMGpus = (int)GetIokitDictInt64(dict, "num_mgpus"),
+            UscGeneration = (int)GetIokitDictInt64(dict, "usc_gen"),
+        };
     }
 
     /// <summary>
@@ -333,35 +315,14 @@ public sealed class HardwareInfo
             return null;
         }
 
-        var service = IOServiceGetMatchingService(0, matching);
-        if (service == 0)
+        using var service = new IOObj(IOServiceGetMatchingService(0, matching));
+        if (!service.IsValid)
         {
             return null;
         }
 
-        try
-        {
-            var key = CFStringCreateWithCString(IntPtr.Zero, "IOPlatformSerialNumber", kCFStringEncodingUTF8);
-            var value = IORegistryEntryCreateCFProperty(service, key, IntPtr.Zero, 0);
-            CFRelease(key);
-
-            if (value == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            try
-            {
-                return CfStringToManaged(value);
-            }
-            finally
-            {
-                CFRelease(value);
-            }
-        }
-        finally
-        {
-            IOObjectRelease(service);
-        }
+        using var key = CFRef.CreateString("IOPlatformSerialNumber");
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(service, key, IntPtr.Zero, 0));
+        return value.IsValid ? CfStringToManaged(value) : null;
     }
 }

@@ -2,6 +2,7 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -83,88 +84,79 @@ public sealed class AppleSiliconEnergyCounter
             return false;
         }
 
-        var samples = IOReportCreateSamples(subscription, channels, IntPtr.Zero);
-        if (samples == IntPtr.Zero)
+        using var samples = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
+        if (!samples.IsValid)
         {
             return false;
         }
 
-        try
+        using var channelsKey = CFRef.CreateString("IOReportChannels");
+        var channelsArray = CFDictionaryGetValue(samples, channelsKey);
+        if (channelsArray == IntPtr.Zero || CFGetTypeID(channelsArray) != CFArrayGetTypeID())
         {
-            var channelsKey = CFStringCreateWithCString(IntPtr.Zero, "IOReportChannels", kCFStringEncodingUTF8);
-            var channelsArray = CFDictionaryGetValue(samples, channelsKey);
-            CFRelease(channelsKey);
+            return false;
+        }
 
-            if (channelsArray == IntPtr.Zero || CFGetTypeID(channelsArray) != CFArrayGetTypeID())
+        double cpuEnergy = 0, gpuEnergy = 0, aneEnergy = 0, ramEnergy = 0, pciEnergy = 0;
+
+        var count = CFArrayGetCount(channelsArray);
+        for (var i = 0L; i < count; i++)
+        {
+            var item = CFArrayGetValueAtIndex(channelsArray, i);
+            if (item == IntPtr.Zero)
             {
-                return false;
+                continue;
             }
 
-            double cpuEnergy = 0, gpuEnergy = 0, aneEnergy = 0, ramEnergy = 0, pciEnergy = 0;
-
-            var count = CFArrayGetCount(channelsArray);
-            for (var i = 0L; i < count; i++)
+            var groupPtr = IOReportChannelGetGroup(item);
+            var group = groupPtr != IntPtr.Zero ? CfStringToManaged(groupPtr) : null;
+            if (group != "Energy Model")
             {
-                var item = CFArrayGetValueAtIndex(channelsArray, i);
-                if (item == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var groupPtr = IOReportChannelGetGroup(item);
-                var group = groupPtr != IntPtr.Zero ? CfStringToManaged(groupPtr) : null;
-                if (group != "Energy Model")
-                {
-                    continue;
-                }
-
-                var channelNamePtr = IOReportChannelGetChannelName(item);
-                var channelName = channelNamePtr != IntPtr.Zero ? CfStringToManaged(channelNamePtr) : null;
-                if (string.IsNullOrEmpty(channelName))
-                {
-                    continue;
-                }
-
-                var unitPtr = IOReportChannelGetUnitLabel(item);
-                var unit = unitPtr != IntPtr.Zero ? CfStringToManaged(unitPtr) : null;
-
-                var value = (double)IOReportSimpleGetIntegerValue(item, 0);
-                var joules = ConvertToJoules(value, unit);
-
-                if (channelName.EndsWith("CPU Energy", StringComparison.Ordinal))
-                {
-                    cpuEnergy = joules;
-                }
-                else if (channelName.EndsWith("GPU Energy", StringComparison.Ordinal))
-                {
-                    gpuEnergy = joules;
-                }
-                else if (channelName.StartsWith("ANE", StringComparison.Ordinal))
-                {
-                    aneEnergy = joules;
-                }
-                else if (channelName.StartsWith("DRAM", StringComparison.Ordinal))
-                {
-                    ramEnergy = joules;
-                }
-                else if (channelName.StartsWith("PCI", StringComparison.Ordinal) && channelName.EndsWith("Energy", StringComparison.Ordinal))
-                {
-                    pciEnergy = joules;
-                }
+                continue;
             }
 
-            Cpu = cpuEnergy;
-            Gpu = gpuEnergy;
-            Ane = aneEnergy;
-            Ram = ramEnergy;
-            Pci = pciEnergy;
+            var channelNamePtr = IOReportChannelGetChannelName(item);
+            var channelName = channelNamePtr != IntPtr.Zero ? CfStringToManaged(channelNamePtr) : null;
+            if (string.IsNullOrEmpty(channelName))
+            {
+                continue;
+            }
 
-            return true;
+            var unitPtr = IOReportChannelGetUnitLabel(item);
+            var unit = unitPtr != IntPtr.Zero ? CfStringToManaged(unitPtr) : null;
+
+            var value = (double)IOReportSimpleGetIntegerValue(item, 0);
+            var joules = ConvertToJoules(value, unit);
+
+            if (channelName.EndsWith("CPU Energy", StringComparison.Ordinal))
+            {
+                cpuEnergy = joules;
+            }
+            else if (channelName.EndsWith("GPU Energy", StringComparison.Ordinal))
+            {
+                gpuEnergy = joules;
+            }
+            else if (channelName.StartsWith("ANE", StringComparison.Ordinal))
+            {
+                aneEnergy = joules;
+            }
+            else if (channelName.StartsWith("DRAM", StringComparison.Ordinal))
+            {
+                ramEnergy = joules;
+            }
+            else if (channelName.StartsWith("PCI", StringComparison.Ordinal) && channelName.EndsWith("Energy", StringComparison.Ordinal))
+            {
+                pciEnergy = joules;
+            }
         }
-        finally
-        {
-            CFRelease(samples);
-        }
+
+        Cpu = cpuEnergy;
+        Gpu = gpuEnergy;
+        Ane = aneEnergy;
+        Ram = ramEnergy;
+        Pci = pciEnergy;
+
+        return true;
     }
 
     //--------------------------------------------------------------------------------
@@ -184,11 +176,8 @@ public sealed class AppleSiliconEnergyCounter
             return false;
         }
 
-        subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out var subDict, 0, IntPtr.Zero);
-        if (subDict != IntPtr.Zero)
-        {
-            CFRelease(subDict);
-        }
+        subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out var subDictRaw, 0, IntPtr.Zero);
+        using var subDict = new CFRef(subDictRaw);
 
         return subscription != IntPtr.Zero;
     }
@@ -197,33 +186,19 @@ public sealed class AppleSiliconEnergyCounter
     {
         try
         {
-            var groupStr = CFStringCreateWithCString(IntPtr.Zero, "Energy Model", kCFStringEncodingUTF8);
-            if (groupStr == IntPtr.Zero)
+            using var groupStr = CFRef.CreateString("Energy Model");
+            if (!groupStr.IsValid)
             {
                 return IntPtr.Zero;
             }
 
-            try
+            using var channel = new CFRef(IOReportCopyChannelsInGroup(groupStr, IntPtr.Zero, 0, 0, 0));
+            if (!channel.IsValid)
             {
-                var channel = IOReportCopyChannelsInGroup(groupStr, IntPtr.Zero, 0, 0, 0);
-                if (channel == IntPtr.Zero)
-                {
-                    return IntPtr.Zero;
-                }
+                return IntPtr.Zero;
+            }
 
-                try
-                {
-                    return CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
-                }
-                finally
-                {
-                    CFRelease(channel);
-                }
-            }
-            finally
-            {
-                CFRelease(groupStr);
-            }
+            return CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
         }
         catch (EntryPointNotFoundException)
         {

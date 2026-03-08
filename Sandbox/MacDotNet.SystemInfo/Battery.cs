@@ -2,6 +2,7 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -86,69 +87,55 @@ public sealed class Battery
 
     public unsafe bool Update()
     {
-        var blob = IOPSCopyPowerSourcesInfo();
-        if (blob == IntPtr.Zero)
+        using var blob = new CFRef(IOPSCopyPowerSourcesInfo());
+        if (!blob.IsValid)
         {
             Supported = false;
             return false;
         }
 
-        try
+        using var sources = new CFRef(IOPSCopyPowerSourcesList(blob));
+        if (!sources.IsValid)
         {
-            var sources = IOPSCopyPowerSourcesList(blob);
-            if (sources == IntPtr.Zero)
-            {
-                Supported = false;
-                return false;
-            }
-
-            try
-            {
-                var count = CFArrayGetCount(sources);
-                if (count == 0)
-                {
-                    Supported = false;
-                    return false;
-                }
-
-                var ps = CFArrayGetValueAtIndex(sources, 0);
-                var desc = IOPSGetPowerSourceDescription(blob, ps);
-                if (desc == IntPtr.Zero)
-                {
-                    Supported = false;
-                    return false;
-                }
-
-                Supported = true;
-                Name = GetStringValue(desc, kIOPSNameKey) ?? "Unknown";
-                Type = GetStringValue(desc, kIOPSTypeKey) ?? "Unknown";
-                TransportType = GetStringValue(desc, kIOPSTransportTypeKey);
-                HardwareSerialNumber = GetStringValue(desc, kIOPSHardwareSerialNumberKey);
-                IsPresent = GetBoolValue(desc, kIOPSIsPresentKey);
-                PowerSourceState = GetStringValue(desc, kIOPSPowerSourceStateKey) ?? "Unknown";
-                IsCharging = GetBoolValue(desc, kIOPSIsChargingKey);
-                IsCharged = GetBoolValue(desc, kIOPSIsChargedKey);
-                CurrentCapacity = GetIntValue(desc, kIOPSCurrentCapacityKey);
-                MaxCapacity = GetIntValue(desc, kIOPSMaxCapacityKey);
-                TimeToEmpty = GetIntValue(desc, kIOPSTimeToEmptyKey, -1);
-                TimeToFullCharge = GetIntValue(desc, kIOPSTimeToFullChargeKey, -1);
-                BatteryHealth = GetStringValue(desc, kIOPSBatteryHealthKey);
-                BatteryHealthCondition = GetStringValue(desc, kIOPSBatteryHealthConditionKey);
-                DesignCycleCount = GetIntValue(desc, kIOPSDesignCycleCountKey, -1);
-
-                UpdateAt = DateTime.Now;
-
-                return true;
-            }
-            finally
-            {
-                CFRelease(sources);
-            }
+            Supported = false;
+            return false;
         }
-        finally
+
+        var count = CFArrayGetCount(sources);
+        if (count == 0)
         {
-            CFRelease(blob);
+            Supported = false;
+            return false;
         }
+
+        var ps = CFArrayGetValueAtIndex(sources, 0);
+        var desc = IOPSGetPowerSourceDescription(blob, ps);
+        if (desc == IntPtr.Zero)
+        {
+            Supported = false;
+            return false;
+        }
+
+        Supported = true;
+        Name = GetStringValue(desc, kIOPSNameKey) ?? "Unknown";
+        Type = GetStringValue(desc, kIOPSTypeKey) ?? "Unknown";
+        TransportType = GetStringValue(desc, kIOPSTransportTypeKey);
+        HardwareSerialNumber = GetStringValue(desc, kIOPSHardwareSerialNumberKey);
+        IsPresent = GetBoolValue(desc, kIOPSIsPresentKey);
+        PowerSourceState = GetStringValue(desc, kIOPSPowerSourceStateKey) ?? "Unknown";
+        IsCharging = GetBoolValue(desc, kIOPSIsChargingKey);
+        IsCharged = GetBoolValue(desc, kIOPSIsChargedKey);
+        CurrentCapacity = GetIntValue(desc, kIOPSCurrentCapacityKey);
+        MaxCapacity = GetIntValue(desc, kIOPSMaxCapacityKey);
+        TimeToEmpty = GetIntValue(desc, kIOPSTimeToEmptyKey, -1);
+        TimeToFullCharge = GetIntValue(desc, kIOPSTimeToFullChargeKey, -1);
+        BatteryHealth = GetStringValue(desc, kIOPSBatteryHealthKey);
+        BatteryHealthCondition = GetStringValue(desc, kIOPSBatteryHealthConditionKey);
+        DesignCycleCount = GetIntValue(desc, kIOPSDesignCycleCountKey, -1);
+
+        UpdateAt = DateTime.Now;
+
+        return true;
     }
 
     //--------------------------------------------------------------------------------
@@ -157,71 +144,50 @@ public sealed class Battery
 
     private static unsafe string? GetStringValue(IntPtr dict, string keyName)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return null;
         }
 
-        try
+        var value = CFDictionaryGetValue(dict, key);
+        if (value == IntPtr.Zero)
         {
-            var value = CFDictionaryGetValue(dict, key);
-            if (value == IntPtr.Zero)
-            {
-                return null;
-            }
+            return null;
+        }
 
-            var buffer = stackalloc byte[256];
-            return CFStringGetCString(value, buffer, 256, kCFStringEncodingUTF8)
-                ? Marshal.PtrToStringUTF8((IntPtr)buffer)
-                : null;
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        var buffer = stackalloc byte[256];
+        return CFStringGetCString(value, buffer, 256, kCFStringEncodingUTF8)
+            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
+            : null;
     }
 
     private static int GetIntValue(IntPtr dict, string keyName, int defaultValue = 0)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return defaultValue;
         }
 
-        try
+        var value = CFDictionaryGetValue(dict, key);
+        if (value == IntPtr.Zero)
         {
-            var value = CFDictionaryGetValue(dict, key);
-            if (value == IntPtr.Zero)
-            {
-                return defaultValue;
-            }
+            return defaultValue;
+        }
 
-            return CFNumberGetValue(value, kCFNumberSInt32Type, out var result) ? result : defaultValue;
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        return CFNumberGetValue(value, kCFNumberSInt32Type, out var result) ? result : defaultValue;
     }
 
     private static bool GetBoolValue(IntPtr dict, string keyName)
     {
-        var key = CFStringCreateWithCString(IntPtr.Zero, keyName, kCFStringEncodingUTF8);
-        if (key == IntPtr.Zero)
+        using var key = CFRef.CreateString(keyName);
+        if (!key.IsValid)
         {
             return false;
         }
 
-        try
-        {
-            var value = CFDictionaryGetValue(dict, key);
-            return value != IntPtr.Zero && CFBooleanGetValue(value);
-        }
-        finally
-        {
-            CFRelease(key);
-        }
+        var value = CFDictionaryGetValue(dict, key);
+        return value != IntPtr.Zero && CFBooleanGetValue(value);
     }
 }
