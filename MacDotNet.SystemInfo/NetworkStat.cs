@@ -20,13 +20,21 @@ public sealed class NetworkStatEntry
 {
     internal bool Live { get; set; }
 
-    // Interface name. Example: "en0"
+    // Interface
+
     public string Name { get; }
 
-    // Service name shown in macOS System Settings
     public string? DisplayName { get; }
 
     public NetworkInterfaceType InterfaceType { get; }
+
+    // SC service metadata
+
+    public bool IsRegistered { get; }
+
+    public bool IsHidden { get; }
+
+    public bool IsEnabled { get; internal set; }
 
     // Cumulative bytes
 
@@ -44,18 +52,18 @@ public sealed class NetworkStatEntry
     public uint Collisions { get; internal set; }
     public uint NoProto { get; internal set; }
 
-    internal NetworkStatEntry(string name, string? displayName, NetworkInterfaceType scType)
+    internal NetworkStatEntry(string name, string? displayName, NetworkInterfaceType interfaceType, bool isRegistered, bool isHidden)
     {
         Name = name;
         DisplayName = displayName;
-        InterfaceType = scType;
+        InterfaceType = interfaceType;
+        IsRegistered = isRegistered;
+        IsHidden = isHidden;
     }
 }
 
 public sealed class NetworkStat
 {
-    private readonly bool includeAll;
-
     private readonly List<NetworkStatEntry> interfaces = new();
 
     public DateTime UpdateAt { get; private set; }
@@ -66,9 +74,8 @@ public sealed class NetworkStat
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    internal NetworkStat(bool includeAll)
+    internal NetworkStat()
     {
-        this.includeAll = includeAll;
         Update();
     }
 
@@ -91,7 +98,6 @@ public sealed class NetworkStat
         try
         {
             var added = false;
-            var session = default(ServiceSession);
 
             for (var ifa = (ifaddrs*)ifap; ifa != null; ifa = (ifaddrs*)ifa->ifa_next)
             {
@@ -116,13 +122,7 @@ public sealed class NetworkStat
 
                     if (iface is null)
                     {
-                        session ??= new ServiceSession();
-                        iface = CreateInterfaceStat(session, name);
-                        if (iface is null)
-                        {
-                            continue;
-                        }
-
+                        iface = CreateEntry(name);
                         interfaces.Add(iface);
                         added = true;
                     }
@@ -155,6 +155,8 @@ public sealed class NetworkStat
                 interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
             }
 
+            RefreshEnabledState();
+
             UpdateAt = DateTime.Now;
 
             return true;
@@ -165,190 +167,212 @@ public sealed class NetworkStat
         }
     }
 
-    //--------------------------------------------------------------------------------
-    // Helpers
-    //--------------------------------------------------------------------------------
-
-    private readonly struct ServiceInfo
+    private void RefreshEnabledState()
     {
-        public bool Unavailable { get; init; }
-
-        public bool Registered { get; init; }
-
-        public bool IsEnabled { get; init; }
-
-        public bool IsHidden { get; init; }
-
-        public string? DisplayName { get; init; }
-
-        public NetworkInterfaceType InterfaceType { get; init; }
-    }
-
-    private NetworkStatEntry? CreateInterfaceStat(ServiceSession session, string bsdName)
-    {
-        var info = session.LookupService(bsdName);
-
-        if (info.Unavailable)
+        var hasTarget = false;
+        foreach (var iface in interfaces)
         {
-            return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown);
+            if (iface.IsRegistered && !iface.IsHidden)
+            {
+                hasTarget = true;
+                break;
+            }
         }
 
-        if (!info.Registered || !info.IsEnabled || info.IsHidden)
+        if (!hasTarget)
         {
-            return includeAll ? new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown) : null;
+            return;
         }
 
-        return new NetworkStatEntry(bsdName, info.DisplayName, info.InterfaceType);
-    }
-
-    //--------------------------------------------------------------------------------
-    // ServiceSession
-    //--------------------------------------------------------------------------------
-
-    private sealed class ServiceSession
-    {
-        private readonly Dictionary<string, ServiceInfo>? serviceMap;
-
-        public ServiceSession()
+        var appNameRef = CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", kCFStringEncodingUTF8);
+        IntPtr prefs;
+        try
         {
-            var appNameRef = CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", kCFStringEncodingUTF8);
-            IntPtr prefs;
-            try
-            {
-                prefs = SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero);
-            }
-            finally
-            {
-                CFRelease(appNameRef);
-            }
+            prefs = SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero);
+        }
+        finally
+        {
+            CFRelease(appNameRef);
+        }
 
-            if (prefs == IntPtr.Zero)
+        if (prefs == IntPtr.Zero)
+        {
+            return;
+        }
+
+        try
+        {
+            var services = SCNetworkServiceCopyAll(prefs);
+            if (services == IntPtr.Zero)
             {
                 return;
             }
 
             try
             {
-                var services = SCNetworkServiceCopyAll(prefs);
-                if (services == IntPtr.Zero)
+                var count = CFArrayGetCount(services);
+                for (var i = 0L; i < count; i++)
                 {
-                    return;
-                }
+                    var service = CFArrayGetValueAtIndex(services, i);
+                    if (service == IntPtr.Zero)
+                    {
+                        continue;
+                    }
 
-                try
-                {
-                    serviceMap = BuildServiceMap(prefs, services);
-                }
-                finally
-                {
-                    CFRelease(services);
+                    var iface = SCNetworkServiceGetInterface(service);
+                    if (iface == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    var bsdName = CfStringToManaged(SCNetworkInterfaceGetBSDName(iface));
+                    if (bsdName is null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var entry in interfaces)
+                    {
+                        if (entry.IsRegistered && !entry.IsHidden && (entry.Name == bsdName))
+                        {
+                            entry.IsEnabled = SCNetworkServiceGetEnabled(service);
+                            break;
+                        }
+                    }
                 }
             }
             finally
             {
-                CFRelease(prefs);
+                CFRelease(services);
             }
         }
-
-        public ServiceInfo LookupService(string bsdName)
+        finally
         {
-            if (serviceMap is null)
-            {
-                return new ServiceInfo { Unavailable = true };
-            }
+            CFRelease(prefs);
+        }
+    }
 
-            return serviceMap.TryGetValue(bsdName, out var info) ? info : new ServiceInfo { Registered = false };
+    //--------------------------------------------------------------------------------
+    // Helpers
+    //--------------------------------------------------------------------------------
+
+    private static NetworkStatEntry CreateEntry(string name)
+    {
+        var appNameRef = CFStringCreateWithCString(IntPtr.Zero, "MacDotNet.SystemInfo", kCFStringEncodingUTF8);
+        IntPtr prefs;
+        try
+        {
+            prefs = SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero);
+        }
+        finally
+        {
+            CFRelease(appNameRef);
         }
 
-        private static Dictionary<string, ServiceInfo> BuildServiceMap(IntPtr prefs, IntPtr services)
+        if (prefs == IntPtr.Zero)
         {
-            var map = new Dictionary<string, ServiceInfo>(StringComparer.Ordinal);
-
-            var count = CFArrayGetCount(services);
-            for (var i = 0L; i < count; i++)
-            {
-                var service = CFArrayGetValueAtIndex(services, i);
-                if (service == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var iface = SCNetworkServiceGetInterface(service);
-                if (iface == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                var bsdName = CfStringToManaged(SCNetworkInterfaceGetBSDName(iface));
-                if (bsdName is null)
-                {
-                    continue;
-                }
-
-                if (IsHiddenConfiguration(prefs, service))
-                {
-                    map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsHidden = true });
-                    continue;
-                }
-
-                var displayName = CfStringToManaged(SCNetworkServiceGetName(service));
-                var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
-                var interfaceType = ParseInterfaceType(CfStringToManaged(SCNetworkInterfaceGetInterfaceType(iface)));
-                map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsEnabled = isEnabled, DisplayName = displayName, InterfaceType = interfaceType });
-            }
-
-            return map;
+            return new NetworkStatEntry(name, null, NetworkInterfaceType.Unknown, isRegistered: false, isHidden: false);
         }
 
-        private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
+        try
         {
-            var serviceId = CfStringToManaged(SCNetworkServiceGetServiceID(service));
-            if (serviceId is null)
+            var services = SCNetworkServiceCopyAll(prefs);
+            if (services == IntPtr.Zero)
             {
-                return false;
+                return new NetworkStatEntry(name, null, NetworkInterfaceType.Unknown, isRegistered: false, isHidden: false);
             }
 
-            var pathRef = CFStringCreateWithCString(IntPtr.Zero, $"/NetworkServices/{serviceId}/Interface", kCFStringEncodingUTF8);
-            IntPtr ifaceDict;
             try
             {
-                ifaceDict = SCPreferencesPathGetValue(prefs, pathRef);
+                var count = CFArrayGetCount(services);
+                for (var i = 0L; i < count; i++)
+                {
+                    var service = CFArrayGetValueAtIndex(services, i);
+                    if (service == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    var iface = SCNetworkServiceGetInterface(service);
+                    if (iface == IntPtr.Zero)
+                    {
+                        continue;
+                    }
+
+                    var bsdName = CfStringToManaged(SCNetworkInterfaceGetBSDName(iface));
+                    if (bsdName != name)
+                    {
+                        continue;
+                    }
+
+                    var isHidden = IsHiddenConfiguration(prefs, service);
+                    var displayName = CfStringToManaged(SCNetworkServiceGetName(service));
+                    var interfaceType = ParseInterfaceType(CfStringToManaged(SCNetworkInterfaceGetInterfaceType(iface)));
+                    return new NetworkStatEntry(name, displayName, interfaceType, isRegistered: true, isHidden: isHidden);
+                }
+
+                // Not found
+                return new NetworkStatEntry(name, null, NetworkInterfaceType.Unknown, isRegistered: false, isHidden: false);
             }
             finally
             {
-                CFRelease(pathRef);
+                CFRelease(services);
             }
+        }
+        finally
+        {
+            CFRelease(prefs);
+        }
+    }
 
-            if (ifaceDict == IntPtr.Zero)
-            {
-                return false;
-            }
+    private static NetworkInterfaceType ParseInterfaceType(string? interfaceType) =>
+        interfaceType switch
+        {
+            "Ethernet" => NetworkInterfaceType.Ethernet,
+            "IEEE80211" => NetworkInterfaceType.WiFi,
+            "Bridge" => NetworkInterfaceType.Bridge,
+            "Bond" => NetworkInterfaceType.Bond,
+            "VLAN" => NetworkInterfaceType.Vlan,
+            "PPP" => NetworkInterfaceType.Ppp,
+            "VPN" => NetworkInterfaceType.Vpn,
+            _ => NetworkInterfaceType.Unknown
+        };
 
-            var hiddenKeyRef = CFStringCreateWithCString(IntPtr.Zero, "HiddenConfiguration", kCFStringEncodingUTF8);
-            IntPtr hiddenRef;
-            try
-            {
-                hiddenRef = CFDictionaryGetValue(ifaceDict, hiddenKeyRef);
-            }
-            finally
-            {
-                CFRelease(hiddenKeyRef);
-            }
-
-            return (hiddenRef != IntPtr.Zero) && CFBooleanGetValue(hiddenRef);
+    private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
+    {
+        var serviceId = CfStringToManaged(SCNetworkServiceGetServiceID(service));
+        if (serviceId is null)
+        {
+            return false;
         }
 
-        private static NetworkInterfaceType ParseInterfaceType(string? interfaceType) =>
-            interfaceType switch
-            {
-                "Ethernet" => NetworkInterfaceType.Ethernet,
-                "IEEE80211" => NetworkInterfaceType.WiFi,
-                "Bridge" => NetworkInterfaceType.Bridge,
-                "Bond" => NetworkInterfaceType.Bond,
-                "VLAN" => NetworkInterfaceType.Vlan,
-                "PPP" => NetworkInterfaceType.Ppp,
-                "VPN" => NetworkInterfaceType.Vpn,
-                _ => NetworkInterfaceType.Unknown
-            };
+        var pathRef = CFStringCreateWithCString(IntPtr.Zero, $"/NetworkServices/{serviceId}/Interface", kCFStringEncodingUTF8);
+        IntPtr ifaceDict;
+        try
+        {
+            ifaceDict = SCPreferencesPathGetValue(prefs, pathRef);
+        }
+        finally
+        {
+            CFRelease(pathRef);
+        }
+
+        if (ifaceDict == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var hiddenKeyRef = CFStringCreateWithCString(IntPtr.Zero, "HiddenConfiguration", kCFStringEncodingUTF8);
+        IntPtr hiddenRef;
+        try
+        {
+            hiddenRef = CFDictionaryGetValue(ifaceDict, hiddenKeyRef);
+        }
+        finally
+        {
+            CFRelease(hiddenKeyRef);
+        }
+
+        return (hiddenRef != IntPtr.Zero) && CFBooleanGetValue(hiddenRef);
     }
 }

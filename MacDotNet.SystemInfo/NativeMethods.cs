@@ -479,6 +479,10 @@ internal static class NativeMethods
 
     [DllImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref ulong valuePtr);
+
+    [DllImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool CFBooleanGetValue(IntPtr boolean);
 
     [DllImport(CoreFoundationLib)]
@@ -559,6 +563,9 @@ internal static class NativeMethods
 
     [DllImport(IOKitLib)]
     public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
+
+    [DllImport(IOKitLib)]
+    public static extern int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
 
     [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
@@ -773,7 +780,7 @@ internal static class NativeMethods
     /// Returns null if the property is absent or is not a CFString.
     /// </para>
     /// </summary>
-    public static unsafe string? GetIokitString(uint entry, string key)
+    public static string? GetIokitString(uint entry, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -839,14 +846,14 @@ internal static class NativeMethods
     }
 
     /// <summary>
-    /// IOKit エントリから CFNumber プロパティを 64 ビット整数として取得する。
+    /// IOKit エントリから CFNumber プロパティを 64 ビット符号なし整数として取得する。
     /// プロパティが存在しないか CFNumber 以外の型の場合は 0 を返す。
     /// <para>
-    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit integer.
+    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit unsigned integer.
     /// Returns 0 if the property is absent or is not a CFNumber.
     /// </para>
     /// </summary>
-    public static long GetIokitNumber(uint entry, string key)
+    public static ulong GetIokitUInt64(uint entry, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -869,63 +876,9 @@ internal static class NativeMethods
                     return 0;
                 }
 
-                long result = 0;
+                ulong result = 0;
                 CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
                 return result;
-            }
-            finally
-            {
-                CFRelease(val);
-            }
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>
-    /// IOKit エントリから CFData プロパティを取得し、先頭 4 バイトをリトルエンディアン uint32 として返す。
-    /// データが 4 バイト未満の場合は 0 を返す。
-    /// <para>
-    /// Retrieves a CFData property from an IOKit entry and interprets the first 4 bytes as a little-endian uint32.
-    /// Returns 0 if the data is shorter than 4 bytes.
-    /// </para>
-    /// </summary>
-    public static uint GetIokitDataUInt32LE(uint entry, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return 0;
-        }
-
-        try
-        {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return 0;
-            }
-
-            try
-            {
-                if (CFGetTypeID(val) != CFDataGetTypeID())
-                {
-                    return 0;
-                }
-
-                var len = CFDataGetLength(val);
-                if (len < 4)
-                {
-                    return 0;
-                }
-
-                var ptr = CFDataGetBytePtr(val);
-                return (uint)(Marshal.ReadByte(ptr, 0)
-                    | (Marshal.ReadByte(ptr, 1) << 8)
-                    | (Marshal.ReadByte(ptr, 2) << 16)
-                    | (Marshal.ReadByte(ptr, 3) << 24));
             }
             finally
             {
@@ -970,14 +923,14 @@ internal static class NativeMethods
     }
 
     /// <summary>
-    /// CFDictionary から CFNumber 値を 64 ビット整数として取得する。
+    /// CFDictionary から CFNumber 値を 64 ビット符号なし整数として取得する。
     /// キーが存在しないか CFNumber 以外の型の場合は 0 を返す。
     /// <para>
-    /// Retrieves a CFNumber value from a CFDictionary as a 64-bit integer.
+    /// Retrieves a CFNumber value from a CFDictionary as a 64-bit unsigned integer.
     /// Returns 0 if the key is absent or the value is not a CFNumber.
     /// </para>
     /// </summary>
-    public static long GetIokitDictNumber(IntPtr dict, string key)
+    public static ulong GetIokitDictUInt64(IntPtr dict, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -998,7 +951,7 @@ internal static class NativeMethods
                 return 0;
             }
 
-            long result = 0;
+            ulong result = 0;
             CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
             return result;
         }

@@ -157,7 +157,7 @@ public sealed class NetworkStatCommand : ICommandHandler
     public ValueTask ExecuteAsync(CommandContext context)
     {
         var network = PlatformProvider.GetNetworkStat();
-        foreach (var nif in network.Interfaces)
+        foreach (var nif in network.Interfaces.Where(static x => x.IsRegistered && !x.IsHidden && x.IsEnabled))
         {
             var name = nif.DisplayName is not null ? $"{nif.Name} {nif.DisplayName}" : nif.Name;
             Console.WriteLine($"Interface:    {name} ({nif.InterfaceType})");
