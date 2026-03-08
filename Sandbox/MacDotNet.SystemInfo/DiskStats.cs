@@ -4,7 +4,8 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public enum DiskBusType
 {
-    Unknown,
+    Unknown,            // バス種別文字列は取得できたが ParseBusType が未対応、または取得できなかった
+    VirtualInterface,   // Disk Image 等の仮想インターフェース
     Sata,
     PciExpress,
     Usb,
@@ -217,6 +218,8 @@ public sealed class DiskStats
     private static DiskBusType ParseBusType(string? busType) =>
         busType switch
         {
+            null => DiskBusType.Unknown,
+            "Virtual Interface" => DiskBusType.VirtualInterface,
             "SATA" => DiskBusType.Sata,
             "PCI-Express" => DiskBusType.PciExpress,
             "USB" => DiskBusType.Usb,

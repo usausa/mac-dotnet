@@ -293,22 +293,11 @@ Thread.Sleep(500);
 diskStats.Update();
 var diskElapsed = (DateTime.UtcNow - diskT0).TotalSeconds;
 
-// 5a ボリュームを物理ディスク名でグループ化
-var volumesByDisk = new Dictionary<string, List<string>>(StringComparer.Ordinal);
-foreach (var vol in fileSystems)
-{
-    var physicalDisk = ExtractPhysicalDiskName(vol.DeviceName);
-    if (physicalDisk is not null)
-    {
-        if (!volumesByDisk.TryGetValue(physicalDisk, out var volList))
-        {
-            volumesByDisk[physicalDisk] = volList = new List<string>();
-        }
-        volList.Add($"{vol.MountPoint} ({vol.DeviceName})");
-    }
-}
-
-var physicalDisks = diskStats.Devices.Where(d => d.IsPhysical).ToList();
+// IsPhysical=true かつ実在のバス接続を持つものに絞る。
+// Disk Image は "Virtual Interface" を返すため VirtualInterface で除外できる。
+var physicalDisks = diskStats.Devices
+    .Where(d => d.IsPhysical && d.BusType != DiskBusType.VirtualInterface)
+    .ToList();
 Console.WriteLine($"  Total: {diskStats.Devices.Count} devices found, {physicalDisks.Count} displayed");
 if (physicalDisks.Count == 0)
 {
@@ -318,6 +307,7 @@ foreach (var d in physicalDisks)
 {
     var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
     Console.WriteLine($"  [{deviceLabel}]");
+    Console.WriteLine($"    Bus:   {d.BusType}");
     if (d.VendorName is not null)
     {
         Console.WriteLine($"    Vendor:  {d.VendorName}");
@@ -335,14 +325,6 @@ foreach (var d in physicalDisks)
     var writeMbps = diskElapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / diskElapsed : 0;
     Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
     Console.WriteLine($"    Write: {FormatBytes(d.BytesWrite),12} total  {writeMbps,8:F2} MB/s");
-
-    if (volumesByDisk.TryGetValue(d.Name, out var relatedVolumes))
-    {
-        foreach (var volStr in relatedVolumes)
-        {
-            Console.WriteLine($"    Volume: {volStr}");
-        }
-    }
 }
 Console.WriteLine();
 
@@ -636,22 +618,3 @@ static string FormatBytes(ulong bytes) => bytes switch
 
 static string Truncate(string s, int max) =>
     s.Length <= max ? s : s[..(max - 1)] + "…";
-
-// /dev/disk3s1s1 や /dev/disk7s2 から物理ディスク名 (disk3, disk7) を抽出する。
-static string? ExtractPhysicalDiskName(string devicePath)
-{
-    const string prefix = "/dev/";
-    if (!devicePath.StartsWith(prefix, StringComparison.Ordinal))
-    {
-        return null;
-    }
-
-    var name = devicePath[prefix.Length..]; // "disk3s1s1"
-    var i = 4; // "disk" の長さ分スキップ
-    while (i < name.Length && char.IsDigit(name[i]))
-    {
-        i++;
-    }
-
-    return i > 4 ? name[..i] : null; // "disk3"
-}
