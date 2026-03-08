@@ -14,6 +14,18 @@ public sealed class DiskDeviceStat
 {
     internal bool Live { get; set; }
 
+    /// <summary>
+    /// 親エントリ (IOBlockStorageDriver) の IOKit レジストリ ID。
+    /// 同一ブート中に同じ Statistics カウンタを追跡するためのキー。
+    /// デバイスが抜き差しされると新しいエントリが生成され、ID が変わる。
+    /// <para>
+    /// IOKit registry ID of the parent entry (IOBlockStorageDriver).
+    /// Used as the identity key to track the same Statistics counter within a single boot.
+    /// The ID changes when a device is removed and re-inserted.
+    /// </para>
+    /// </summary>
+    internal ulong RegistryEntryId { get; }
+
     /// <summary>BSD デバイス名。例: "disk0"<br/>BSD device name. Example: "disk0"</summary>
     public string Name { get; }
 
@@ -104,8 +116,9 @@ public sealed class DiskDeviceStat
     /// </summary>
     public string? BusType { get; }
 
-    internal DiskDeviceStat(string name, bool isPhysicalMedium, string? mediaName, string? vendorName, string? mediumType, bool isRemovable, ulong diskSize, string? busType)
+    internal DiskDeviceStat(ulong registryEntryId, string name, bool isPhysicalMedium, string? mediaName, string? vendorName, string? mediumType, bool isRemovable, ulong diskSize, string? busType)
     {
+        RegistryEntryId = registryEntryId;
         Name = name;
         IsPhysicalMedium = isPhysicalMedium;
         MediaName = mediaName;
@@ -133,7 +146,7 @@ public sealed class DiskDeviceStat
 public sealed class DiskStats
 {
     private readonly List<DiskDeviceStat> _devices = new();
-    private readonly bool _physicalOnly;
+    private readonly bool _includeAll;
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
@@ -149,9 +162,9 @@ public sealed class DiskStats
     // Constructor / Factory
     //--------------------------------------------------------------------------------
 
-    private DiskStats(bool physicalOnly)
+    private DiskStats(bool includeAll)
     {
-        _physicalOnly = physicalOnly;
+        _includeAll = includeAll;
         Update();
     }
 
@@ -159,15 +172,15 @@ public sealed class DiskStats
     /// DiskStats インスタンスを生成する。
     /// <para>Creates a DiskStats instance.</para>
     /// </summary>
-    /// <param name="physicalOnly">
-    /// true の場合、IOKit の親が IOBlockStorageDriver である物理メディアのみを対象にする。
-    /// APFS コンテナ仮想ディスク (disk3、disk7 等) は除外される。
+    /// <param name="includeAll">
+    /// true の場合、APFS コンテナ仮想ディスク (disk3、disk7 等) を含むすべてのディスクを対象にする。
+    /// false (デフォルト) の場合、IOKit の親が IOBlockStorageDriver である物理メディアのみを対象にする。
     /// <para>
-    /// When true, only physical media whose IOKit parent is IOBlockStorageDriver are included.
-    /// APFS container virtual disks (e.g. disk3, disk7) are excluded.
+    /// When true, all disks are included, including APFS container virtual disks (e.g. disk3, disk7).
+    /// When false (default), only physical media whose IOKit parent is IOBlockStorageDriver are included.
     /// </para>
     /// </param>
-    public static DiskStats Create(bool physicalOnly = false) => new(physicalOnly);
+    public static DiskStats Create(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Update
@@ -222,8 +235,17 @@ public sealed class DiskStats
                     {
                         var isPhysical = IsPhysicalMedium(parent);
 
-                        // physicalOnly フィルタ
-                        if (_physicalOnly && !isPhysical)
+                        // includeAll=false (デフォルト) の場合、物理メディアのみを対象にする
+                        if (!_includeAll && !isPhysical)
+                        {
+                            continue;
+                        }
+
+                        // Statistics カウンタを保持している親エントリの ID で同一判定する。
+                        // BSD 名はデバイス抜き差し後に再利用される可能性があるが、
+                        // Registry Entry ID はエントリが生存している間だけ有効で、
+                        // 再挿入時は新しい ID が付与されるため、同一カウンタの追跡に適している。
+                        if (IORegistryEntryGetRegistryEntryID(parent, out var entryId) != KERN_SUCCESS)
                         {
                             continue;
                         }
@@ -231,7 +253,7 @@ public sealed class DiskStats
                         var device = default(DiskDeviceStat);
                         foreach (var item in _devices)
                         {
-                            if (item.Name == bsdName)
+                            if (item.RegistryEntryId == entryId)
                             {
                                 device = item;
                                 break;
@@ -242,7 +264,7 @@ public sealed class DiskStats
                         {
                             // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
                             var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
-                            device = new DiskDeviceStat(bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
+                            device = new DiskDeviceStat(entryId, bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
                             _devices.Add(device);
                             added = true;
                         }

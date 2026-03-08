@@ -560,6 +560,9 @@ internal static class NativeMethods
     public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
 
     [DllImport(IOKitLib)]
+    public static extern int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
+
+    [DllImport(IOKitLib)]
     public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
 
     //------------------------------------------------------------------------
