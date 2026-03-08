@@ -206,19 +206,32 @@ public sealed class DiskStats
             {
                 try
                 {
-                    var info = ReadMediaInfo(entry);
-                    if (info is null)
+                    var bsdName = GetBsdNameIfWhole(entry);
+                    if (bsdName is null)
                     {
                         continue;
                     }
 
-                    var (name, parent) = info.Value;
+                    var parent = GetParentEntry(entry);
+                    if (parent == 0)
+                    {
+                        continue;
+                    }
+
                     try
                     {
+                        var isPhysical = IsPhysicalMedium(parent);
+
+                        // physicalOnly フィルタ
+                        if (_physicalOnly && !isPhysical)
+                        {
+                            continue;
+                        }
+
                         var device = default(DiskDeviceStat);
                         foreach (var item in _devices)
                         {
-                            if (item.Name == name)
+                            if (item.Name == bsdName)
                             {
                                 device = item;
                                 break;
@@ -227,14 +240,9 @@ public sealed class DiskStats
 
                         if (device is null)
                         {
-                            // 新規デバイス: 静的情報 (IsPhysicalMedium 判定を含む) を一度だけ取得してコンストラクタに渡す
-                            var (isPhysical, isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry, parent);
-                            if (_physicalOnly && !isPhysical)
-                            {
-                                continue;
-                            }
-
-                            device = new DiskDeviceStat(name, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
+                            // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
+                            var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
+                            device = new DiskDeviceStat(bsdName, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
                             _devices.Add(device);
                             added = true;
                         }
@@ -280,12 +288,11 @@ public sealed class DiskStats
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// IOMedia エントリが Whole=true かつ BSD 名を持つ場合に (BSD名, 親エントリ) を返す。
-    /// 戻り値が non-null の場合、呼び出し元が Parent を IOObjectRelease しなければならない。
+    /// IOMedia エントリが Whole=true の場合に BSD 名を返す。
+    /// Whole でない場合、または BSD 名が取得できない場合は null を返す。
     /// </summary>
-    private static (string Name, uint Parent)? ReadMediaInfo(uint mediaEntry)
+    private static string? GetBsdNameIfWhole(uint mediaEntry)
     {
-        // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
         if (wholeKey == IntPtr.Zero)
         {
@@ -312,20 +319,28 @@ public sealed class DiskStats
             CFRelease(wholeKey);
         }
 
-        // BSD 名を取得 (例: "disk0")
-        var bsdName = GetIokitString(mediaEntry, "BSD Name");
-        if (bsdName is null)
-        {
-            return null;
-        }
+        return GetIokitString(mediaEntry, "BSD Name");
+    }
 
-        // 親エントリを取得 (呼び出し元が release する)
-        if (IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
-        {
-            return null;
-        }
+    /// <summary>
+    /// IOMedia エントリの IOService プレーンにおける親エントリを返す。
+    /// 取得失敗時は 0 を返す。戻り値が非 0 の場合、呼び出し元が IOObjectRelease しなければならない。
+    /// </summary>
+    private static uint GetParentEntry(uint mediaEntry)
+    {
+        return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0
+            ? parent
+            : 0;
+    }
 
-        return (bsdName, parent);
+    /// <summary>
+    /// 親エントリのクラスが IOBlockStorageDriver かどうかを返す。
+    /// true の場合、物理ブロックストレージデバイス (NVMe、USB NVMe など)。
+    /// false の場合、APFS コンテナ仮想ディスクなど合成された論理ディスク。
+    /// </summary>
+    private static bool IsPhysicalMedium(uint parentEntry)
+    {
+        return GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
     }
 
     /// <summary>
@@ -362,15 +377,13 @@ public sealed class DiskStats
 
     /// <summary>
     /// IOMedia エントリから静的なデバイス情報を読み取る。新規デバイス登録時に一度だけ呼ばれる。
-    /// IsPhysicalMedium の判定 (親クラスが IOBlockStorageDriver かどうか) もここで行う。
     /// </summary>
-    private static (bool IsPhysicalMedium, bool IsRemovable, string? MediaName, string? VendorName, string? MediumType, ulong DiskSize, string? BusType) ReadStaticDeviceInfo(uint mediaEntry, uint parentEntry)
+    private static (bool IsRemovable, string? MediaName, string? VendorName, string? MediumType, ulong DiskSize, string? BusType) ReadStaticDeviceInfo(uint mediaEntry)
     {
-        var isPhysicalMedium = GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
         var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
         var diskSize = GetIokitUInt64(mediaEntry, "Size");
         var (mediaName, vendorName, mediumType, busType) = FindDeviceCharacteristics(mediaEntry);
-        return (isPhysicalMedium, isRemovable, mediaName, vendorName, mediumType, diskSize, busType);
+        return (isRemovable, mediaName, vendorName, mediumType, diskSize, busType);
     }
 
     /// <summary>
