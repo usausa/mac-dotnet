@@ -124,6 +124,11 @@ public sealed class DiskStats
             {
                 try
                 {
+                    if (!IsWhole(entry))
+                    {
+                        continue;
+                    }
+
                     var parent = GetParentEntry(entry);
                     if (parent == 0)
                     {
@@ -150,10 +155,6 @@ public sealed class DiskStats
                         if (device is null)
                         {
                             device = CreateEntry(entryId, entry, parent);
-                            if (device is null)
-                            {
-                                continue;
-                            }
                             devices.Add(device);
                             added = true;
                         }
@@ -198,14 +199,9 @@ public sealed class DiskStats
     /// 新規デバイス検出時に IOKit から静的情報を取得してエントリを生成する。
     /// IOMedia エントリが Whole でない場合は null を返す。
     /// </summary>
-    private static DiskDeviceStat? CreateEntry(ulong registryEntryId, uint mediaEntry, uint parentEntry)
+    private static DiskDeviceStat CreateEntry(ulong registryEntryId, uint mediaEntry, uint parentEntry)
     {
-        var bsdName = GetBsdNameIfWhole(mediaEntry);
-        if (bsdName is null)
-        {
-            return null;
-        }
-
+        var bsdName = GetIokitString(mediaEntry, "BSD Name") ?? string.Empty;
         var isPhysical = IsPhysical(parentEntry);
         var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
         var diskSize = GetIokitUInt64(mediaEntry, "Size");
@@ -247,15 +243,14 @@ public sealed class DiskStats
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// IOMedia エントリが Whole=true の場合に BSD 名を返す。
-    /// Whole でない場合、または BSD 名が取得できない場合は null を返す。
+    /// IOMedia エントリが Whole=true かどうかを返す。
     /// </summary>
-    private static string? GetBsdNameIfWhole(uint mediaEntry)
+    private static bool IsWhole(uint mediaEntry)
     {
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
         if (wholeKey == IntPtr.Zero)
         {
-            return null;
+            return false;
         }
 
         try
@@ -263,22 +258,17 @@ public sealed class DiskStats
             var wholeProp = IORegistryEntryCreateCFProperty(mediaEntry, wholeKey, IntPtr.Zero, 0);
             if (wholeProp == IntPtr.Zero)
             {
-                return null;
+                return false;
             }
 
             var isWhole = CFBooleanGetValue(wholeProp);
             CFRelease(wholeProp);
-            if (!isWhole)
-            {
-                return null;
-            }
+            return isWhole;
         }
         finally
         {
             CFRelease(wholeKey);
         }
-
-        return GetIokitString(mediaEntry, "BSD Name");
     }
 
     /// <summary>
