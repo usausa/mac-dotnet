@@ -474,6 +474,10 @@ internal static class NativeMethods
 
     [DllImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref ulong valuePtr);
+
+    [DllImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool CFBooleanGetValue(IntPtr boolean);
 
     [DllImport(CoreFoundationLib)]
@@ -834,14 +838,14 @@ internal static class NativeMethods
     }
 
     /// <summary>
-    /// IOKit エントリから CFNumber プロパティを 64 ビット整数として取得する。
+    /// IOKit エントリから CFNumber プロパティを 64 ビット符号なし整数として取得する。
     /// プロパティが存在しないか CFNumber 以外の型の場合は 0 を返す。
     /// <para>
-    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit integer.
+    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit unsigned integer.
     /// Returns 0 if the property is absent or is not a CFNumber.
     /// </para>
     /// </summary>
-    public static long GetIokitNumber(uint entry, string key)
+    public static ulong GetIokitUInt64(uint entry, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -864,7 +868,7 @@ internal static class NativeMethods
                     return 0;
                 }
 
-                long result = 0;
+                ulong result = 0;
                 CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
                 return result;
             }
@@ -957,6 +961,45 @@ internal static class NativeMethods
             }
 
             return val;
+        }
+        finally
+        {
+            CFRelease(cfKey);
+        }
+    }
+
+    /// <summary>
+    /// CFDictionary から CFNumber 値を 64 ビット符号なし整数として取得する。
+    /// キーが存在しないか CFNumber 以外の型の場合は 0 を返す。
+    /// <para>
+    /// Retrieves a CFNumber value from a CFDictionary as a 64-bit unsigned integer.
+    /// Returns 0 if the key is absent or the value is not a CFNumber.
+    /// </para>
+    /// </summary>
+    public static ulong GetIokitDictUInt64(IntPtr dict, string key)
+    {
+        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
+        if (cfKey == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        try
+        {
+            var val = CFDictionaryGetValue(dict, cfKey);
+            if (val == IntPtr.Zero)
+            {
+                return 0;
+            }
+
+            if (CFGetTypeID(val) != CFNumberGetTypeID())
+            {
+                return 0;
+            }
+
+            ulong result = 0;
+            CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
+            return result;
         }
         finally
         {

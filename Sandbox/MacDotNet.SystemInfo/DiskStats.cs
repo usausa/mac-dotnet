@@ -212,15 +212,9 @@ public sealed class DiskStats
                         continue;
                     }
 
-                    var (name, isPhysical, parent) = info.Value;
+                    var (name, parent) = info.Value;
                     try
                     {
-                        // physicalOnly フィルタ
-                        if (_physicalOnly && !isPhysical)
-                        {
-                            continue;
-                        }
-
                         var device = default(DiskDeviceStat);
                         foreach (var item in _devices)
                         {
@@ -233,8 +227,13 @@ public sealed class DiskStats
 
                         if (device is null)
                         {
-                            // 新規デバイス: 静的情報を一度だけ取得してコンストラクタに渡す
-                            var (isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry);
+                            // 新規デバイス: 静的情報 (IsPhysicalMedium 判定を含む) を一度だけ取得してコンストラクタに渡す
+                            var (isPhysical, isRemovable, mediaName, vendorName, mediumType, diskSize, busType) = ReadStaticDeviceInfo(entry, parent);
+                            if (_physicalOnly && !isPhysical)
+                            {
+                                continue;
+                            }
+
                             device = new DiskDeviceStat(name, isPhysical, mediaName, vendorName, mediumType, isRemovable, diskSize, busType);
                             _devices.Add(device);
                             added = true;
@@ -281,10 +280,10 @@ public sealed class DiskStats
     //--------------------------------------------------------------------------------
 
     /// <summary>
-    /// IOMedia エントリが Whole=true かつ BSD 名を持つ場合に (BSD名, 物理メディアフラグ, 親エントリ) を返す。
+    /// IOMedia エントリが Whole=true かつ BSD 名を持つ場合に (BSD名, 親エントリ) を返す。
     /// 戻り値が non-null の場合、呼び出し元が Parent を IOObjectRelease しなければならない。
     /// </summary>
-    private static (string Name, bool IsPhysicalMedium, uint Parent)? ReadMediaInfo(uint mediaEntry)
+    private static (string Name, uint Parent)? ReadMediaInfo(uint mediaEntry)
     {
         // Whole=true のエントリのみ対象 (物理ディスク全体を表す IOMedia)
         var wholeKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
@@ -326,9 +325,7 @@ public sealed class DiskStats
             return null;
         }
 
-        // 親クラスが IOBlockStorageDriver であれば物理メディア
-        var isPhysicalMedium = GetIokitClassName(parent) == "IOBlockStorageDriver";
-        return (bsdName, isPhysicalMedium, parent);
+        return (bsdName, parent);
     }
 
     /// <summary>
@@ -344,18 +341,18 @@ public sealed class DiskStats
 
         try
         {
-            device.BytesRead          = (ulong)GetIokitDictNumber(statsDict, "Bytes (Read)");
-            device.BytesWritten       = (ulong)GetIokitDictNumber(statsDict, "Bytes (Write)");
-            device.ReadsCompleted     = (ulong)GetIokitDictNumber(statsDict, "Operations (Read)");
-            device.WritesCompleted    = (ulong)GetIokitDictNumber(statsDict, "Operations (Write)");
-            device.TotalTimeRead      = (ulong)GetIokitDictNumber(statsDict, "Total Time (Read)");
-            device.TotalTimeWritten   = (ulong)GetIokitDictNumber(statsDict, "Total Time (Write)");
-            device.RetriesRead        = (ulong)GetIokitDictNumber(statsDict, "Retries (Read)");
-            device.RetriesWritten     = (ulong)GetIokitDictNumber(statsDict, "Retries (Write)");
-            device.ErrorsRead         = (ulong)GetIokitDictNumber(statsDict, "Errors (Read)");
-            device.ErrorsWritten      = (ulong)GetIokitDictNumber(statsDict, "Errors (Write)");
-            device.LatencyTimeRead    = (ulong)GetIokitDictNumber(statsDict, "Latency Time (Read)");
-            device.LatencyTimeWritten = (ulong)GetIokitDictNumber(statsDict, "Latency Time (Write)");
+            device.BytesRead          = GetIokitDictUInt64(statsDict, "Bytes (Read)");
+            device.BytesWritten       = GetIokitDictUInt64(statsDict, "Bytes (Write)");
+            device.ReadsCompleted     = GetIokitDictUInt64(statsDict, "Operations (Read)");
+            device.WritesCompleted    = GetIokitDictUInt64(statsDict, "Operations (Write)");
+            device.TotalTimeRead      = GetIokitDictUInt64(statsDict, "Total Time (Read)");
+            device.TotalTimeWritten   = GetIokitDictUInt64(statsDict, "Total Time (Write)");
+            device.RetriesRead        = GetIokitDictUInt64(statsDict, "Retries (Read)");
+            device.RetriesWritten     = GetIokitDictUInt64(statsDict, "Retries (Write)");
+            device.ErrorsRead         = GetIokitDictUInt64(statsDict, "Errors (Read)");
+            device.ErrorsWritten      = GetIokitDictUInt64(statsDict, "Errors (Write)");
+            device.LatencyTimeRead    = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
+            device.LatencyTimeWritten = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
         }
         finally
         {
@@ -365,13 +362,15 @@ public sealed class DiskStats
 
     /// <summary>
     /// IOMedia エントリから静的なデバイス情報を読み取る。新規デバイス登録時に一度だけ呼ばれる。
+    /// IsPhysicalMedium の判定 (親クラスが IOBlockStorageDriver かどうか) もここで行う。
     /// </summary>
-    private static (bool IsRemovable, string? MediaName, string? VendorName, string? MediumType, ulong DiskSize, string? BusType) ReadStaticDeviceInfo(uint mediaEntry)
+    private static (bool IsPhysicalMedium, bool IsRemovable, string? MediaName, string? VendorName, string? MediumType, ulong DiskSize, string? BusType) ReadStaticDeviceInfo(uint mediaEntry, uint parentEntry)
     {
+        var isPhysicalMedium = GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
         var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
-        var diskSize = (ulong)Math.Max(0L, GetIokitNumber(mediaEntry, "Size"));
+        var diskSize = GetIokitUInt64(mediaEntry, "Size");
         var (mediaName, vendorName, mediumType, busType) = FindDeviceCharacteristics(mediaEntry);
-        return (isRemovable, mediaName, vendorName, mediumType, diskSize, busType);
+        return (isPhysicalMedium, isRemovable, mediaName, vendorName, mediumType, diskSize, busType);
     }
 
     /// <summary>

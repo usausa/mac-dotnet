@@ -259,7 +259,7 @@ public sealed class HardwareInfo
             Model = GetIokitString(entry, "model") ?? "(unknown)",
             ClassName = GetIokitString(entry, "IOClass") ?? "(unknown)",
             MetalPluginName = GetIokitString(entry, "MetalPluginName"),
-            CoreCount = (int)GetIokitNumber(entry, "gpu-core-count"),
+            CoreCount = (int)GetIokitUInt64(entry, "gpu-core-count"),
             VendorId = GetIokitDataUInt32LE(entry, "vendor-id"),
             Configuration = ReadGpuConfiguration(entry),
         };

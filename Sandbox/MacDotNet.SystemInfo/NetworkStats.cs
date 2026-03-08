@@ -378,6 +378,11 @@ public sealed class NetworkStats
                 }
 
                 var displayName = NativeMethods.CfStringToManaged(NativeMethods.SCNetworkServiceGetName(service));
+                if (displayName is null)
+                {
+                    continue;
+                }
+
                 var scType = ParseScInterfaceType(NativeMethods.CfStringToManaged(NativeMethods.SCNetworkInterfaceGetInterfaceType(iface)));
                 var isEnabled = NativeMethods.SCNetworkServiceGetEnabled(service);
                 map.TryAdd(bsdName, new ServiceInfo { Registered = true, IsEnabled = isEnabled, DisplayName = displayName, ScType = scType });
