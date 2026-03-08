@@ -43,7 +43,7 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    public static NetworkStat GetNetworkStat(bool includeAll = false) => new(includeAll);
+    public static NetworkStat GetNetworkStat() => new();
 
     //--------------------------------------------------------------------------------
     // Process
@@ -63,7 +63,7 @@ public static class PlatformProvider
     // Disk
     //--------------------------------------------------------------------------------
 
-    public static DiskStats GetDiskStats(bool physicalOnly = false) => DiskStats.Create(physicalOnly);
+    public static DiskStat GetDiskStats() => new();
 
     //--------------------------------------------------------------------------------
     // Power

@@ -181,26 +181,28 @@ public sealed class NetworkStatCommand : ICommandHandler
 //--------------------------------------------------------------------------------
 // DiskStat
 //--------------------------------------------------------------------------------
-[Command("disk", "Get disk I/O stats (500ms delta)")]
+[Command("disk", "Get disk I/O stats (1000ms delta)")]
 public sealed class DiskStatCommand : ICommandHandler
 {
-    public ValueTask ExecuteAsync(CommandContext context)
+    public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var diskStats = PlatformProvider.GetDiskStats(physicalOnly: true);
+        var diskStats = PlatformProvider.GetDiskStats();
         if (diskStats.Devices.Count == 0)
         {
             Console.WriteLine("No physical disks found.");
-            return ValueTask.CompletedTask;
+            return;
         }
 
         // 1st snapshot
         var prevSnapshot = diskStats.Devices.ToDictionary(
             x => x.Name,
-            x => (x.BytesRead, x.BytesWritten));
+            x => (x.BytesRead, x.BytesWrite));
         var t0 = DateTime.UtcNow;
 
-        Console.WriteLine("Measuring (500ms)...");
-        Thread.Sleep(500);
+        Console.WriteLine("Measuring (1000ms)...");
+
+        await Task.Delay(1000);
+
         diskStats.Update();
         var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
 
@@ -221,14 +223,12 @@ public sealed class DiskStatCommand : ICommandHandler
 
             var hasPrev = prevSnapshot.TryGetValue(d.Name, out var prev);
             var deltaRead = hasPrev ? d.BytesRead - prev.BytesRead : 0UL;
-            var deltaWritten = hasPrev ? d.BytesWritten - prev.BytesWritten : 0UL;
+            var deltaWritten = hasPrev ? d.BytesWrite - prev.BytesWrite : 0UL;
             var readMbps = elapsed > 0 ? deltaRead / (1024.0 * 1024.0) / elapsed : 0;
             var writeMbps = elapsed > 0 ? deltaWritten / (1024.0 * 1024.0) / elapsed : 0;
             Console.WriteLine($"    Read:  {FormatBytes(d.BytesRead),12} total  {readMbps,8:F2} MB/s");
-            Console.WriteLine($"    Write: {FormatBytes(d.BytesWritten),12} total  {writeMbps,8:F2} MB/s");
+            Console.WriteLine($"    Write: {FormatBytes(d.BytesWrite),12} total  {writeMbps,8:F2} MB/s");
         }
-
-        return ValueTask.CompletedTask;
     }
 
     private static string FormatBytes(ulong bytes) => bytes switch
@@ -247,13 +247,13 @@ public sealed class DiskStatCommand : ICommandHandler
 [Command("power", "Get Apple Silicon power info (IOReport)")]
 public sealed class PowerStatCommand : ICommandHandler
 {
-    public ValueTask ExecuteAsync(CommandContext context)
+    public async ValueTask ExecuteAsync(CommandContext context)
     {
         var power = PlatformProvider.GetPowerStat();
         if (!power.Supported)
         {
             Console.WriteLine("Apple Silicon power reporting not supported (requires ARM64).");
-            return ValueTask.CompletedTask;
+            return;
         }
 
         // 1st snapshot (baseline)
@@ -267,7 +267,8 @@ public sealed class PowerStatCommand : ICommandHandler
         var prevTime = DateTime.UtcNow;
 
         Console.WriteLine("Sampling (1000ms)...");
-        Thread.Sleep(1000);
+
+        await Task.Delay(1000);
 
         // 2nd snapshot
         power.Update();
@@ -288,8 +289,6 @@ public sealed class PowerStatCommand : ICommandHandler
         Console.WriteLine($"  RAM Power:  {(power.Ram - prevRam) / elapsed:F2} W");
         Console.WriteLine($"  PCI Power:  {(power.Pci - prevPci) / elapsed:F2} W");
         Console.WriteLine($"  Total:      {(power.Total - prevTotal) / elapsed:F2} W");
-
-        return ValueTask.CompletedTask;
     }
 }
 

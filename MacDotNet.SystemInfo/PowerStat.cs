@@ -124,21 +124,21 @@ public sealed class PowerStat
             }
 
             var groupPtr = IOReportChannelGetGroup(item);
-            var group = groupPtr != IntPtr.Zero ? CfStringToManaged(groupPtr) : null;
+            var group = groupPtr != IntPtr.Zero ? ToManagedString(groupPtr) : null;
             if (group != "Energy Model")
             {
                 continue;
             }
 
             var channelNamePtr = IOReportChannelGetChannelName(item);
-            var channelName = channelNamePtr != IntPtr.Zero ? CfStringToManaged(channelNamePtr) : null;
+            var channelName = channelNamePtr != IntPtr.Zero ? ToManagedString(channelNamePtr) : null;
             if (String.IsNullOrEmpty(channelName))
             {
                 continue;
             }
 
             var unitPtr = IOReportChannelGetUnitLabel(item);
-            var unit = unitPtr != IntPtr.Zero ? CfStringToManaged(unitPtr) : null;
+            var unit = unitPtr != IntPtr.Zero ? ToManagedString(unitPtr) : null;
 
             var value = (double)IOReportSimpleGetIntegerValue(item, 0);
             var joules = ConvertToJoules(value, unit);

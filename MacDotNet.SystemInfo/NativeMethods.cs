@@ -658,46 +658,6 @@ internal static class NativeMethods
     // CFNumberType for double
     public const int kCFNumberFloat64Type = 6;
 
-    //------------------------------------------------------------------------
-    // Helper / ヘルパーメソッド
-    //------------------------------------------------------------------------
-
-    /// <summary>
-    /// CFStringRef をマネージ文字列に変換する。
-    /// まず CFStringGetCStringPtr で高速パスを試み、失敗した場合はバッファを確保して変換する。
-    /// cfString が IntPtr.Zero の場合は null を返す。
-    /// <para>
-    /// Converts a CFStringRef to a managed string.
-    /// Tries the fast path via CFStringGetCStringPtr first; falls back to buffer allocation if needed.
-    /// Returns null if cfString is IntPtr.Zero.
-    /// </para>
-    /// </summary>
-    public static unsafe string? CfStringToManaged(IntPtr cfString)
-    {
-        if (cfString == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        var ptr = CFStringGetCStringPtr(cfString, kCFStringEncodingUTF8);
-        if (ptr != IntPtr.Zero)
-        {
-            return Marshal.PtrToStringUTF8(ptr);
-        }
-
-        var length = CFStringGetLength(cfString);
-        if (length <= 0)
-        {
-            return string.Empty;
-        }
-
-        var bufSize = (length * 4) + 1;
-        var buf = stackalloc byte[(int)bufSize];
-        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-            ? Marshal.PtrToStringUTF8((IntPtr)buf)
-            : null;
-    }
-
     /// <summary>
     /// sysctlbyname で 32 ビット整数値を取得する。取得失敗時は 0 を返す。
     /// <para>Reads a 32-bit integer value via sysctlbyname. Returns 0 on failure.</para>
@@ -750,246 +710,34 @@ internal static class NativeMethods
 
         var allocatedSize = len;
         var buffer = stackalloc byte[(int)allocatedSize];
-        return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0
-            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
-            : null;
+        return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
     //------------------------------------------------------------------------
-    // IOKit property helpers / IOKit プロパティヘルパー
+    // CF string conversion
     //------------------------------------------------------------------------
 
-    /// <summary>
-    /// IOKit オブジェクトのクラス名を取得する。失敗時は null を返す。
-    /// <para>Returns the IOKit class name of an object. Returns null on failure.</para>
-    /// </summary>
-    public static unsafe string? GetIokitClassName(uint @object)
+    public static unsafe string? ToManagedString(IntPtr cfString)
     {
-        const int IO_NAME_LENGTH = 128;
-        var buf = stackalloc byte[IO_NAME_LENGTH];
-        return IOObjectGetClass(@object, buf) == KERN_SUCCESS
-            ? Marshal.PtrToStringUTF8((IntPtr)buf)
-            : null;
-    }
-
-    /// <summary>
-    /// IOKit エントリから CFString プロパティを取得してマネージ文字列に変換する。
-    /// プロパティが存在しないか CFString 以外の型の場合は null を返す。
-    /// <para>
-    /// Retrieves a CFString property from an IOKit entry and converts it to a managed string.
-    /// Returns null if the property is absent or is not a CFString.
-    /// </para>
-    /// </summary>
-    public static string? GetIokitString(uint entry, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
+        if (cfString == IntPtr.Zero)
         {
             return null;
         }
 
-        try
+        var ptr = CFStringGetCStringPtr(cfString, kCFStringEncodingUTF8);
+        if (ptr != IntPtr.Zero)
         {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            try
-            {
-                return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
-            }
-            finally
-            {
-                CFRelease(val);
-            }
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>
-    /// IOKit エントリから CFBoolean プロパティを取得する。
-    /// プロパティが存在しないか CFBoolean 以外の型の場合は false を返す。
-    /// <para>
-    /// Retrieves a CFBoolean property from an IOKit entry.
-    /// Returns false if the property is absent or is not a CFBoolean.
-    /// </para>
-    /// </summary>
-    public static bool GetIokitBoolean(uint entry, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return false;
+            return Marshal.PtrToStringUTF8(ptr);
         }
 
-        try
+        var length = CFStringGetLength(cfString);
+        if (length <= 0)
         {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return false;
-            }
-
-            var result = CFBooleanGetValue(val);
-            CFRelease(val);
-            return result;
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>
-    /// IOKit エントリから CFNumber プロパティを 64 ビット符号なし整数として取得する。
-    /// プロパティが存在しないか CFNumber 以外の型の場合は 0 を返す。
-    /// <para>
-    /// Retrieves a CFNumber property from an IOKit entry as a 64-bit unsigned integer.
-    /// Returns 0 if the property is absent or is not a CFNumber.
-    /// </para>
-    /// </summary>
-    public static ulong GetIokitUInt64(uint entry, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return 0;
+            return string.Empty;
         }
 
-        try
-        {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return 0;
-            }
-
-            try
-            {
-                if (CFGetTypeID(val) != CFNumberGetTypeID())
-                {
-                    return 0;
-                }
-
-                ulong result = 0;
-                CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
-                return result;
-            }
-            finally
-            {
-                CFRelease(val);
-            }
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>IOKit エントリから CFDictionary プロパティを取得する。戻り値が非 Zero の場合は呼び出し元が CFRelease する必要がある</summary>
-    public static IntPtr GetIokitDictionary(uint entry, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return IntPtr.Zero;
-        }
-
-        try
-        {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return IntPtr.Zero;
-            }
-
-            if (CFGetTypeID(val) != CFDictionaryGetTypeID())
-            {
-                CFRelease(val);
-                return IntPtr.Zero;
-            }
-
-            return val;
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>
-    /// CFDictionary から CFNumber 値を 64 ビット符号なし整数として取得する。
-    /// キーが存在しないか CFNumber 以外の型の場合は 0 を返す。
-    /// <para>
-    /// Retrieves a CFNumber value from a CFDictionary as a 64-bit unsigned integer.
-    /// Returns 0 if the key is absent or the value is not a CFNumber.
-    /// </para>
-    /// </summary>
-    public static ulong GetIokitDictUInt64(IntPtr dict, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return 0;
-        }
-
-        try
-        {
-            var val = CFDictionaryGetValue(dict, cfKey);
-            if (val == IntPtr.Zero)
-            {
-                return 0;
-            }
-
-            if (CFGetTypeID(val) != CFNumberGetTypeID())
-            {
-                return 0;
-            }
-
-            ulong result = 0;
-            CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
-            return result;
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
-    }
-
-    /// <summary>
-    /// CFDictionary から CFString 値をマネージ文字列として取得する。
-    /// キーが存在しないか CFString 以外の型の場合は null を返す。
-    /// <para>
-    /// Retrieves a CFString value from a CFDictionary as a managed string.
-    /// Returns null if the key is absent or the value is not a CFString.
-    /// </para>
-    /// </summary>
-    public static string? GetIokitDictString(IntPtr dict, string key)
-    {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        try
-        {
-            var val = CFDictionaryGetValue(dict, cfKey);
-            if (val == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            return CFGetTypeID(val) == CFStringGetTypeID() ? CfStringToManaged(val) : null;
-        }
-        finally
-        {
-            CFRelease(cfKey);
-        }
+        var bufSize = (length * 4) + 1;
+        var buf = stackalloc byte[(int)bufSize];
+        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8) ? Marshal.PtrToStringUTF8((IntPtr)buf) : null;
     }
 }
