@@ -5,10 +5,44 @@ using System.Runtime.InteropServices;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
-/// マウント済みファイルシステムの詳細情報 (statfs 構造体から取得)。
-/// <para>Detailed information for a mounted file system (from the statfs structure).</para>
+/// statfs 構造体の f_flags フィールドに対応するマウントフラグ (sys/mount.h)。
+/// <para>Mount flags corresponding to the f_flags field of the statfs structure (sys/mount.h).</para>
 /// </summary>
-public sealed record FileSystemEntry
+[Flags]
+public enum MountFlags : uint
+{
+    None             = 0,
+    ReadOnly         = 1u << 0,   // MNT_RDONLY      — 読み取り専用 / Read-only filesystem
+    Synchronous      = 1u << 1,   // MNT_SYNCHRONOUS — 同期書き込み / Synchronous writes
+    NoExec           = 1u << 2,   // MNT_NOEXEC      — 実行禁止 / No execution of binaries
+    NoSuid           = 1u << 3,   // MNT_NOSUID      — SUID/SGID 無効 / Ignore SUID/SGID bits
+    Union            = 1u << 5,   // MNT_UNION       — ユニオンマウント / Union mount
+    Async            = 1u << 6,   // MNT_ASYNC       — 非同期書き込み / Asynchronous writes
+    Exported         = 1u << 8,   // MNT_EXPORTED    — NFS エクスポート済み / Exported via NFS
+    Quarantine       = 1u << 10,  // MNT_QUARANTINE  — 隔離済み / Quarantined
+    Local            = 1u << 12,  // MNT_LOCAL       — ローカル FS / Local filesystem (not network)
+    Quota            = 1u << 13,  // MNT_QUOTA       — クォータ有効 / Disk quotas enabled
+    RootFs           = 1u << 14,  // MNT_ROOTFS      — ルート FS / Root filesystem
+    DontBrowse       = 1u << 20,  // MNT_DONTBROWSE  — Finder に非表示 / Hidden from Finder browsing
+    IgnoreOwnership  = 1u << 21,  // MNT_IGNORE_OWNERSHIP — 所有者無視 / Ignore file ownership
+    AutoMounted      = 1u << 22,  // MNT_AUTOMOUNTED — 自動マウント / Automounted
+    Journaled        = 1u << 23,  // MNT_JOURNALED   — ジャーナリング有効 / Journaling enabled
+    NoUserXattr      = 1u << 24,  // MNT_NOUSERXATTR — ユーザー拡張属性禁止 / No user extended attributes
+    DefWrite         = 1u << 25,  // MNT_DEFWRITE    — 遅延書き込み / Deferred writes
+    MultiLabel       = 1u << 26,  // MNT_MULTILABEL  — MAC マルチラベル / MAC multi-label
+    NoAtime          = 1u << 28,  // MNT_NOATIME     — atime 更新無効 / Do not update access times
+    Snapshot         = 1u << 30,  // MNT_SNAPSHOT    — APFS スナップショット / APFS snapshot mount
+}
+
+/// <summary>
+/// マウント済みファイルシステムの詳細情報 (statfs 構造体から取得)。
+/// <see cref="GetAll"/> でシステム上の全エントリを取得する。
+/// <para>
+/// Detailed information for a mounted file system (from the statfs structure).
+/// Use <see cref="GetAll"/> to retrieve all entries on the system.
+/// </para>
+/// </summary>
+public sealed record FileSystemInfo
 {
     /// <summary>マウントポイントのパス。例: "/"、"/Volumes/Storage"<br/>Mount point path. Example: "/", "/Volumes/Storage"</summary>
     public required string MountPoint { get; init; }
@@ -52,32 +86,14 @@ public sealed record FileSystemEntry
     /// <summary>空きファイルノード (inode) の数<br/>Number of free file nodes (inodes)</summary>
     public required ulong FreeFiles { get; init; }
 
-    /// <summary>マウントフラグのビットフィールド (MNT_RDONLY など)<br/>Mount flags bit field (e.g. MNT_RDONLY)</summary>
-    public required uint Flags { get; init; }
+    /// <summary>マウントフラグ (sys/mount.h の f_flags に対応)<br/>Mount flags corresponding to f_flags in sys/mount.h</summary>
+    public required MountFlags Flags { get; init; }
 
     /// <summary>ファイルシステムのサブタイプ識別子<br/>File system subtype identifier</summary>
     public required uint SubType { get; init; }
 
     /// <summary>ファイルシステムの所有者のユーザー ID<br/>User ID of the file system owner</summary>
     public required uint OwnerUid { get; init; }
-
-    /// <summary>読み取り専用でマウントされているかどうか<br/>Whether the file system is mounted read-only</summary>
-    public bool IsReadOnly => (Flags & MNT_RDONLY) != 0;
-
-    /// <summary>ローカルファイルシステムかどうか。false の場合はネットワークまたは仮想<br/>Whether the file system is local. False indicates network or virtual.</summary>
-    public bool IsLocal => (Flags & MNT_LOCAL) != 0;
-
-    /// <summary>
-    /// ユーザーから見えるボリュームかどうか。
-    /// ローカル FS のうち "/" (Macintosh HD) および "/Volumes/*" (隠しディレクトリ除外) のみ true。
-    /// "/System/Volumes/*" 等の APFS 内部ボリュームや "/Volumes/.timemachine" 等は false。
-    /// <para>
-    /// Whether this is a user-visible volume.
-    /// True only for local file systems mounted at "/" or "/Volumes/*" (excluding hidden directories).
-    /// False for APFS internal volumes such as /System/Volumes/* and hidden mounts like /Volumes/.timemachine.
-    /// </para>
-    /// </summary>
-    public required bool IsUserVisible { get; init; }
 
     /// <summary>
     /// DeviceName から物理ディスクの BSD 名を返す。
@@ -105,25 +121,22 @@ public sealed record FileSystemEntry
             return n > 0 ? string.Concat("disk", span[..n]) : null;
         }
     }
-}
 
-/// <summary>
-/// ファイルシステムの列挙ユーティリティ。
-/// <para>Utility class for enumerating file systems.</para>
-/// </summary>
-public static class FileSystemInfo
-{
+    //--------------------------------------------------------------------------------
+    // Factory
+    //--------------------------------------------------------------------------------
+
     /// <summary>
-    /// getfsstat(2) が返すすべてのマウント済みファイルシステムの詳細情報を返す。
+    /// getfsstat(2) が返すすべてのマウント済みファイルシステムの情報を返す。
     /// 仮想・ネットワーク・内部ボリュームを含む全エントリが対象。
-    /// ユーザーから見えるボリューム ("/" および "/Volumes/*") は <see cref="FileSystemEntry.IsUserVisible"/> が true。
+    /// ユーザーから見えるボリューム ("/" および "/Volumes/*") は <see cref="IsUserVisible"/> が true。
     /// <para>
-    /// Returns detailed information for all mounted file systems reported by getfsstat(2).
+    /// Returns information for all mounted file systems reported by getfsstat(2).
     /// Includes virtual, network, and internal volumes.
-    /// Entries visible to users ("/" and "/Volumes/*") have <see cref="FileSystemEntry.IsUserVisible"/> set to true.
+    /// Entries visible to users ("/" and "/Volumes/*") have <see cref="IsUserVisible"/> set to true.
     /// </para>
     /// </summary>
-    public static unsafe FileSystemEntry[] GetFileSystems()
+    public static unsafe FileSystemInfo[] GetAll()
     {
         var count = getfsstat(null, 0, MNT_NOWAIT);
         if (count <= 0)
@@ -142,19 +155,13 @@ public static class FileSystemInfo
             }
 
             var resultCount = Math.Min(actual, count);
-            var result = new FileSystemEntry[resultCount];
+            var result = new FileSystemInfo[resultCount];
 
             for (var i = 0; i < resultCount; i++)
             {
-                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty;
-                var isRoot = mountPoint == "/";
-                var isUserVolume = mountPoint.StartsWith("/Volumes/", StringComparison.Ordinal)
-                    && !mountPoint["/Volumes/".Length..].StartsWith(".", StringComparison.Ordinal);
-                var isUserVisible = (ptr[i].f_flags & MNT_LOCAL) != 0 && (isRoot || isUserVolume);
-
-                result[i] = new FileSystemEntry
+                result[i] = new FileSystemInfo
                 {
-                    MountPoint = mountPoint,
+                    MountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty,
                     TypeName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
                     DeviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty,
                     BlockSize = ptr[i].f_bsize,
@@ -164,10 +171,9 @@ public static class FileSystemInfo
                     AvailableBlocks = ptr[i].f_bavail,
                     TotalFiles = ptr[i].f_files,
                     FreeFiles = ptr[i].f_ffree,
-                    Flags = ptr[i].f_flags,
+                    Flags = (MountFlags)ptr[i].f_flags,
                     SubType = ptr[i].f_fssubtype,
                     OwnerUid = ptr[i].f_owner,
-                    IsUserVisible = isUserVisible,
                 };
             }
 

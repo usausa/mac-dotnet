@@ -156,39 +156,37 @@ Console.WriteLine($"  Encrypted:        {swap.IsEncrypted}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5. File Systems (GetFileSystems)
-// getfsstat(2) が返すすべてのマウント済みファイルシステム。
-// APFS 内部ボリューム (/System/Volumes/*) や devfs、autofs 等の仮想 FS を含む全エントリ。
-// GetDiskVolumes は本リストのサブセット ([V] でマーク)。
+// 5. File Systems (全属性表示 — isUserVisible の判定根拠分析用)
+// SubType, OwnerUid, Flags (raw hex + 個別ビット) をすべて表示して
+// フラグだけで isUserVisible を判定できるか確認する。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 5. File Systems (GetFileSystems) ###");
+Console.WriteLine("### 5. File Systems — Full Attributes ###");
 var fileSystems = PlatformProvider.GetFileSystems();
-var diskVolumes = fileSystems.Where(fs => fs.IsUserVisible).ToList();
-Console.WriteLine($"  Source : getfsstat(2) — 仮想・内部 FS を含む全マウント済みエントリ");
-Console.WriteLine($"  Total  : {fileSystems.Count} file systems  ({diskVolumes.Count} are user-visible volumes [V])");
+var diskVolumes = fileSystems.Where(fs => fs.Flags.HasFlag(MountFlags.Local) && !fs.Flags.HasFlag(MountFlags.DontBrowse)).ToList();
+Console.WriteLine($"  Total: {fileSystems.Count} file systems  ({diskVolumes.Count} user-visible [V])");
 Console.WriteLine();
 foreach (var fs in fileSystems)
 {
-    var marker = fs.IsUserVisible ? "[V]" : "   ";
+    var marker = fs.Flags.HasFlag(MountFlags.Local) && !fs.Flags.HasFlag(MountFlags.DontBrowse) ? "[V]" : "   ";
     Console.WriteLine($"  {marker} {fs.MountPoint} ({fs.TypeName})");
-    Console.WriteLine($"       Device:    {fs.DeviceName}");
-    Console.WriteLine($"       Local:     {fs.IsLocal}, ReadOnly: {fs.IsReadOnly}");
+    Console.WriteLine($"       Device   : {fs.DeviceName}");
+    Console.WriteLine($"       Flags    : 0x{(uint)fs.Flags:X8}  {fs.Flags}");
+    Console.WriteLine($"       SubType  : {fs.SubType}");
+    Console.WriteLine($"       OwnerUid : {fs.OwnerUid}");
+    Console.WriteLine($"       BlockSize: {fs.BlockSize}, IOSize: {fs.IOSize}");
     if (fs.TotalSize > 0)
     {
-        Console.WriteLine($"       Size:      {FormatBytes(fs.TotalSize)}, Available: {FormatBytes(fs.AvailableSize)} ({fs.UsagePercent:P1} used)");
+        Console.WriteLine($"       Size     : {FormatBytes(fs.TotalSize)}, Available: {FormatBytes(fs.AvailableSize)} ({fs.UsagePercent:P1} used)");
+        Console.WriteLine($"       Inodes   : {fs.TotalFiles} total, {fs.FreeFiles} free");
     }
 }
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 5a. Disk Volumes (GetDiskVolumes)
-// GetFileSystems のサブセット: "/" (Macintosh HD) と "/Volumes/*" のみ。
-// "/System/Volumes/*" 等の APFS 内部ボリュームや ".timemachine" 等の隠しディレクトリは除外。
-// Linux の /proc/mounts でマウント済みパーティションを列挙するのに相当する用途向け。
+// 5a. Disk Volumes (IsUserVisible == true のエントリ)
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 5a. Disk Volumes (GetDiskVolumes) ###");
-Console.WriteLine($"  Source : GetFileSystems のサブセット — \"/\" と \"/Volumes/*\" のみ (隠しディレクトリ除外)");
-Console.WriteLine($"  Total  : {diskVolumes.Count} of {fileSystems.Count} file systems");
+Console.WriteLine("### 5a. Disk Volumes (IsUserVisible) ###");
+Console.WriteLine($"  Total: {diskVolumes.Count} of {fileSystems.Count} file systems");
 Console.WriteLine();
 foreach (var vol in diskVolumes)
 {
@@ -198,7 +196,7 @@ foreach (var vol in diskVolumes)
     Console.WriteLine($"    Total:     {FormatBytes(usage.TotalSize)}");
     Console.WriteLine($"    Used:      {FormatBytes(usage.TotalSize - usage.AvailableSize)}  ({usage.UsagePercent:P1} used)");
     Console.WriteLine($"    Available: {FormatBytes(usage.AvailableSize)}");
-    Console.WriteLine($"    ReadOnly:  {vol.IsReadOnly}");
+    Console.WriteLine($"    ReadOnly:  {vol.Flags.HasFlag(MountFlags.ReadOnly)}");
 }
 Console.WriteLine();
 
