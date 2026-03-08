@@ -63,7 +63,7 @@ public static class PlatformProvider
     // Disk
     //--------------------------------------------------------------------------------
 
-    public static DiskStat GetDiskStats() => new();
+    public static DiskStat GetDiskStat() => new();
 
     //--------------------------------------------------------------------------------
     // Power

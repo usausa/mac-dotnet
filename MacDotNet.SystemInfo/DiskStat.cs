@@ -127,8 +127,7 @@ public sealed class DiskStat
                 continue;
             }
 
-            var rawParent = GetParentEntry(entry);
-            if (rawParent == 0)
+            if ((IORegistryEntryGetParentEntry(entry, "IOService", out var rawParent) != KERN_SUCCESS) || (rawParent == 0))
             {
                 continue;
             }
@@ -215,17 +214,6 @@ public sealed class DiskStat
         return new DiskDeviceStat(registryEntryId, bsdName, busType, isPhysical, isRemovable, diskSize, mediaName, vendorName, mediumType);
     }
 
-    // TODO
-
-    /// <summary>
-    /// IOMedia エントリの IOService プレーンにおける親エントリを返す。
-    /// 取得失敗時は 0 を返す。戻り値が非 0 の場合、呼び出し元が IOObjectRelease しなければならない。
-    /// </summary>
-    private static uint GetParentEntry(IOObj mediaEntry)
-    {
-        return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0 ? parent : 0;
-    }
-
     private static DiskBusType ParseBusType(string? busType) =>
         busType switch
         {
@@ -240,58 +228,57 @@ public sealed class DiskStat
             _ => DiskBusType.Unknown
         };
 
-    /// <summary>
-    /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
-    /// "Device Characteristics" 辞書中の製品名・ベンダー名・メディア種別と
-    /// "Protocol Characteristics" 辞書中のバス接続種別を返す。
-    /// entry 自体は呼び出し元が所有するため release しない。
-    /// </summary>
-    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(IOObj entry)
+    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(uint entry)
     {
-        uint currentRaw = entry;
-        var currentOwned = IOObj.Zero;
+        var busType = default(string);
+        var mediaName = default(string);
+        var vendorName = default(string);
+        var mediumType = default(string);
 
-        string? mediaName = null, vendorName = null, mediumType = null, busType = null;
-
-        for (var depth = 0; depth < 8; depth++)
+        var ioObj = IOObj.Zero;
+        try
         {
-            if (IORegistryEntryGetParentEntry(currentRaw, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+            for (var depth = 0; depth < 8; depth++)
             {
-                break;
-            }
-
-            currentOwned.Dispose();
-            currentOwned = new IOObj(parent);
-            currentRaw = parent;
-
-            if (busType is null)
-            {
-                using var protoCharacts = currentOwned.GetDictionary("Protocol Characteristics");
-                if (protoCharacts.IsValid)
+                if (IORegistryEntryGetParentEntry(entry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
                 {
-                    busType = protoCharacts.GetString("Physical Interconnect");
+                    break;
                 }
-            }
 
-            if (mediaName is null)
-            {
-                using var deviceCharacts = currentOwned.GetDictionary("Device Characteristics");
-                if (deviceCharacts.IsValid)
+                ioObj.Dispose();
+                ioObj = new IOObj(parent);
+                entry = parent;
+
+                if (busType is null)
                 {
-                    mediaName = deviceCharacts.GetString("Product Name");
-                    vendorName = deviceCharacts.GetString("Vendor Name");
-                    mediumType = deviceCharacts.GetString("Medium Type");
+                    using var protocol = ioObj.GetDictionary("Protocol Characteristics");
+                    if (protocol.IsValid)
+                    {
+                        busType = protocol.GetString("Physical Interconnect");
+                    }
                 }
-            }
 
-            // 両方取得できたら早期終了
-            if (mediaName is not null && busType is not null)
-            {
-                break;
+                if (mediaName is null)
+                {
+                    using var device = ioObj.GetDictionary("Device Characteristics");
+                    if (device.IsValid)
+                    {
+                        mediaName = device.GetString("Product Name");
+                        vendorName = device.GetString("Vendor Name");
+                        mediumType = device.GetString("Medium Type");
+                    }
+                }
+
+                if ((mediaName is not null) && (busType is not null))
+                {
+                    break;
+                }
             }
         }
-
-        currentOwned.Dispose();
+        finally
+        {
+            ioObj.Dispose();
+        }
 
         return (mediaName, vendorName, mediumType, busType);
     }
