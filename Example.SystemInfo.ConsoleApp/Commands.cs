@@ -16,24 +16,18 @@ public static class CommandBuilderExtensions
         commands.AddCommand<LoadCommand>();
         commands.AddCommand<MemoryCommand>();
         commands.AddCommand<SwapCommand>();
+        commands.AddCommand<DiskCommand>();
+        commands.AddCommand<FileSystemCommand>();
+        commands.AddCommand<NetworkCommand>();
         commands.AddCommand<ProcessCommand>();
-        commands.AddCommand<NetworkStatCommand>();
-        commands.AddCommand<DiskStatCommand>();
-        commands.AddCommand<PowerStatCommand>();
-        //commands.AddCommand<CpuCommand>();
-        //commands.AddCommand<CpuLoadCommand>();
-        //commands.AddCommand<FileSystemCommand>();
-        //commands.AddCommand<NetworkCommand>();
-        //commands.AddCommand<ProcessCommand>();
-        //commands.AddCommand<GpuCommand>();
+        commands.AddCommand<PowerCommand>();
         //commands.AddCommand<HardwareCommand>();
         //commands.AddCommand<KernelCommand>();
-        //commands.AddCommand<BatteryCommand>();
-        //commands.AddCommand<BatteryDetailCommand>();
+        //commands.AddCommand<ProcessCommand>();
+        //commands.AddCommand<CpuCommand>();
+        //commands.AddCommand<GpuCommand>();
         //commands.AddCommand<TemperatureCommand>();
         //commands.AddCommand<FanCommand>();
-        //commands.AddCommand<PowerCommand>();
-        //commands.AddCommand<AppleSiliconPowerCommand>();
         //commands.AddCommand<VoltageCommand>();
     }
 }
@@ -114,10 +108,92 @@ public sealed class SwapCommand : ICommandHandler
     {
         var swap = PlatformProvider.GetSwapUsage();
         var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
-        Console.WriteLine($"Total:            {FormatBytes(swap.TotalBytes)}");
-        Console.WriteLine($"Used:             {FormatBytes(swap.UsedBytes)}  ({usage:F1}%)");
-        Console.WriteLine($"Available:        {FormatBytes(swap.AvailableBytes)}");
-        Console.WriteLine($"Encrypted:        {swap.IsEncrypted}");
+        Console.WriteLine($"Total:     {FormatBytes(swap.TotalBytes)}");
+        Console.WriteLine($"Used:      {FormatBytes(swap.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Available: {FormatBytes(swap.AvailableBytes)}");
+        Console.WriteLine($"Encrypted: {swap.IsEncrypted}");
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
+        _ => $"{bytes} B"
+    };
+}
+
+//--------------------------------------------------------------------------------
+// Disk
+//--------------------------------------------------------------------------------
+[Command("disk", "Get disk stat")]
+public sealed class DiskCommand : ICommandHandler
+{
+    [Option<bool>("--all", "-a", Description = "All")]
+    public bool All { get; set; }
+
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var diskStats = PlatformProvider.GetDiskStat();
+        foreach (var d in diskStats.Devices.Where(x => All || x.IsPhysical))
+        {
+            var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
+            Console.WriteLine($"Device:          {deviceLabel}");
+            if (d.VendorName is not null)
+            {
+                Console.WriteLine($"Vendor:          {d.VendorName}");
+            }
+            if (d.MediumType is not null)
+            {
+                Console.WriteLine($"MediumType:      {d.MediumType}");
+            }
+            Console.WriteLine($"BusType:         {d.BusType}");
+            Console.WriteLine($"IsPhysical:      {d.IsPhysical}");
+            Console.WriteLine($"IsRemovable:     {d.IsRemovable}");
+            Console.WriteLine($"DiskSize:        {d.DiskSize}");
+            Console.WriteLine($"BytesRead:       {d.BytesRead}");
+            Console.WriteLine($"BytesWrite:      {d.BytesWrite}");
+            Console.WriteLine($"ReadsCompleted:  {d.ReadsCompleted}");
+            Console.WriteLine($"WritesCompleted: {d.WritesCompleted}");
+            Console.WriteLine($"ErrorsRead:      {d.ErrorsRead}");
+            Console.WriteLine($"ErrorsWrite:     {d.ErrorsWrite}");
+            Console.WriteLine();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+//--------------------------------------------------------------------------------
+// FileSystem
+//--------------------------------------------------------------------------------
+[Command("fs", "Get file system info")]
+public sealed class FileSystemCommand : ICommandHandler
+{
+    [Option<bool>("--all", "-a", Description = "All")]
+    public bool All { get; set; }
+
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var fileSystems = PlatformProvider.GetFileSystems(All);
+        foreach (var fs in fileSystems)
+        {
+            Console.WriteLine($"MountPoint:    {fs.MountPoint}");
+            Console.WriteLine($"DeviceName:    {fs.DeviceName}");
+            Console.WriteLine($"FileSystem:    {fs.FileSystem}");
+            Console.WriteLine($"Option:        {fs.Option}");
+            Console.WriteLine($"BlockSize:     {fs.BlockSize}");
+            Console.WriteLine($"IOSize:        {fs.IOSize}");
+            Console.WriteLine($"TotalSize:     {FormatBytes(fs.TotalSize)}");
+            Console.WriteLine($"FreeSize:      {FormatBytes(fs.FreeSize)}");
+            Console.WriteLine($"AvailableSize: {FormatBytes(fs.AvailableSize)}");
+            Console.WriteLine($"TotalFiles:    {fs.TotalFiles}");
+            Console.WriteLine($"FreeFiles:     {fs.FreeFiles}");
+            Console.WriteLine();
+        }
 
         return ValueTask.CompletedTask;
     }
@@ -149,15 +225,18 @@ public sealed class ProcessCommand : ICommandHandler
 }
 
 //--------------------------------------------------------------------------------
-// NetworkStat
+// Network
 //--------------------------------------------------------------------------------
 [Command("network", "Get network stat")]
-public sealed class NetworkStatCommand : ICommandHandler
+public sealed class NetworkCommand : ICommandHandler
 {
+    [Option<bool>("--all", "-a", Description = "All")]
+    public bool All { get; set; }
+
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var network = PlatformProvider.GetNetworkStat();
-        foreach (var nif in network.Interfaces.Where(static x => x.IsRegistered && !x.IsHidden && x.IsEnabled))
+        var network = PlatformProvider.GetNetworkStat(All);
+        foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
         {
             var name = nif.DisplayName is not null ? $"{nif.Name} {nif.DisplayName}" : nif.Name;
             Console.WriteLine($"Interface:    {name} ({nif.InterfaceType})");
@@ -180,53 +259,10 @@ public sealed class NetworkStatCommand : ICommandHandler
 }
 
 //--------------------------------------------------------------------------------
-// DiskStat
+// Power
 //--------------------------------------------------------------------------------
-[Command("disk", "Get disk I/O stat")]
-public sealed class DiskStatCommand : ICommandHandler
-{
-    [Option<bool>("--all", "-a", Description = "All")]
-    public bool All { get; set; }
-
-    public ValueTask ExecuteAsync(CommandContext context)
-    {
-        var diskStats = PlatformProvider.GetDiskStat();
-        foreach (var d in diskStats.Devices.Where(x => All || x.IsPhysical))
-        {
-            var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
-            Console.WriteLine($"Device:          {deviceLabel}");
-            if (d.VendorName is not null)
-            {
-                Console.WriteLine($"Vendor:          {d.VendorName}");
-            }
-
-            if (d.MediumType is not null)
-            {
-                Console.WriteLine($"MediumType:      {d.MediumType}");
-            }
-
-            Console.WriteLine($"BusType:         {d.BusType}");
-            Console.WriteLine($"IsPhysical:      {d.IsPhysical}");
-            Console.WriteLine($"IsRemovable:     {d.IsRemovable}");
-            Console.WriteLine($"DiskSize:        {d.DiskSize}");
-            Console.WriteLine($"BytesRead:       {d.BytesRead}");
-            Console.WriteLine($"BytesWrite:      {d.BytesWrite}");
-            Console.WriteLine($"ReadsCompleted:  {d.ReadsCompleted}");
-            Console.WriteLine($"WritesCompleted: {d.WritesCompleted}");
-            Console.WriteLine($"ErrorsRead:      {d.ErrorsRead}");
-            Console.WriteLine($"ErrorsWrite:     {d.ErrorsWrite}");
-            Console.WriteLine();
-        }
-
-        return ValueTask.CompletedTask;
-    }
-}
-
-//--------------------------------------------------------------------------------
-// PowerStat
-//--------------------------------------------------------------------------------
-[Command("power", "Get Apple Silicon power info (IOReport)")]
-public sealed class PowerStatCommand : ICommandHandler
+[Command("power", "Get power info")]
+public sealed class PowerCommand : ICommandHandler
 {
     public async ValueTask ExecuteAsync(CommandContext context)
     {
@@ -301,89 +337,6 @@ public sealed class PowerStatCommand : ICommandHandler
 //        Console.WriteLine($"1 min:  {load.Average1:F2}");
 //        Console.WriteLine($"5 min:  {load.Average5:F2}");
 //        Console.WriteLine($"15 min: {load.Average15:F2}");
-
-//        return ValueTask.CompletedTask;
-//    }
-//}
-
-//// FileSystem
-//[Command("fs", "File System Info")]
-//public sealed class FileSystemCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var entries = PlatformProvider.GetFileSystems();
-//        if (entries.Count == 0)
-//        {
-//            Console.WriteLine("No file systems found.");
-//            return ValueTask.CompletedTask;
-//        }
-
-
-
-//        foreach (var fs in entries)
-//        {
-//            Console.WriteLine($"Mount Point:    {fs.MountPoint}");
-//            Console.WriteLine($"Device:         {fs.DeviceName}");
-//            Console.WriteLine($"Type:           {fs.TypeName}");
-//            Console.WriteLine($"Total Size:     {FormatBytes(fs.TotalSize)}");
-//            Console.WriteLine($"Free Size:      {FormatBytes(fs.FreeSize)}");
-//            Console.WriteLine($"Usage:          {fs.UsagePercent:F1}%");
-//            Console.WriteLine($"Read Only:      {fs.IsReadOnly}");
-//            Console.WriteLine();
-//        }
-
-//        return ValueTask.CompletedTask;
-//    }
-
-//    private static string FormatBytes(ulong bytes) => bytes switch
-//    {
-//        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-//        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-//        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-//        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-//        _ => $"{bytes} B"
-//    };
-//}
-
-//// Network
-//[Command("network", "Network Info")]
-//public sealed class NetworkCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var interfaces = PlatformProvider.GetNetworkInterfaces();
-//        if (interfaces.Count == 0)
-//        {
-//            Console.WriteLine("No network interfaces found.");
-//            return ValueTask.CompletedTask;
-//        }
-
-//        foreach (var iface in interfaces)
-//        {
-//            Console.WriteLine($"=== {iface.Name} ({iface.InterfaceTypeName}) ===");
-//            Console.WriteLine($"  State:           {iface.State}");
-//            if (iface.MacAddress is not null)
-//            {
-//                Console.WriteLine($"  MAC Address:     {iface.MacAddress}");
-//            }
-
-//            Console.WriteLine($"  MTU:             {iface.Mtu}");
-
-//            foreach (var addr in iface.IPv4Addresses)
-//            {
-//                Console.WriteLine($"  IPv4:            {addr.Address}/{addr.PrefixLength}");
-//            }
-
-//            foreach (var addr in iface.IPv6Addresses)
-//            {
-//                Console.WriteLine($"  IPv6:            {addr.Address}/{addr.PrefixLength}");
-//            }
-
-//            Console.WriteLine($"  Rx Bytes:        {iface.RxBytes:N0}");
-//            Console.WriteLine($"  Tx Bytes:        {iface.TxBytes:N0}");
-//            Console.WriteLine();
-//        }
 
 //        return ValueTask.CompletedTask;
 //    }
@@ -576,44 +529,6 @@ public sealed class PowerStatCommand : ICommandHandler
 //        return ValueTask.CompletedTask;
 //    }
 
-//}
-
-//// Battery
-//[Command("battery", "Battery Info")]
-//public sealed class BatteryCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var battery = PlatformProvider.GetBattery();
-//        if (!battery.Supported)
-//        {
-//            Console.WriteLine("No battery found.");
-//            return ValueTask.CompletedTask;
-//        }
-
-//        Console.WriteLine("=== Battery ===");
-//        Console.WriteLine($"Name:                  {battery.Name}");
-//        Console.WriteLine($"Type:                  {battery.Type}");
-//        Console.WriteLine($"Is Present:            {battery.IsPresent}");
-//        Console.WriteLine($"Power Source State:    {battery.PowerSourceState}");
-//        Console.WriteLine($"Is Charging:           {battery.IsCharging}");
-//        Console.WriteLine($"Is Charged:            {battery.IsCharged}");
-//        Console.WriteLine($"Current Capacity:      {battery.CurrentCapacity}");
-//        Console.WriteLine($"Max Capacity:          {battery.MaxCapacity}");
-//        Console.WriteLine($"Battery Percent:       {battery.BatteryPercent}%");
-//        Console.WriteLine($"Time to Empty:         {FormatMinutes(battery.TimeToEmpty)}");
-//        Console.WriteLine($"Time to Full Charge:   {FormatMinutes(battery.TimeToFullCharge)}");
-//        Console.WriteLine($"Battery Health:        {battery.BatteryHealth ?? "N/A"}");
-//        Console.WriteLine($"Design Cycle Count:    {(battery.DesignCycleCount >= 0 ? battery.DesignCycleCount.ToString(CultureInfo.InvariantCulture) : "N/A")}");
-
-//        return ValueTask.CompletedTask;
-//    }
-
-//    private static string FormatMinutes(int minutes) => minutes switch
-//    {
-//        -1 => "Unknown",
-//        _ => $"{minutes} min"
-//    };
 //}
 
 //// Temperature

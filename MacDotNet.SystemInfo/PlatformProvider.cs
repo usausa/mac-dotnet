@@ -35,8 +35,7 @@ public static class PlatformProvider
 
     public static DiskStat GetDiskStat(bool includeAll = false) => new(includeAll);
 
-    // TODO ?
-    //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
+    public static IReadOnlyList<FileSystemInfo> GetFileSystems(bool includeAll = false) => FileSystemInfo.GetFileSystems(includeAll);
 
     public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
 

@@ -12,13 +12,17 @@ public enum MountOption
     Synchronous = 1 << 1,
     NoExec = 1 << 2,
     NoSuid = 1 << 3,
+    NoDevice = 1 << 4,
     Union = 1 << 5,
     Async = 1 << 6,
+    ContentProtection = 1 << 7,
     Exported = 1 << 8,
+    Removable = 1 << 9,
     Quarantine = 1 << 10,
     Local = 1 << 12,
     Quota = 1 << 13,
     RootFs = 1 << 14,
+    DoVolumeFs = 1 << 15,
     DontBrowse = 1 << 20,
     IgnoreOwnership = 1 << 21,
     AutoMounted = 1 << 22,
@@ -64,7 +68,7 @@ public sealed record FileSystemInfo
 
     public required ulong FreeFiles { get; init; }
 
-    public required MountOption Flags { get; init; }
+    public required MountOption Option { get; init; }
 
     public required uint SubType { get; init; }
 
@@ -91,11 +95,17 @@ public sealed record FileSystemInfo
                 return [];
             }
 
-            var resultCount = Math.Min(actual, count);
-            var result = new FileSystemInfo[resultCount];
-            for (var i = 0; i < resultCount; i++)
+            count = Math.Min(actual, count);
+            var result = new List<FileSystemInfo>(count);
+            for (var i = 0; i < count; i++)
             {
-                result[i] = new FileSystemInfo
+                var option = (MountOption)ptr[i].f_flags;
+                if (!includeAll && !(option.HasFlag(MountOption.Local) && !option.HasFlag(MountOption.DontBrowse)))
+                {
+                    continue;
+                }
+
+                result.Add(new FileSystemInfo
                 {
                     MountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty,
                     FileSystem = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
@@ -107,10 +117,10 @@ public sealed record FileSystemInfo
                     AvailableBlocks = ptr[i].f_bavail,
                     TotalFiles = ptr[i].f_files,
                     FreeFiles = ptr[i].f_ffree,
-                    Flags = (MountOption)ptr[i].f_flags,
+                    Option = option,
                     SubType = ptr[i].f_fssubtype,
                     OwnerUid = ptr[i].f_owner
-                };
+                });
             }
 
             return result;
