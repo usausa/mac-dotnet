@@ -322,6 +322,6 @@ public sealed class HardwareInfo
 
         using var key = CFRef.CreateString("IOPlatformSerialNumber");
         using var value = new CFRef(IORegistryEntryCreateCFProperty(service, key, IntPtr.Zero, 0));
-        return value.IsValid ? value.ToManagedString() : null;
+        return value.IsValid ? value.GetString() : null;
     }
 }

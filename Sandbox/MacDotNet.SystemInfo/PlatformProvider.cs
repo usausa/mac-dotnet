@@ -7,17 +7,17 @@ public static class PlatformProvider
     // System
     //--------------------------------------------------------------------------------
 
-    //public static HardwareInfo GetHardware() => HardwareInfo.Create();
+    public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
-    //public static KernelInfo GetKernel() => KernelInfo.Create();
+    public static KernelInfo GetKernel() => KernelInfo.Create();
 
-    //public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
+    public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
 
     //--------------------------------------------------------------------------------
-    // Load
+    // CPU
     //--------------------------------------------------------------------------------
 
-    //public static CpuUsage GetCpuUsageStat() => CpuUsage.Create();
+    public static CpuStat GetCpuStat() => CpuStat.Create();
 
     //--------------------------------------------------------------------------------
     // Memory
@@ -25,13 +25,15 @@ public static class PlatformProvider
 
     public static MemoryStat GetMemoryStat() => new();
 
-    public static SwapUsage GetSwapUsage() => new();
+    public static SwapUsage GetSwapStat() => new();
 
     //--------------------------------------------------------------------------------
     // Storage
     //--------------------------------------------------------------------------------
 
-    //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
+    public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
+
+    public static IReadOnlyList<DiskVolume> GetDiskVolumes() => FileSystemInfo.GetDiskVolumes();
 
     public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
 
@@ -39,7 +41,9 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    public static NetworkStat GetNetworkStat() => new();
+    public static IReadOnlyList<NetworkInterfaceEntry> GetNetworkInterfaces(bool includeAll = false) => NetworkInfo.GetNetworkInterfaces(includeAll);
+
+    public static NetworkStat GetNetworkStats() => new();
 
     //--------------------------------------------------------------------------------
     // Process
@@ -47,13 +51,15 @@ public static class PlatformProvider
 
     public static ProcessSummary GetProcessSummary() => new();
 
-    //public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
+    public static ProcessInfo[] GetProcesses() => ProcessInfo.GetProcesses();
 
     //--------------------------------------------------------------------------------
     // GPU
     //--------------------------------------------------------------------------------
 
-    //public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
+    public static GpuInfo[] GetGpuInfos() => HardwareInfo.GetGpus();
+
+    public static GpuDevice[] GetGpuDevices() => GpuDevice.GetDevices();
 
     //--------------------------------------------------------------------------------
     // Disk
@@ -62,28 +68,20 @@ public static class PlatformProvider
     public static DiskStats GetDiskStats() => new();
 
     //--------------------------------------------------------------------------------
-    // Power
+    // Power / Battery
     //--------------------------------------------------------------------------------
 
-    public static PowerStat GetPowerStat() => new();
+    public static Battery GetBattery() => new();
 
-    //public static Battery GetBattery() => new();
+    public static BatteryDetail GetBatteryDetail() => BatteryDetail.Create();
 
-    //public static BatteryDetail GetBatteryDetail() => BatteryDetail.Create();
+    public static BatteryGeneric GetBatteryGeneric() => BatteryGeneric.Create();
 
-    //public static AppleSiliconPower GetAppleSiliconPower() => AppleSiliconPower.Create();
+    public static AppleSiliconEnergyCounter GetAppleSiliconEnergyCounter() => AppleSiliconEnergyCounter.Create();
 
     //--------------------------------------------------------------------------------
     // Sensor
     //--------------------------------------------------------------------------------
 
-    //public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
-
-    //public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
-
-    //public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
-
-    //public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
-
-    //public static double? GetTotalSystemPower() => SmcInfo.GetTotalSystemPower();
+    public static HardwareMonitor? GetHardwareMonitor() => HardwareMonitor.Create();
 }
