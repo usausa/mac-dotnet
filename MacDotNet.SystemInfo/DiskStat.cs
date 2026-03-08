@@ -5,19 +5,22 @@ using static MacDotNet.SystemInfo.NativeMethods;
 public enum DiskBusType
 {
     Unknown,
+    VirtualInterface,
+    AppleFabric,
     Sata,
     PciExpress,
     Usb,
     Thunderbolt,
     FireWire,
     Sas,
-    Sd,
-    AppleFabric
+    Sd
 }
 
 public sealed class DiskDeviceStat
 {
     internal bool Live { get; set; }
+
+    internal bool Target { get; set; }
 
     internal ulong RegistryEntryId { get; }
 
@@ -83,18 +86,23 @@ public sealed class DiskDeviceStat
 
 public sealed class DiskStat
 {
+    private readonly bool includeAll;
+
     private readonly List<DiskDeviceStat> devices = new();
+
+    private readonly List<DiskDeviceStat> filteredDevices = new();
 
     public DateTime UpdateAt { get; private set; }
 
-    public IReadOnlyList<DiskDeviceStat> Devices => devices;
+    public IReadOnlyList<DiskDeviceStat> Devices => includeAll ? devices : filteredDevices;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal DiskStat()
+    internal DiskStat(bool includeAll = false)
     {
+        this.includeAll = includeAll;
         Update();
     }
 
@@ -117,6 +125,8 @@ public sealed class DiskStat
         }
 
         var added = false;
+        var filterAdded = false;
+
         uint rawEntry;
         using var it = new IORef(itPtr);
         while ((rawEntry = IOIteratorNext(it)) != 0)
@@ -151,18 +161,35 @@ public sealed class DiskStat
             if (device is null)
             {
                 device = CreateEntry(entryId, entry, parent);
+                device.Target = includeAll || (device.IsPhysical && (device.BusType != DiskBusType.VirtualInterface));
+
                 devices.Add(device);
                 added = true;
+
+                if (!includeAll && device.Target)
+                {
+                    filteredDevices.Add(device);
+                    filterAdded = true;
+                }
+            }
+
+            if (device.Target)
+            {
+                ReadStatistics(parent, device);
             }
 
             device.Live = true;
-            ReadStatistics(parent, device);
         }
 
         for (var i = devices.Count - 1; i >= 0; i--)
         {
-            if (!devices[i].Live)
+            var device = devices[i];
+            if (!device.Live)
             {
+                if (device.Target)
+                {
+                    filteredDevices.Remove(device);
+                }
                 devices.RemoveAt(i);
             }
         }
@@ -170,6 +197,10 @@ public sealed class DiskStat
         if (added)
         {
             devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            if (filterAdded)
+            {
+                filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            }
         }
 
         UpdateAt = DateTime.Now;
@@ -217,6 +248,8 @@ public sealed class DiskStat
     private static DiskBusType ParseBusType(string? busType) =>
         busType switch
         {
+            "Virtual Interface" => DiskBusType.VirtualInterface,
+            "Apple Fabric" => DiskBusType.AppleFabric,
             "SATA" => DiskBusType.Sata,
             "PCI-Express" => DiskBusType.PciExpress,
             "USB" => DiskBusType.Usb,
@@ -224,7 +257,6 @@ public sealed class DiskStat
             "FireWire" => DiskBusType.FireWire,
             "SAS" => DiskBusType.Sas,
             "SD" => DiskBusType.Sd,
-            "Apple Fabric" => DiskBusType.AppleFabric,
             _ => DiskBusType.Unknown
         };
 

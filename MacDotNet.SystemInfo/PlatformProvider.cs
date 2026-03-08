@@ -33,7 +33,7 @@ public static class PlatformProvider
     // Storage
     //--------------------------------------------------------------------------------
 
-    public static DiskStat GetDiskStat() => new();
+    public static DiskStat GetDiskStat(bool includeAll = false) => new(includeAll);
 
     // TODO ?
     //public static IReadOnlyList<FileSystemEntry> GetFileSystems() => FileSystemInfo.GetFileSystems();
@@ -44,7 +44,7 @@ public static class PlatformProvider
     // Network
     //--------------------------------------------------------------------------------
 
-    public static NetworkStat GetNetworkStat() => new();
+    public static NetworkStat GetNetworkStat(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Process

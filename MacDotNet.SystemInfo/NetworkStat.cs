@@ -20,6 +20,8 @@ public sealed class NetworkStatEntry
 {
     internal bool Live { get; set; }
 
+    internal bool Target { get; set; }
+
     // Interface
 
     public string Name { get; }
@@ -64,18 +66,23 @@ public sealed class NetworkStatEntry
 
 public sealed class NetworkStat
 {
+    private readonly bool includeAll;
+
     private readonly List<NetworkStatEntry> interfaces = new();
+
+    private readonly List<NetworkStatEntry> filteredInterfaces = new();
 
     public DateTime UpdateAt { get; private set; }
 
-    public IReadOnlyList<NetworkStatEntry> Interfaces => interfaces;
+    public IReadOnlyList<NetworkStatEntry> Interfaces => includeAll ? interfaces : filteredInterfaces;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal NetworkStat()
+    internal NetworkStat(bool includeAll = false)
     {
+        this.includeAll = includeAll;
         Update();
     }
 
@@ -98,6 +105,7 @@ public sealed class NetworkStat
         try
         {
             var added = false;
+            var filterAdded = false;
 
             for (var ifa = (ifaddrs*)ifap; ifa != null; ifa = (ifaddrs*)ifa->ifa_next)
             {
@@ -123,29 +131,46 @@ public sealed class NetworkStat
                     if (iface is null)
                     {
                         iface = CreateEntry(name);
+                        iface.Target = includeAll || (iface.IsRegistered && !iface.IsHidden);
+
                         interfaces.Add(iface);
                         added = true;
+
+                        if (!includeAll && iface.Target)
+                        {
+                            filteredInterfaces.Add(iface);
+                            filterAdded = true;
+                        }
+                    }
+
+                    if (iface.Target)
+                    {
+                        iface.RxBytes = raw.ifi_ibytes;
+                        iface.RxPackets = raw.ifi_ipackets;
+                        iface.RxErrors = raw.ifi_ierrors;
+                        iface.RxDrops = raw.ifi_iqdrops;
+                        iface.RxMulticast = raw.ifi_imcasts;
+                        iface.TxBytes = raw.ifi_obytes;
+                        iface.TxPackets = raw.ifi_opackets;
+                        iface.TxErrors = raw.ifi_oerrors;
+                        iface.TxMulticast = raw.ifi_omcasts;
+                        iface.Collisions = raw.ifi_collisions;
+                        iface.NoProto = raw.ifi_noproto;
                     }
 
                     iface.Live = true;
-                    iface.RxBytes = raw.ifi_ibytes;
-                    iface.RxPackets = raw.ifi_ipackets;
-                    iface.RxErrors = raw.ifi_ierrors;
-                    iface.RxDrops = raw.ifi_iqdrops;
-                    iface.RxMulticast = raw.ifi_imcasts;
-                    iface.TxBytes = raw.ifi_obytes;
-                    iface.TxPackets = raw.ifi_opackets;
-                    iface.TxErrors = raw.ifi_oerrors;
-                    iface.TxMulticast = raw.ifi_omcasts;
-                    iface.Collisions = raw.ifi_collisions;
-                    iface.NoProto = raw.ifi_noproto;
                 }
             }
 
             for (var i = interfaces.Count - 1; i >= 0; i--)
             {
-                if (!interfaces[i].Live)
+                var iface = interfaces[i];
+                if (!iface.Live)
                 {
+                    if (iface.Target)
+                    {
+                        filteredInterfaces.Remove(iface);
+                    }
                     interfaces.RemoveAt(i);
                 }
             }
@@ -153,6 +178,10 @@ public sealed class NetworkStat
             if (added)
             {
                 interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                if (filterAdded)
+                {
+                    filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                }
             }
 
             RefreshEnabledState();
