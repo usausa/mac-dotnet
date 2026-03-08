@@ -63,7 +63,7 @@ public static class PlatformProvider
     // Disk
     //--------------------------------------------------------------------------------
 
-    public static DiskStats GetDiskStats(bool includeAll = false) => new(includeAll);
+    public static DiskStat GetDiskStats(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Power / Battery

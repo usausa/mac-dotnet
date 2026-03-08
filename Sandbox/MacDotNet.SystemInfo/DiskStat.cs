@@ -4,16 +4,16 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public enum DiskBusType
 {
-    Unknown,            // バス種別文字列は取得できたが ParseBusType が未対応、または取得できなかった
-    VirtualInterface,   // Disk Image 等の仮想インターフェース
+    Unknown,
+    VirtualInterface,
+    AppleFabric,
     Sata,
     PciExpress,
     Usb,
     Thunderbolt,
     FireWire,
     Sas,
-    Sd,
-    AppleFabric
+    Sd
 }
 
 public sealed class DiskDeviceStat
@@ -84,11 +84,11 @@ public sealed class DiskDeviceStat
     }
 }
 
-public sealed class DiskStats
+public sealed class DiskStat
 {
-    private readonly List<DiskDeviceStat> devices = new();
-
     private readonly bool includeAll;
+
+    private readonly List<DiskDeviceStat> devices = new();
 
     private readonly List<DiskDeviceStat> filteredDevices = new();
 
@@ -100,7 +100,7 @@ public sealed class DiskStats
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal DiskStats(bool includeAll = false)
+    internal DiskStat(bool includeAll = false)
     {
         this.includeAll = includeAll;
         Update();
@@ -125,6 +125,8 @@ public sealed class DiskStats
         }
 
         var added = false;
+        var filterAdded = false;
+
         uint rawEntry;
         using var it = new IORef(itPtr);
         while ((rawEntry = IOIteratorNext(it)) != 0)
@@ -135,7 +137,7 @@ public sealed class DiskStats
                 continue;
             }
 
-            if (IORegistryEntryGetParentEntry(entry, "IOService", out var rawParent) != KERN_SUCCESS || rawParent == 0)
+            if ((IORegistryEntryGetParentEntry(entry, "IOService", out var rawParent) != KERN_SUCCESS) || (rawParent == 0))
             {
                 continue;
             }
@@ -159,29 +161,34 @@ public sealed class DiskStats
             if (device is null)
             {
                 device = CreateEntry(entryId, entry, parent);
+                device.Target = includeAll || (device.IsPhysical && (device.BusType != DiskBusType.VirtualInterface));
+
                 devices.Add(device);
-                device.Target = includeAll || (device.IsPhysical && device.BusType != DiskBusType.VirtualInterface);
-                if (device.Target)
+                added = true;
+
+                if (!includeAll && device.Target)
                 {
                     filteredDevices.Add(device);
+                    filterAdded = true;
                 }
-                added = true;
             }
 
-            device.Live = true;
             if (device.Target)
             {
                 ReadStatistics(parent, device);
             }
+
+            device.Live = true;
         }
 
         for (var i = devices.Count - 1; i >= 0; i--)
         {
-            if (!devices[i].Live)
+            var device = devices[i];
+            if (!device.Live)
             {
-                if (devices[i].Target)
+                if (device.Target)
                 {
-                    filteredDevices.Remove(devices[i]);
+                    filteredDevices.Remove(device);
                 }
                 devices.RemoveAt(i);
             }
@@ -190,7 +197,10 @@ public sealed class DiskStats
         if (added)
         {
             devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
-            filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            if (filterAdded)
+            {
+                filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            }
         }
 
         UpdateAt = DateTime.Now;
@@ -238,8 +248,8 @@ public sealed class DiskStats
     private static DiskBusType ParseBusType(string? busType) =>
         busType switch
         {
-            null => DiskBusType.Unknown,
             "Virtual Interface" => DiskBusType.VirtualInterface,
+            "Apple Fabric" => DiskBusType.AppleFabric,
             "SATA" => DiskBusType.Sata,
             "PCI-Express" => DiskBusType.PciExpress,
             "USB" => DiskBusType.Usb,
@@ -247,62 +257,60 @@ public sealed class DiskStats
             "FireWire" => DiskBusType.FireWire,
             "SAS" => DiskBusType.Sas,
             "SD" => DiskBusType.Sd,
-            "Apple Fabric" => DiskBusType.AppleFabric,
             _ => DiskBusType.Unknown
         };
 
-    /// <summary>
-    /// IOKit エントリの祖先を IOService プレーンで上方向に辿り、
-    /// "Device Characteristics" 辞書中の製品名・ベンダー名・メディア種別と
-    /// "Protocol Characteristics" 辞書中のバス接続種別を返す。
-    /// entry 自体は呼び出し元が所有するため release しない。
-    /// </summary>
-    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(IOObj entry)
+    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(uint entry)
     {
-        uint currentRaw = entry;
-        var currentOwned = IOObj.Zero;
+        var busType = default(string);
+        var mediaName = default(string);
+        var vendorName = default(string);
+        var mediumType = default(string);
 
-        string? mediaName = null, vendorName = null, mediumType = null, busType = null;
-
-        for (var depth = 0; depth < 8; depth++)
+        var ioObj = IOObj.Zero;
+        try
         {
-            if (IORegistryEntryGetParentEntry(currentRaw, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+            for (var depth = 0; depth < 8; depth++)
             {
-                break;
-            }
-
-            currentOwned.Dispose();
-            currentOwned = new IOObj(parent);
-            currentRaw = parent;
-
-            if (busType is null)
-            {
-                using var protoCharacts = currentOwned.GetDictionary("Protocol Characteristics");
-                if (protoCharacts.IsValid)
+                if (IORegistryEntryGetParentEntry(entry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
                 {
-                    busType = protoCharacts.GetString("Physical Interconnect");
+                    break;
                 }
-            }
 
-            if (mediaName is null)
-            {
-                using var deviceCharacts = currentOwned.GetDictionary("Device Characteristics");
-                if (deviceCharacts.IsValid)
+                ioObj.Dispose();
+                ioObj = new IOObj(parent);
+                entry = parent;
+
+                if (busType is null)
                 {
-                    mediaName = deviceCharacts.GetString("Product Name");
-                    vendorName = deviceCharacts.GetString("Vendor Name");
-                    mediumType = deviceCharacts.GetString("Medium Type");
+                    using var protocol = ioObj.GetDictionary("Protocol Characteristics");
+                    if (protocol.IsValid)
+                    {
+                        busType = protocol.GetString("Physical Interconnect");
+                    }
                 }
-            }
 
-            // 両方取得できたら早期終了
-            if (mediaName is not null && busType is not null)
-            {
-                break;
+                if (mediaName is null)
+                {
+                    using var device = ioObj.GetDictionary("Device Characteristics");
+                    if (device.IsValid)
+                    {
+                        mediaName = device.GetString("Product Name");
+                        vendorName = device.GetString("Vendor Name");
+                        mediumType = device.GetString("Medium Type");
+                    }
+                }
+
+                if ((mediaName is not null) && (busType is not null))
+                {
+                    break;
+                }
             }
         }
-
-        currentOwned.Dispose();
+        finally
+        {
+            ioObj.Dispose();
+        }
 
         return (mediaName, vendorName, mediumType, busType);
     }

@@ -66,9 +66,9 @@ public sealed class NetworkStatEntry
 
 public sealed class NetworkStat
 {
-    private readonly List<NetworkStatEntry> interfaces = new();
-
     private readonly bool includeAll;
+
+    private readonly List<NetworkStatEntry> interfaces = new();
 
     private readonly List<NetworkStatEntry> filteredInterfaces = new();
 
@@ -105,6 +105,7 @@ public sealed class NetworkStat
         try
         {
             var added = false;
+            var filterAdded = false;
 
             for (var ifa = (ifaddrs*)ifap; ifa != null; ifa = (ifaddrs*)ifa->ifa_next)
             {
@@ -130,16 +131,18 @@ public sealed class NetworkStat
                     if (iface is null)
                     {
                         iface = CreateEntry(name);
-                        interfaces.Add(iface);
                         iface.Target = includeAll || (iface.IsRegistered && !iface.IsHidden);
-                        if (iface.Target)
+
+                        interfaces.Add(iface);
+                        added = true;
+
+                        if (!includeAll && iface.Target)
                         {
                             filteredInterfaces.Add(iface);
+                            filterAdded = true;
                         }
-                        added = true;
                     }
 
-                    iface.Live = true;
                     if (iface.Target)
                     {
                         iface.RxBytes = raw.ifi_ibytes;
@@ -154,16 +157,19 @@ public sealed class NetworkStat
                         iface.Collisions = raw.ifi_collisions;
                         iface.NoProto = raw.ifi_noproto;
                     }
+
+                    iface.Live = true;
                 }
             }
 
             for (var i = interfaces.Count - 1; i >= 0; i--)
             {
-                if (!interfaces[i].Live)
+                var iface = interfaces[i];
+                if (!iface.Live)
                 {
-                    if (interfaces[i].Target)
+                    if (iface.Target)
                     {
-                        filteredInterfaces.Remove(interfaces[i]);
+                        filteredInterfaces.Remove(iface);
                     }
                     interfaces.RemoveAt(i);
                 }
@@ -172,7 +178,10 @@ public sealed class NetworkStat
             if (added)
             {
                 interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
-                filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                if (filterAdded)
+                {
+                    filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                }
             }
 
             RefreshEnabledState();
