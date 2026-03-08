@@ -194,21 +194,21 @@ public sealed class GpuDevice
         {
             try
             {
-                DeviceUtilization = GetIokitDictNumber(perfDict, "Device Utilization %");
-                RendererUtilization = GetIokitDictNumber(perfDict, "Renderer Utilization %");
-                TilerUtilization = GetIokitDictNumber(perfDict, "Tiler Utilization %");
-                AllocSystemMemory = GetIokitDictNumber(perfDict, "Alloc system memory");
-                InUseSystemMemory = GetIokitDictNumber(perfDict, "In use system memory");
-                InUseSystemMemoryDriver = GetIokitDictNumber(perfDict, "In use system memory (driver)");
-                TiledSceneBytes = GetIokitDictNumber(perfDict, "TiledSceneBytes");
-                AllocatedPBSize = GetIokitDictNumber(perfDict, "Allocated PB Size");
-                RecoveryCount = GetIokitDictNumber(perfDict, "recoveryCount");
-                SplitSceneCount = GetIokitDictNumber(perfDict, "SplitSceneCount");
+                DeviceUtilization = GetIokitDictInt64(perfDict, "Device Utilization %");
+                RendererUtilization = GetIokitDictInt64(perfDict, "Renderer Utilization %");
+                TilerUtilization = GetIokitDictInt64(perfDict, "Tiler Utilization %");
+                AllocSystemMemory = GetIokitDictInt64(perfDict, "Alloc system memory");
+                InUseSystemMemory = GetIokitDictInt64(perfDict, "In use system memory");
+                InUseSystemMemoryDriver = GetIokitDictInt64(perfDict, "In use system memory (driver)");
+                TiledSceneBytes = GetIokitDictInt64(perfDict, "TiledSceneBytes");
+                AllocatedPBSize = GetIokitDictInt64(perfDict, "Allocated PB Size");
+                RecoveryCount = GetIokitDictInt64(perfDict, "recoveryCount");
+                SplitSceneCount = GetIokitDictInt64(perfDict, "SplitSceneCount");
 
-                var rawTemp = GetIokitDictNumber(perfDict, "Temperature(C)");
-                var rawFan = GetIokitDictNumber(perfDict, "Fan Speed(%)");
-                var rawCore = GetIokitDictNumber(perfDict, "Core Clock(MHz)");
-                var rawMem = GetIokitDictNumber(perfDict, "Memory Clock(MHz)");
+                var rawTemp = GetIokitDictInt64(perfDict, "Temperature(C)");
+                var rawFan = GetIokitDictInt64(perfDict, "Fan Speed(%)");
+                var rawCore = GetIokitDictInt64(perfDict, "Core Clock(MHz)");
+                var rawMem = GetIokitDictInt64(perfDict, "Memory Clock(MHz)");
 
                 temperature = rawTemp > 0 && rawTemp < 128 ? (int)rawTemp : null;
                 fanSpeed = rawFan > 0 ? (int)rawFan : null;
@@ -237,7 +237,7 @@ public sealed class GpuDevice
         var agcInfo = GetIokitDictionary(entry, "AGCInfo");
         if (agcInfo != IntPtr.Zero)
         {
-            var poweredOff = GetIokitDictNumber(agcInfo, "poweredOffByAGC");
+            var poweredOff = GetIokitDictInt64(agcInfo, "poweredOffByAGC");
             powerState = poweredOff == 0;
             CFRelease(agcInfo);
         }

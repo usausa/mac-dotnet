@@ -830,9 +830,14 @@ internal static class NativeMethods
                 return false;
             }
 
-            var result = CFBooleanGetValue(val);
-            CFRelease(val);
-            return result;
+            try
+            {
+                return CFBooleanGetValue(val);
+            }
+            finally
+            {
+                CFRelease(val);
+            }
         }
         finally
         {
@@ -887,14 +892,14 @@ internal static class NativeMethods
     }
 
     /// <summary>
-    /// IOKit エントリから CFData プロパティを取得し、先頭 4 バイトをリトルエンディアン uint32 として返す。
+    /// IOKit エントリから CFData プロパティを取得し、先頭 4 バイトを uint32 として返す。
     /// データが 4 バイト未満の場合は 0 を返す。
     /// <para>
-    /// Retrieves a CFData property from an IOKit entry and interprets the first 4 bytes as a little-endian uint32.
+    /// Retrieves a CFData property from an IOKit entry and returns the first 4 bytes as a uint32.
     /// Returns 0 if the data is shorter than 4 bytes.
     /// </para>
     /// </summary>
-    public static uint GetIokitDataUInt32LE(uint entry, string key)
+    public static uint GetIokitDataUInt32(uint entry, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)
@@ -924,10 +929,7 @@ internal static class NativeMethods
                 }
 
                 var ptr = CFDataGetBytePtr(val);
-                return (uint)(Marshal.ReadByte(ptr, 0)
-                    | (Marshal.ReadByte(ptr, 1) << 8)
-                    | (Marshal.ReadByte(ptr, 2) << 16)
-                    | (Marshal.ReadByte(ptr, 3) << 24));
+                return (uint)Marshal.ReadInt32(ptr);
             }
             finally
             {
@@ -1018,7 +1020,7 @@ internal static class NativeMethods
     /// Returns 0 if the key is absent or the value is not a CFNumber.
     /// </para>
     /// </summary>
-    public static long GetIokitDictNumber(IntPtr dict, string key)
+    public static long GetIokitDictInt64(IntPtr dict, string key)
     {
         var cfKey = CFStringCreateWithCString(IntPtr.Zero, key, kCFStringEncodingUTF8);
         if (cfKey == IntPtr.Zero)

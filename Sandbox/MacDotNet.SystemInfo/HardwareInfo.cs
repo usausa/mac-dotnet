@@ -260,7 +260,7 @@ public sealed class HardwareInfo
             ClassName = GetIokitString(entry, "IOClass") ?? "(unknown)",
             MetalPluginName = GetIokitString(entry, "MetalPluginName"),
             CoreCount = (int)GetIokitUInt64(entry, "gpu-core-count"),
-            VendorId = GetIokitDataUInt32LE(entry, "vendor-id"),
+            VendorId = GetIokitDataUInt32(entry, "vendor-id"),
             Configuration = ReadGpuConfiguration(entry),
         };
     }
@@ -277,12 +277,12 @@ public sealed class HardwareInfo
         {
             return new GpuConfiguration
             {
-                GpuGeneration = (int)GetIokitDictNumber(dict, "gpu_gen"),
-                NumCores = (int)GetIokitDictNumber(dict, "num_cores"),
-                NumGPs = (int)GetIokitDictNumber(dict, "num_gps"),
-                NumFragments = (int)GetIokitDictNumber(dict, "num_frags"),
-                NumMGpus = (int)GetIokitDictNumber(dict, "num_mgpus"),
-                UscGeneration = (int)GetIokitDictNumber(dict, "usc_gen"),
+                GpuGeneration = (int)GetIokitDictInt64(dict, "gpu_gen"),
+                NumCores = (int)GetIokitDictInt64(dict, "num_cores"),
+                NumGPs = (int)GetIokitDictInt64(dict, "num_gps"),
+                NumFragments = (int)GetIokitDictInt64(dict, "num_frags"),
+                NumMGpus = (int)GetIokitDictInt64(dict, "num_mgpus"),
+                UscGeneration = (int)GetIokitDictInt64(dict, "usc_gen"),
             };
         }
         finally
