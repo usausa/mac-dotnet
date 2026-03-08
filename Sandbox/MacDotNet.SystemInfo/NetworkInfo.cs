@@ -2,7 +2,6 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 
@@ -208,9 +207,9 @@ public static class NetworkInfo
                 continue;
             }
 
-            var bsdName = CfStringToManaged(bsdNameRef);
-            var serviceName = CfStringToManaged(serviceNameRef);
-            var scType = ParseScInterfaceType(CfStringToManaged(scTypeRef));
+            var bsdName = ToManagedString(bsdNameRef);
+            var serviceName = ToManagedString(serviceNameRef);
+            var scType = ParseScInterfaceType(ToManagedString(scTypeRef));
 
             if (bsdName is not null && serviceName is not null)
             {
@@ -229,7 +228,7 @@ public static class NetworkInfo
     internal static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
     {
         var serviceIdRef = NativeMethods.SCNetworkServiceGetServiceID(service);
-        var serviceId = CfStringToManaged(serviceIdRef);
+        var serviceId = ToManagedString(serviceIdRef);
         if (serviceId is null)
         {
             return false;

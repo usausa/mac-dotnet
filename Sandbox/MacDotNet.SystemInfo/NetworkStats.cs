@@ -2,7 +2,6 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 public enum NetworkInterfaceType
@@ -214,15 +213,15 @@ public sealed class NetworkStat
                 continue;
             }
 
-            var name = CfStringToManaged(SCNetworkInterfaceGetBSDName(iface));
+            var name = ToManagedString(SCNetworkInterfaceGetBSDName(iface));
             if (name != bsdName)
             {
                 continue;
             }
 
             var isHidden = IsHiddenConfiguration(prefs, service);
-            var displayName = CfStringToManaged(SCNetworkServiceGetName(service));
-            var interfaceType = ParseInterfaceType(CfStringToManaged(SCNetworkInterfaceGetInterfaceType(iface)));
+            var displayName = ToManagedString(SCNetworkServiceGetName(service));
+            var interfaceType = ParseInterfaceType(ToManagedString(SCNetworkInterfaceGetInterfaceType(iface)));
             return new NetworkStatEntry(bsdName, displayName, interfaceType, isRegistered: true, isHidden: isHidden);
         }
 
@@ -284,7 +283,7 @@ public sealed class NetworkStat
                 continue;
             }
 
-            var bsdName = CfStringToManaged(SCNetworkInterfaceGetBSDName(iface));
+            var bsdName = ToManagedString(SCNetworkInterfaceGetBSDName(iface));
             if (bsdName is null)
             {
                 continue;
@@ -307,7 +306,7 @@ public sealed class NetworkStat
 
     private static bool IsHiddenConfiguration(IntPtr prefs, IntPtr service)
     {
-        var serviceId = CfStringToManaged(SCNetworkServiceGetServiceID(service));
+        var serviceId = ToManagedString(SCNetworkServiceGetServiceID(service));
         if (serviceId is null)
         {
             return false;

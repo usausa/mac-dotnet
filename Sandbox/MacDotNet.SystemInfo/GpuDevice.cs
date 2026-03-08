@@ -1,6 +1,5 @@
 namespace MacDotNet.SystemInfo;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -108,7 +107,7 @@ public sealed class GpuDevice
         while ((raw = IOIteratorNext(iter)) != 0)
         {
             using var entry = new IOObj(raw);
-            var name = GetIokitString(entry, "IOClass") ?? "(unknown)";
+            var name = entry.GetString("IOClass") ?? "(unknown)";
             var device = new GpuDevice(name);
             device.UpdateFromEntry(entry);
             results.Add(device);
@@ -143,7 +142,7 @@ public sealed class GpuDevice
         while ((raw = IOIteratorNext(iter)) != 0)
         {
             using var entry = new IOObj(raw);
-            var ioClass = GetIokitString(entry, "IOClass");
+            var ioClass = entry.GetString("IOClass");
             if (string.Equals(ioClass, Name, StringComparison.Ordinal))
             {
                 UpdateFromEntry(entry);
@@ -158,7 +157,7 @@ public sealed class GpuDevice
     // Private helpers
     //--------------------------------------------------------------------------------
 
-    private void UpdateFromEntry(uint entry)
+    private void UpdateFromEntry(IOObj entry)
     {
         int? temperature = null;
         int? fanSpeed = null;
@@ -166,24 +165,24 @@ public sealed class GpuDevice
         int? memoryClock = null;
         bool? powerState = null;
 
-        using var perfDict = GetIokitDictionary(entry, "PerformanceStatistics");
+        using var perfDict = entry.GetDictionary("PerformanceStatistics");
         if (perfDict.IsValid)
         {
-            DeviceUtilization = GetIokitDictInt64(perfDict, "Device Utilization %");
-            RendererUtilization = GetIokitDictInt64(perfDict, "Renderer Utilization %");
-            TilerUtilization = GetIokitDictInt64(perfDict, "Tiler Utilization %");
-            AllocSystemMemory = GetIokitDictInt64(perfDict, "Alloc system memory");
-            InUseSystemMemory = GetIokitDictInt64(perfDict, "In use system memory");
-            InUseSystemMemoryDriver = GetIokitDictInt64(perfDict, "In use system memory (driver)");
-            TiledSceneBytes = GetIokitDictInt64(perfDict, "TiledSceneBytes");
-            AllocatedPBSize = GetIokitDictInt64(perfDict, "Allocated PB Size");
-            RecoveryCount = GetIokitDictInt64(perfDict, "recoveryCount");
-            SplitSceneCount = GetIokitDictInt64(perfDict, "SplitSceneCount");
+            DeviceUtilization = perfDict.GetInt64("Device Utilization %");
+            RendererUtilization = perfDict.GetInt64("Renderer Utilization %");
+            TilerUtilization = perfDict.GetInt64("Tiler Utilization %");
+            AllocSystemMemory = perfDict.GetInt64("Alloc system memory");
+            InUseSystemMemory = perfDict.GetInt64("In use system memory");
+            InUseSystemMemoryDriver = perfDict.GetInt64("In use system memory (driver)");
+            TiledSceneBytes = perfDict.GetInt64("TiledSceneBytes");
+            AllocatedPBSize = perfDict.GetInt64("Allocated PB Size");
+            RecoveryCount = perfDict.GetInt64("recoveryCount");
+            SplitSceneCount = perfDict.GetInt64("SplitSceneCount");
 
-            var rawTemp = GetIokitDictInt64(perfDict, "Temperature(C)");
-            var rawFan = GetIokitDictInt64(perfDict, "Fan Speed(%)");
-            var rawCore = GetIokitDictInt64(perfDict, "Core Clock(MHz)");
-            var rawMem = GetIokitDictInt64(perfDict, "Memory Clock(MHz)");
+            var rawTemp = perfDict.GetInt64("Temperature(C)");
+            var rawFan = perfDict.GetInt64("Fan Speed(%)");
+            var rawCore = perfDict.GetInt64("Core Clock(MHz)");
+            var rawMem = perfDict.GetInt64("Memory Clock(MHz)");
 
             temperature = rawTemp > 0 && rawTemp < 128 ? (int)rawTemp : null;
             fanSpeed = rawFan > 0 ? (int)rawFan : null;
@@ -204,10 +203,10 @@ public sealed class GpuDevice
             SplitSceneCount = 0;
         }
 
-        using var agcInfo = GetIokitDictionary(entry, "AGCInfo");
+        using var agcInfo = entry.GetDictionary("AGCInfo");
         if (agcInfo.IsValid)
         {
-            var poweredOff = GetIokitDictInt64(agcInfo, "poweredOffByAGC");
+            var poweredOff = agcInfo.GetInt64("poweredOffByAGC");
             powerState = poweredOff == 0;
         }
 

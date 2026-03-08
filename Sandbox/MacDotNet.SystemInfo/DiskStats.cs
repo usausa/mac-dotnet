@@ -1,6 +1,5 @@
 namespace MacDotNet.SystemInfo;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 public enum DiskBusType
@@ -182,36 +181,36 @@ public sealed class DiskStats
     /// 新規デバイス検出時に IOKit から静的情報を取得してエントリを生成する。
     /// IOMedia エントリが Whole でない場合は null を返す。
     /// </summary>
-    private static DiskDeviceStat CreateEntry(ulong registryEntryId, uint mediaEntry, uint parentEntry)
+    private static DiskDeviceStat CreateEntry(ulong registryEntryId, IOObj mediaEntry, IOObj parentEntry)
     {
-        var bsdName = GetIokitString(mediaEntry, "BSD Name") ?? string.Empty;
+        var bsdName = mediaEntry.GetString("BSD Name") ?? string.Empty;
         var isPhysical = IsPhysical(parentEntry);
-        var isRemovable = GetIokitBoolean(mediaEntry, "Removable");
-        var diskSize = GetIokitUInt64(mediaEntry, "Size");
+        var isRemovable = mediaEntry.GetBoolean("Removable");
+        var diskSize = mediaEntry.GetUInt64("Size");
         var (mediaName, vendorName, mediumType, busTypeStr) = FindDeviceCharacteristics(mediaEntry);
         return new DiskDeviceStat(registryEntryId, bsdName, isPhysical, isRemovable, ParseBusType(busTypeStr), diskSize, mediaName, vendorName, mediumType);
     }
 
-    private static void ReadStatistics(uint parentEntry, DiskDeviceStat device)
+    private static void ReadStatistics(IOObj parentEntry, DiskDeviceStat device)
     {
-        using var statsDict = GetIokitDictionary(parentEntry, "Statistics");
+        using var statsDict = parentEntry.GetDictionary("Statistics");
         if (!statsDict.IsValid)
         {
             return;
         }
 
-        device.BytesRead = GetIokitDictUInt64(statsDict, "Bytes (Read)");
-        device.BytesWrite = GetIokitDictUInt64(statsDict, "Bytes (Write)");
-        device.ReadsCompleted = GetIokitDictUInt64(statsDict, "Operations (Read)");
-        device.WritesCompleted = GetIokitDictUInt64(statsDict, "Operations (Write)");
-        device.TotalTimeRead = GetIokitDictUInt64(statsDict, "Total Time (Read)");
-        device.TotalTimeWrite = GetIokitDictUInt64(statsDict, "Total Time (Write)");
-        device.RetriesRead = GetIokitDictUInt64(statsDict, "Retries (Read)");
-        device.RetriesWrite = GetIokitDictUInt64(statsDict, "Retries (Write)");
-        device.ErrorsRead = GetIokitDictUInt64(statsDict, "Errors (Read)");
-        device.ErrorsWrite = GetIokitDictUInt64(statsDict, "Errors (Write)");
-        device.LatencyTimeRead = GetIokitDictUInt64(statsDict, "Latency Time (Read)");
-        device.LatencyTimeWrite = GetIokitDictUInt64(statsDict, "Latency Time (Write)");
+        device.BytesRead = statsDict.GetUInt64("Bytes (Read)");
+        device.BytesWrite = statsDict.GetUInt64("Bytes (Write)");
+        device.ReadsCompleted = statsDict.GetUInt64("Operations (Read)");
+        device.WritesCompleted = statsDict.GetUInt64("Operations (Write)");
+        device.TotalTimeRead = statsDict.GetUInt64("Total Time (Read)");
+        device.TotalTimeWrite = statsDict.GetUInt64("Total Time (Write)");
+        device.RetriesRead = statsDict.GetUInt64("Retries (Read)");
+        device.RetriesWrite = statsDict.GetUInt64("Retries (Write)");
+        device.ErrorsRead = statsDict.GetUInt64("Errors (Read)");
+        device.ErrorsWrite = statsDict.GetUInt64("Errors (Write)");
+        device.LatencyTimeRead = statsDict.GetUInt64("Latency Time (Read)");
+        device.LatencyTimeWrite = statsDict.GetUInt64("Latency Time (Write)");
     }
 
     //--------------------------------------------------------------------------------
@@ -221,23 +220,13 @@ public sealed class DiskStats
     /// <summary>
     /// IOMedia エントリが Whole=true かどうかを返す。
     /// </summary>
-    private static bool IsWhole(uint mediaEntry)
-    {
-        using var wholeKey = CFRef.CreateString("Whole");
-        if (!wholeKey.IsValid)
-        {
-            return false;
-        }
-
-        using var wholeProp = new CFRef(IORegistryEntryCreateCFProperty(mediaEntry, wholeKey, IntPtr.Zero, 0));
-        return wholeProp.IsValid && CFBooleanGetValue(wholeProp);
-    }
+    private static bool IsWhole(IOObj mediaEntry) => mediaEntry.GetBoolean("Whole");
 
     /// <summary>
     /// IOMedia エントリの IOService プレーンにおける親エントリを返す。
     /// 取得失敗時は 0 を返す。戻り値が非 0 の場合、呼び出し元が IOObjectRelease しなければならない。
     /// </summary>
-    private static uint GetParentEntry(uint mediaEntry)
+    private static uint GetParentEntry(IOObj mediaEntry)
     {
         return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0
             ? parent
@@ -249,9 +238,9 @@ public sealed class DiskStats
     /// true の場合、物理ブロックストレージデバイス (NVMe、USB NVMe など)。
     /// false の場合、APFS コンテナ仮想ディスクなど合成された論理ディスク。
     /// </summary>
-    private static bool IsPhysical(uint parentEntry)
+    private static bool IsPhysical(IOObj parentEntry)
     {
-        return GetIokitClassName(parentEntry) == "IOBlockStorageDriver";
+        return parentEntry.GetClassName() == "IOBlockStorageDriver";
     }
 
     private static DiskBusType ParseBusType(string? busType) =>
@@ -274,9 +263,9 @@ public sealed class DiskStats
     /// "Protocol Characteristics" 辞書中のバス接続種別を返す。
     /// entry 自体は呼び出し元が所有するため release しない。
     /// </summary>
-    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(uint entry)
+    private static (string? MediaName, string? VendorName, string? MediumType, string? BusType) FindDeviceCharacteristics(IOObj entry)
     {
-        var currentRaw = entry;
+        uint currentRaw = entry;
         var currentOwned = IOObj.Zero;
 
         string? mediaName = null, vendorName = null, mediumType = null, busType = null;
@@ -294,21 +283,21 @@ public sealed class DiskStats
 
             if (mediaName is null)
             {
-                using var deviceCharacts = GetIokitDictionary(currentRaw, "Device Characteristics");
+                using var deviceCharacts = currentOwned.GetDictionary("Device Characteristics");
                 if (deviceCharacts.IsValid)
                 {
-                    mediaName = GetIokitDictString(deviceCharacts, "Product Name");
-                    vendorName = GetIokitDictString(deviceCharacts, "Vendor Name");
-                    mediumType = GetIokitDictString(deviceCharacts, "Medium Type");
+                    mediaName = deviceCharacts.GetString("Product Name");
+                    vendorName = deviceCharacts.GetString("Vendor Name");
+                    mediumType = deviceCharacts.GetString("Medium Type");
                 }
             }
 
             if (busType is null)
             {
-                using var protoCharacts = GetIokitDictionary(currentRaw, "Protocol Characteristics");
+                using var protoCharacts = currentOwned.GetDictionary("Protocol Characteristics");
                 if (protoCharacts.IsValid)
                 {
-                    busType = GetIokitDictString(protoCharacts, "Physical Interconnect");
+                    busType = protoCharacts.GetString("Physical Interconnect");
                 }
             }
 

@@ -1,6 +1,5 @@
 namespace MacDotNet.SystemInfo;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
@@ -241,22 +240,22 @@ public sealed class HardwareInfo
         return [.. results];
     }
 
-    private static GpuInfo ReadGpuInfo(uint entry)
+    private static GpuInfo ReadGpuInfo(IOObj entry)
     {
         return new GpuInfo
         {
-            Model = GetIokitString(entry, "model") ?? "(unknown)",
-            ClassName = GetIokitString(entry, "IOClass") ?? "(unknown)",
-            MetalPluginName = GetIokitString(entry, "MetalPluginName"),
-            CoreCount = (int)GetIokitUInt64(entry, "gpu-core-count"),
-            VendorId = GetIokitDataUInt32(entry, "vendor-id"),
+            Model = entry.GetString("model") ?? "(unknown)",
+            ClassName = entry.GetString("IOClass") ?? "(unknown)",
+            MetalPluginName = entry.GetString("MetalPluginName"),
+            CoreCount = (int)entry.GetUInt64("gpu-core-count"),
+            VendorId = entry.GetDataUInt32("vendor-id"),
             Configuration = ReadGpuConfiguration(entry),
         };
     }
 
-    private static GpuConfiguration? ReadGpuConfiguration(uint entry)
+    private static GpuConfiguration? ReadGpuConfiguration(IOObj entry)
     {
-        using var dict = GetIokitDictionary(entry, "GPUConfigurationVariable");
+        using var dict = entry.GetDictionary("GPUConfigurationVariable");
         if (!dict.IsValid)
         {
             return null;
@@ -264,12 +263,12 @@ public sealed class HardwareInfo
 
         return new GpuConfiguration
         {
-            GpuGeneration = (int)GetIokitDictInt64(dict, "gpu_gen"),
-            NumCores = (int)GetIokitDictInt64(dict, "num_cores"),
-            NumGPs = (int)GetIokitDictInt64(dict, "num_gps"),
-            NumFragments = (int)GetIokitDictInt64(dict, "num_frags"),
-            NumMGpus = (int)GetIokitDictInt64(dict, "num_mgpus"),
-            UscGeneration = (int)GetIokitDictInt64(dict, "usc_gen"),
+            GpuGeneration = (int)dict.GetInt64("gpu_gen"),
+            NumCores = (int)dict.GetInt64("num_cores"),
+            NumGPs = (int)dict.GetInt64("num_gps"),
+            NumFragments = (int)dict.GetInt64("num_frags"),
+            NumMGpus = (int)dict.GetInt64("num_mgpus"),
+            UscGeneration = (int)dict.GetInt64("usc_gen"),
         };
     }
 
@@ -323,6 +322,6 @@ public sealed class HardwareInfo
 
         using var key = CFRef.CreateString("IOPlatformSerialNumber");
         using var value = new CFRef(IORegistryEntryCreateCFProperty(service, key, IntPtr.Zero, 0));
-        return value.IsValid ? CfStringToManaged(value) : null;
+        return value.IsValid ? value.ToManagedString() : null;
     }
 }

@@ -1,6 +1,5 @@
 namespace MacDotNet.SystemInfo;
 
-using static MacDotNet.SystemInfo.IokitHelper;
 using static MacDotNet.SystemInfo.NativeMethods;
 
 /// <summary>
