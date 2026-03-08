@@ -2,6 +2,11 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
+// TODO delete
+#pragma warning disable SA1611
+#pragma warning disable SA1615
+#pragma warning disable SA1629
+
 // ReSharper disable CommentTypo
 // ReSharper disable IdentifierTypo
 // ReSharper disable InconsistentNaming
@@ -705,25 +710,13 @@ internal static class NativeMethods
 
         var allocatedSize = len;
         var buffer = stackalloc byte[(int)allocatedSize];
-        return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0
-            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
-            : null;
+        return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
     //------------------------------------------------------------------------
-    // CF 文字列変換 / CF string conversion
+    // CF string conversion
     //------------------------------------------------------------------------
 
-    /// <summary>
-    /// CFStringRef をマネージ文字列に変換する。
-    /// まず CFStringGetCStringPtr で高速パスを試み、失敗した場合はバッファを確保して変換する。
-    /// cfString が IntPtr.Zero の場合は null を返す。
-    /// <para>
-    /// Converts a CFStringRef to a managed string.
-    /// Tries the fast path via CFStringGetCStringPtr first; falls back to buffer allocation if needed.
-    /// Returns null if cfString is IntPtr.Zero.
-    /// </para>
-    /// </summary>
     public static unsafe string? ToManagedString(IntPtr cfString)
     {
         if (cfString == IntPtr.Zero)
@@ -745,9 +738,6 @@ internal static class NativeMethods
 
         var bufSize = (length * 4) + 1;
         var buf = stackalloc byte[(int)bufSize];
-        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-            ? Marshal.PtrToStringUTF8((IntPtr)buf)
-            : null;
+        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8) ? Marshal.PtrToStringUTF8((IntPtr)buf) : null;
     }
-
 }

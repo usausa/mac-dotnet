@@ -51,13 +51,13 @@ public sealed class DiskDeviceStat
 
     public ulong LatencyTimeWrite { get; internal set; }
 
-    // ---- 静的情報 (インスタンス作成時に一度だけ取得) ----
+    // Information
+
+    public DiskBusType BusType { get; }
 
     public bool IsPhysical { get; }
 
     public bool IsRemovable { get; }
-
-    public DiskBusType BusType { get; }
 
     public ulong DiskSize { get; }
 
@@ -67,13 +67,13 @@ public sealed class DiskDeviceStat
 
     public string? MediumType { get; }
 
-    internal DiskDeviceStat(ulong registryEntryId, string name, bool isPhysicalMedium, bool isRemovable, DiskBusType busType, ulong diskSize, string? mediaName, string? vendorName, string? mediumType)
+    internal DiskDeviceStat(ulong registryEntryId, string name, DiskBusType busType, bool isPhysicalMedium, bool isRemovable, ulong diskSize, string? mediaName, string? vendorName, string? mediumType)
     {
         RegistryEntryId = registryEntryId;
         Name = name;
+        BusType = busType;
         IsPhysical = isPhysicalMedium;
         IsRemovable = isRemovable;
-        BusType = busType;
         DiskSize = diskSize;
         MediaName = mediaName;
         VendorName = vendorName;
@@ -109,20 +109,20 @@ public sealed class DiskStats
             device.Live = false;
         }
 
-        var iterPtr = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref iterPtr);
-        if (kr != KERN_SUCCESS || iterPtr == IntPtr.Zero)
+        var itPtr = IntPtr.Zero;
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref itPtr);
+        if ((kr != KERN_SUCCESS) || (itPtr == IntPtr.Zero))
         {
             return false;
         }
 
-        using var iter = new IORef(iterPtr);
         var added = false;
         uint rawEntry;
-        while ((rawEntry = IOIteratorNext(iter)) != 0)
+        using var it = new IORef(itPtr);
+        while ((rawEntry = IOIteratorNext(it)) != 0)
         {
             using var entry = new IOObj(rawEntry);
-            if (!IsWhole(entry))
+            if (!entry.GetBoolean("Whole"))
             {
                 continue;
             }
@@ -174,53 +174,48 @@ public sealed class DiskStats
         }
 
         UpdateAt = DateTime.Now;
-        return true;
-    }
 
-    /// <summary>
-    /// 新規デバイス検出時に IOKit から静的情報を取得してエントリを生成する。
-    /// IOMedia エントリが Whole でない場合は null を返す。
-    /// </summary>
-    private static DiskDeviceStat CreateEntry(ulong registryEntryId, IOObj mediaEntry, IOObj parentEntry)
-    {
-        var bsdName = mediaEntry.GetString("BSD Name") ?? string.Empty;
-        var isPhysical = IsPhysical(parentEntry);
-        var isRemovable = mediaEntry.GetBoolean("Removable");
-        var diskSize = mediaEntry.GetUInt64("Size");
-        var (mediaName, vendorName, mediumType, busTypeStr) = FindDeviceCharacteristics(mediaEntry);
-        return new DiskDeviceStat(registryEntryId, bsdName, isPhysical, isRemovable, ParseBusType(busTypeStr), diskSize, mediaName, vendorName, mediumType);
+        return true;
     }
 
     private static void ReadStatistics(IOObj parentEntry, DiskDeviceStat device)
     {
-        using var statsDict = parentEntry.GetDictionary("Statistics");
-        if (!statsDict.IsValid)
+        using var statistics = parentEntry.GetDictionary("Statistics");
+        if (!statistics.IsValid)
         {
             return;
         }
 
-        device.BytesRead = statsDict.GetUInt64("Bytes (Read)");
-        device.BytesWrite = statsDict.GetUInt64("Bytes (Write)");
-        device.ReadsCompleted = statsDict.GetUInt64("Operations (Read)");
-        device.WritesCompleted = statsDict.GetUInt64("Operations (Write)");
-        device.TotalTimeRead = statsDict.GetUInt64("Total Time (Read)");
-        device.TotalTimeWrite = statsDict.GetUInt64("Total Time (Write)");
-        device.RetriesRead = statsDict.GetUInt64("Retries (Read)");
-        device.RetriesWrite = statsDict.GetUInt64("Retries (Write)");
-        device.ErrorsRead = statsDict.GetUInt64("Errors (Read)");
-        device.ErrorsWrite = statsDict.GetUInt64("Errors (Write)");
-        device.LatencyTimeRead = statsDict.GetUInt64("Latency Time (Read)");
-        device.LatencyTimeWrite = statsDict.GetUInt64("Latency Time (Write)");
+        device.BytesRead = statistics.GetUInt64("Bytes (Read)");
+        device.BytesWrite = statistics.GetUInt64("Bytes (Write)");
+        device.ReadsCompleted = statistics.GetUInt64("Operations (Read)");
+        device.WritesCompleted = statistics.GetUInt64("Operations (Write)");
+        device.TotalTimeRead = statistics.GetUInt64("Total Time (Read)");
+        device.TotalTimeWrite = statistics.GetUInt64("Total Time (Write)");
+        device.RetriesRead = statistics.GetUInt64("Retries (Read)");
+        device.RetriesWrite = statistics.GetUInt64("Retries (Write)");
+        device.ErrorsRead = statistics.GetUInt64("Errors (Read)");
+        device.ErrorsWrite = statistics.GetUInt64("Errors (Write)");
+        device.LatencyTimeRead = statistics.GetUInt64("Latency Time (Read)");
+        device.LatencyTimeWrite = statistics.GetUInt64("Latency Time (Write)");
     }
 
     //--------------------------------------------------------------------------------
-    // Private types / helpers
+    // Helper
     //--------------------------------------------------------------------------------
 
-    /// <summary>
-    /// IOMedia エントリが Whole=true かどうかを返す。
-    /// </summary>
-    private static bool IsWhole(IOObj mediaEntry) => mediaEntry.GetBoolean("Whole");
+    private static DiskDeviceStat CreateEntry(ulong registryEntryId, IOObj entry, IOObj parentEntry)
+    {
+        var bsdName = entry.GetString("BSD Name") ?? string.Empty;
+        var isPhysical = parentEntry.GetClassName() == "IOBlockStorageDriver";
+        var isRemovable = entry.GetBoolean("Removable");
+        var diskSize = entry.GetUInt64("Size");
+        var (mediaName, vendorName, mediumType, busTypeStr) = FindDeviceCharacteristics(entry);
+        var busType = ParseBusType(busTypeStr);
+        return new DiskDeviceStat(registryEntryId, bsdName, busType, isPhysical, isRemovable, diskSize, mediaName, vendorName, mediumType);
+    }
+
+    // TODO
 
     /// <summary>
     /// IOMedia エントリの IOService プレーンにおける親エントリを返す。
@@ -228,19 +223,7 @@ public sealed class DiskStats
     /// </summary>
     private static uint GetParentEntry(IOObj mediaEntry)
     {
-        return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0
-            ? parent
-            : 0;
-    }
-
-    /// <summary>
-    /// 親エントリのクラスが IOBlockStorageDriver かどうかを返す。
-    /// true の場合、物理ブロックストレージデバイス (NVMe、USB NVMe など)。
-    /// false の場合、APFS コンテナ仮想ディスクなど合成された論理ディスク。
-    /// </summary>
-    private static bool IsPhysical(IOObj parentEntry)
-    {
-        return parentEntry.GetClassName() == "IOBlockStorageDriver";
+        return IORegistryEntryGetParentEntry(mediaEntry, "IOService", out var parent) == KERN_SUCCESS && parent != 0 ? parent : 0;
     }
 
     private static DiskBusType ParseBusType(string? busType) =>
@@ -281,6 +264,15 @@ public sealed class DiskStats
             currentOwned = new IOObj(parent);
             currentRaw = parent;
 
+            if (busType is null)
+            {
+                using var protoCharacts = currentOwned.GetDictionary("Protocol Characteristics");
+                if (protoCharacts.IsValid)
+                {
+                    busType = protoCharacts.GetString("Physical Interconnect");
+                }
+            }
+
             if (mediaName is null)
             {
                 using var deviceCharacts = currentOwned.GetDictionary("Device Characteristics");
@@ -289,15 +281,6 @@ public sealed class DiskStats
                     mediaName = deviceCharacts.GetString("Product Name");
                     vendorName = deviceCharacts.GetString("Vendor Name");
                     mediumType = deviceCharacts.GetString("Medium Type");
-                }
-            }
-
-            if (busType is null)
-            {
-                using var protoCharacts = currentOwned.GetDictionary("Protocol Characteristics");
-                if (protoCharacts.IsValid)
-                {
-                    busType = protoCharacts.GetString("Physical Interconnect");
                 }
             }
 
