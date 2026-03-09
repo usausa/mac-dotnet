@@ -20,10 +20,10 @@ public static class CommandBuilderExtensions
         commands.AddCommand<FileSystemCommand>();
         commands.AddCommand<NetworkCommand>();
         commands.AddCommand<ProcessCommand>();
+        commands.AddCommand<ProcessesCommand>();
         commands.AddCommand<PowerCommand>();
         //commands.AddCommand<HardwareCommand>();
         //commands.AddCommand<KernelCommand>();
-        //commands.AddCommand<ProcessCommand>();
         //commands.AddCommand<CpuCommand>();
         //commands.AddCommand<GpuCommand>();
         //commands.AddCommand<TemperatureCommand>();
@@ -44,6 +44,54 @@ public sealed class UptimeCommand : ICommandHandler
         Console.WriteLine($"Uptime: {uptime.Elapsed}");
 
         return ValueTask.CompletedTask;
+    }
+}
+
+[Command("processes", "Get all processes")]
+public sealed class ProcessesCommand : ICommandHandler
+{
+    [Option<int>("--top", "-t", Description = "Top", DefaultValue = 100)]
+    public int Top { get; set; }
+
+    [Option<string>("--sort", "-s", Description = "Sort", Completions = ["pid", "name", "cpu", "memory"], DefaultValue = "pid")]
+    public string Sort { get; set; } = default!;
+
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var processes = PlatformProvider.GetProcesses();
+
+#pragma warning disable CA1308
+        var sorted = Sort.ToLowerInvariant() switch
+        {
+            "name" => processes.OrderBy(p => p.Name),
+            "cpu" => processes.OrderByDescending(p => p.UserTime + p.SystemTime),
+            "memory" => processes.OrderByDescending(p => p.ResidentMemorySize),
+            _ => processes.OrderBy(p => p.ProcessId)
+        };
+#pragma warning restore CA1308
+
+        var topProcesses = sorted.Take(Top).ToList();
+
+        Console.WriteLine($"{"PID",-6} {"Name",-20} {"State",-12} {"User",-5} {"Threads",7} {"RSS (MB)",10} {"CPU Time",10}");
+        Console.WriteLine(new string('-', 76));
+
+        foreach (var p in topProcesses)
+        {
+            var rss = (double)p.ResidentMemorySize / 1024 / 1024;
+            var cpuTime = (p.UserTime + p.SystemTime).TotalSeconds;
+
+            Console.WriteLine($"{p.ProcessId,-6} {TruncateName(p.Name, 20),-20} {p.Status,-12} {p.UserId,-5} {p.ThreadCount,7} {rss,10:F2} {cpuTime,10:F2}");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"Total processes: {processes.Count}");
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static string TruncateName(string name, int maxLength)
+    {
+        return name.Length <= maxLength ? name : name[..(maxLength - 3)] + "...";
     }
 }
 
@@ -307,6 +355,18 @@ public sealed class PowerCommand : ICommandHandler
         Console.WriteLine($"  PCI Power:  {(power.Pci - prevPci) / elapsed:F2} W");
         Console.WriteLine($"  Total:      {(power.Total - prevTotal) / elapsed:F2} W");
     }
+}
+
+public static class DisplayFormatter
+{
+    public static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
+        _ => $"{bytes} B"
+    };
 }
 
 //// CPU
