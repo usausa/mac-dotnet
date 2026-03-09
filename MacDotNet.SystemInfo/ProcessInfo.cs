@@ -4,6 +4,16 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+public enum ProcessState
+{
+    Unknown = 0,
+    Idle,
+    Running,
+    Sleeping,
+    Stopped,
+    Zombie
+}
+
 public sealed record ProcessInfo
 {
     // Basic
@@ -12,9 +22,13 @@ public sealed record ProcessInfo
 
     public required int ParentProcessId { get; init; }
 
+    public required int ProcessGroupId { get; init; }
+
     public required string Name { get; init; }
 
     public string ExecutablePath { get; init; } = default!;
+
+    public required ProcessState Status { get; init; }
 
     // Scheduler
 
@@ -30,9 +44,9 @@ public sealed record ProcessInfo
 
     // CPU
 
-    public required ulong UserTime { get; init; }
+    public required TimeSpan UserTime { get; init; }
 
-    public required ulong SystemTime { get; init; }
+    public required TimeSpan SystemTime { get; init; }
 
     public required DateTimeOffset StartTime { get; init; }
 
@@ -58,9 +72,15 @@ public sealed record ProcessInfo
 
     public required int SysCallsUnix { get; init; }
 
+    // I/O
+
+    public required ulong ReadBytes { get; init; }
+
+    public required ulong WriteBytes { get; init; }
+
     // File
 
-    public required uint OpenFiles { get; init; }
+    public required uint OpenFileCount { get; init; }
 
     // Identity
 
@@ -103,7 +123,7 @@ public sealed record ProcessInfo
                     continue;
                 }
 
-                var entry = GetProcessCore(pid);
+                var entry = GetProcess(pid);
                 if (entry is not null)
                 {
                     result.Add(entry);
@@ -116,7 +136,7 @@ public sealed record ProcessInfo
         }
     }
 
-    private static unsafe ProcessInfo? GetProcessCore(int processId)
+    public static unsafe ProcessInfo? GetProcess(int processId)
     {
         // BSD info
         proc_bsdinfo bsdInfo;
@@ -130,6 +150,10 @@ public sealed record ProcessInfo
         proc_taskinfo taskInfo;
         var taskSize = proc_pidinfo(processId, PROC_PIDTASKINFO, 0, &taskInfo, sizeof(proc_taskinfo));
         var hasTaskInfo = taskSize >= sizeof(proc_taskinfo);
+
+        // Resource usage info
+        rusage_info_v2 usageInfo;
+        var hasUsageInfo = proc_pid_rusage(processId, RUSAGE_INFO_V2, &usageInfo) == 0;
 
         // Name
         var name = Marshal.PtrToStringUTF8((IntPtr)bsdInfo.pbi_name);
@@ -150,14 +174,16 @@ public sealed record ProcessInfo
         {
             ProcessId = processId,
             ParentProcessId = (int)bsdInfo.pbi_ppid,
+            ProcessGroupId = (int)bsdInfo.pbi_pgid,
             Name = name,
             ExecutablePath = path,
+            Status = ToProcessState(bsdInfo.pbi_status),
             Priority = hasTaskInfo ? taskInfo.pti_priority : 0,
             Nice = bsdInfo.pbi_nice,
             ThreadCount = hasTaskInfo ? taskInfo.pti_threadnum : 0,
             RunningThreadCount = hasTaskInfo ? taskInfo.pti_numrunning : 0,
-            UserTime = hasTaskInfo ? taskInfo.pti_total_user : 0,
-            SystemTime = hasTaskInfo ? taskInfo.pti_total_system : 0,
+            UserTime = hasTaskInfo ? TimeSpan.FromTicks((long)(taskInfo.pti_total_user / 100)) : TimeSpan.Zero,
+            SystemTime = hasTaskInfo ? TimeSpan.FromTicks((long)(taskInfo.pti_total_system / 100)) : TimeSpan.Zero,
             StartTime = startTime,
             VirtualMemorySize = hasTaskInfo ? taskInfo.pti_virtual_size : 0,
             ResidentMemorySize = hasTaskInfo ? taskInfo.pti_resident_size : 0,
@@ -167,9 +193,21 @@ public sealed record ProcessInfo
             ContextSwitch = hasTaskInfo ? taskInfo.pti_csw : 0,
             SysCallsMach = hasTaskInfo ? taskInfo.pti_syscalls_mach : 0,
             SysCallsUnix = hasTaskInfo ? taskInfo.pti_syscalls_unix : 0,
-            OpenFiles = bsdInfo.pbi_nfiles,
+            ReadBytes = hasUsageInfo ? usageInfo.ri_diskio_bytesread : 0,
+            WriteBytes = hasUsageInfo ? usageInfo.ri_diskio_byteswritten : 0,
+            OpenFileCount = bsdInfo.pbi_nfiles,
             UserId = bsdInfo.pbi_uid,
             GroupId = bsdInfo.pbi_gid
         };
     }
+
+    private static ProcessState ToProcessState(uint status) => status switch
+    {
+        SIDL => ProcessState.Idle,
+        SRUN => ProcessState.Running,
+        SSLEEP => ProcessState.Sleeping,
+        SSTOP => ProcessState.Stopped,
+        SZOMB => ProcessState.Zombie,
+        _ => ProcessState.Unknown
+    };
 }

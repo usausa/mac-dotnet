@@ -53,6 +53,8 @@ public static class PlatformProvider
 
     public static IReadOnlyList<ProcessInfo> GetProcesses() => ProcessInfo.GetProcesses();
 
+    public static ProcessInfo? GetProcess(int processId) => ProcessInfo.GetProcess(processId);
+
     //--------------------------------------------------------------------------------
     // CPU
     //--------------------------------------------------------------------------------

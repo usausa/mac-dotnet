@@ -100,6 +100,14 @@ internal static class NativeMethods
     // proc_pidinfo flavor (sys/proc_info.h) / Flavor arguments for proc_pidinfo
     public const int PROC_PIDTBSDINFO = 3;  // BSD プロセス情報 (proc_bsdinfo) / BSD process info
     public const int PROC_PIDTASKINFO = 4;  // タスク情報 (proc_taskinfo) / Task info
+    public const int RUSAGE_INFO_V2 = 2;
+
+    // BSD process status values (sys/proc.h)
+    public const uint SIDL = 1;
+    public const uint SRUN = 2;
+    public const uint SSLEEP = 3;
+    public const uint SSTOP = 4;
+    public const uint SZOMB = 5;
 
     // proc_pidpath バッファサイズ (sys/proc_info.h) / Buffer size for proc_pidpath
     public const uint PROC_PIDPATHINFO_MAXSIZE = 4096;
@@ -340,6 +348,45 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct rusage_info_v2
+    {
+        public byte ri_uuid0;
+        public byte ri_uuid1;
+        public byte ri_uuid2;
+        public byte ri_uuid3;
+        public byte ri_uuid4;
+        public byte ri_uuid5;
+        public byte ri_uuid6;
+        public byte ri_uuid7;
+        public byte ri_uuid8;
+        public byte ri_uuid9;
+        public byte ri_uuid10;
+        public byte ri_uuid11;
+        public byte ri_uuid12;
+        public byte ri_uuid13;
+        public byte ri_uuid14;
+        public byte ri_uuid15;
+        public ulong ri_user_time;
+        public ulong ri_system_time;
+        public ulong ri_pkg_idle_wkups;
+        public ulong ri_interrupt_wkups;
+        public ulong ri_pageins;
+        public ulong ri_wired_size;
+        public ulong ri_resident_size;
+        public ulong ri_phys_footprint;
+        public ulong ri_proc_start_abstime;
+        public ulong ri_proc_exit_abstime;
+        public ulong ri_child_user_time;
+        public ulong ri_child_system_time;
+        public ulong ri_child_pkg_idle_wkups;
+        public ulong ri_child_interrupt_wkups;
+        public ulong ri_child_pageins;
+        public ulong ri_child_elapsed_abstime;
+        public ulong ri_diskio_bytesread;
+        public ulong ri_diskio_byteswritten;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct SMCKeyData_keyInfo_t
     {
         public uint dataSize;
@@ -434,6 +481,9 @@ internal static class NativeMethods
 
     [DllImport("libproc")]
     public static extern unsafe int proc_pidpath(int pid, byte* buffer, uint buffersize);
+
+    [DllImport("libproc")]
+    public static extern unsafe int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
 
     //------------------------------------------------------------------------
     // CoreFoundation
