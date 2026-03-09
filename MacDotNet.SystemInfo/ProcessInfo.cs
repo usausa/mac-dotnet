@@ -14,7 +14,7 @@ public sealed record ProcessInfo
 
     public required string Name { get; init; }
 
-    public string Path { get; init; } = string.Empty;
+    public string ExecutablePath { get; init; } = default!;
 
     // Scheduler
 
@@ -38,9 +38,9 @@ public sealed record ProcessInfo
 
     // Memory
 
-    public required ulong VirtualSize { get; init; }
+    public required ulong VirtualMemorySize { get; init; }
 
-    public required ulong ResidentSize { get; init; }
+    public required ulong ResidentMemorySize { get; init; }
 
     // I/O
 
@@ -151,7 +151,7 @@ public sealed record ProcessInfo
             ProcessId = processId,
             ParentProcessId = (int)bsdInfo.pbi_ppid,
             Name = name,
-            Path = path,
+            ExecutablePath = path,
             Priority = hasTaskInfo ? taskInfo.pti_priority : 0,
             Nice = bsdInfo.pbi_nice,
             ThreadCount = hasTaskInfo ? taskInfo.pti_threadnum : 0,
@@ -159,8 +159,8 @@ public sealed record ProcessInfo
             UserTime = hasTaskInfo ? taskInfo.pti_total_user : 0,
             SystemTime = hasTaskInfo ? taskInfo.pti_total_system : 0,
             StartTime = startTime,
-            VirtualSize = hasTaskInfo ? taskInfo.pti_virtual_size : 0,
-            ResidentSize = hasTaskInfo ? taskInfo.pti_resident_size : 0,
+            VirtualMemorySize = hasTaskInfo ? taskInfo.pti_virtual_size : 0,
+            ResidentMemorySize = hasTaskInfo ? taskInfo.pti_resident_size : 0,
             Faults = hasTaskInfo ? taskInfo.pti_faults : 0,
             PageIns = hasTaskInfo ? taskInfo.pti_pageins : 0,
             CowFaults = hasTaskInfo ? taskInfo.pti_cow_faults : 0,
