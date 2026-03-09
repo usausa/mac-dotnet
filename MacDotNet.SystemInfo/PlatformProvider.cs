@@ -51,8 +51,7 @@ public static class PlatformProvider
 
     public static ProcessSummary GetProcessSummary() => new();
 
-    // TODO 1
-    //public static IReadOnlyList<ProcessEntry> GetProcesses() => ProcessInfo.GetProcesses();
+    public static IReadOnlyList<ProcessInfo> GetProcesses() => ProcessInfo.GetProcesses();
 
     //--------------------------------------------------------------------------------
     // CPU
