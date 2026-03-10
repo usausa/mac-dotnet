@@ -15,6 +15,7 @@ public static class CommandBuilderExtensions
         //commands.AddCommand<HardwareCommand>();
         commands.AddCommand<KernelCommand>();
         commands.AddCommand<UptimeCommand>();
+        commands.AddCommand<CpuCommand>();
         commands.AddCommand<LoadCommand>();
         commands.AddCommand<MemoryCommand>();
         commands.AddCommand<SwapCommand>();
@@ -132,6 +133,65 @@ public sealed class ProcessesCommand : ICommandHandler
     private static string TruncateName(string name, int maxLength)
     {
         return name.Length <= maxLength ? name : name[..(maxLength - 3)] + "...";
+    }
+}
+
+//--------------------------------------------------------------------------------
+// Cpu
+//--------------------------------------------------------------------------------
+[Command("cpu", "Get cpu stat")]
+public sealed class CpuCommand : ICommandHandler
+{
+    public async ValueTask ExecuteAsync(CommandContext context)
+    {
+        var stat = PlatformProvider.GetCpuStat();
+
+        Console.WriteLine($"User:   {stat.CpuTotal.User}");
+        Console.WriteLine($"Nice:   {stat.CpuTotal.Nice}");
+        Console.WriteLine($"System: {stat.CpuTotal.System}");
+        Console.WriteLine($"Idle:   {stat.CpuTotal.Idle}");
+        Console.WriteLine();
+
+        for (var i = 0; i < 10; i++)
+        {
+            var previousValues = stat.CpuCores
+                .Select(static x => new
+                {
+                    Idle = CalcCpuIdle(x),
+                    Total = CalcCpuTotal(x)
+                })
+                .ToList();
+
+            await Task.Delay(1000);
+
+            stat.Update();
+
+            for (var j = 0; j < stat.CpuCores.Count; j++)
+            {
+                var core = stat.CpuCores[j];
+                var idle = CalcCpuIdle(core);
+                var total = CalcCpuTotal(core);
+
+                var idleDiff = idle - previousValues[j].Idle;
+                var totalDiff = total - previousValues[j].Total;
+                var usage = totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
+
+                Console.WriteLine($"Name:  cpu{core.Name}");
+                Console.WriteLine($"Usage: {usage}");
+            }
+
+            Console.WriteLine();
+        }
+
+        static long CalcCpuIdle(CpuCoreStat cpu)
+        {
+            return cpu.Idle;
+        }
+
+        static long CalcCpuTotal(CpuCoreStat cpu)
+        {
+            return cpu.User + cpu.Nice + cpu.System + cpu.Idle;
+        }
     }
 }
 
