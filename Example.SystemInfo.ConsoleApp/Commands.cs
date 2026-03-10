@@ -12,6 +12,8 @@ public static class CommandBuilderExtensions
 {
     public static void AddCommands(this ICommandBuilder commands)
     {
+        //commands.AddCommand<HardwareCommand>();
+        commands.AddCommand<KernelCommand>();
         commands.AddCommand<UptimeCommand>();
         commands.AddCommand<LoadCommand>();
         commands.AddCommand<MemoryCommand>();
@@ -22,13 +24,51 @@ public static class CommandBuilderExtensions
         commands.AddCommand<ProcessCommand>();
         commands.AddCommand<ProcessesCommand>();
         commands.AddCommand<PowerCommand>();
-        //commands.AddCommand<HardwareCommand>();
-        //commands.AddCommand<KernelCommand>();
         //commands.AddCommand<CpuCommand>();
         //commands.AddCommand<GpuCommand>();
         //commands.AddCommand<TemperatureCommand>();
         //commands.AddCommand<FanCommand>();
         //commands.AddCommand<VoltageCommand>();
+    }
+}
+
+public static class DisplayFormatter
+{
+    public static string FormatBytes(ulong bytes) => bytes switch
+    {
+        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TB",
+        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GB",
+        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MB",
+        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KB",
+        _ => $"{bytes} B"
+    };
+}
+
+//--------------------------------------------------------------------------------
+// Kernel
+//--------------------------------------------------------------------------------
+[Command("kernel", "Get kernel information")]
+public sealed class KernelCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var kernel = PlatformProvider.GetKernel();
+        Console.WriteLine($"OsType:              {kernel.OsType}");
+        Console.WriteLine($"OsRelease:           {kernel.OsRelease}");
+        Console.WriteLine($"OsVersion:           {kernel.OsVersion}");
+        Console.WriteLine($"OsProductVersion:    {kernel.OsProductVersion}");
+        Console.WriteLine($"OsRevision:          {kernel.OsRevision}");
+        Console.WriteLine($"KernelVersion:       {kernel.KernelVersion}");
+        Console.WriteLine($"Uuid:                {kernel.Uuid}");
+        Console.WriteLine($"MaxProcesses:        {kernel.MaxProcesses}");
+        Console.WriteLine($"MaxProcessesPerUser: {kernel.MaxProcessesPerUser}");
+        Console.WriteLine($"MaxFiles:            {kernel.MaxFiles}");
+        Console.WriteLine($"MaxFilesPerProcess:  {kernel.MaxFilesPerProcess}");
+        Console.WriteLine($"MaxArguments:        {kernel.MaxArguments}");
+        Console.WriteLine($"SecureLevel:         {kernel.SecureLevel}");
+        Console.WriteLine($"BootTime:            {kernel.BootTime}");
+
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -122,28 +162,19 @@ public sealed class MemoryCommand : ICommandHandler
     {
         var mem = PlatformProvider.GetMemoryStat();
         var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
-        Console.WriteLine($"PhysicalMemory:   {FormatBytes(mem.PhysicalMemory)}");
-        Console.WriteLine($"Used:             {FormatBytes(mem.UsedBytes)}  ({usage:F1}%)");
-        Console.WriteLine($"Free:             {FormatBytes(mem.FreeBytes)}");
-        Console.WriteLine($"Active:           {FormatBytes(mem.ActiveBytes)}");
-        Console.WriteLine($"Inactive:         {FormatBytes(mem.InactiveBytes)}");
-        Console.WriteLine($"Wired:            {FormatBytes(mem.WiredBytes)}");
-        Console.WriteLine($"AppMemory:        {FormatBytes(mem.AppMemoryBytes)}");
-        Console.WriteLine($"Compressed:       {FormatBytes(mem.CompressorBytes)}");
+        Console.WriteLine($"PhysicalMemory:   {DisplayFormatter.FormatBytes(mem.PhysicalMemory)}");
+        Console.WriteLine($"Used:             {DisplayFormatter.FormatBytes(mem.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Free:             {DisplayFormatter.FormatBytes(mem.FreeBytes)}");
+        Console.WriteLine($"Active:           {DisplayFormatter.FormatBytes(mem.ActiveBytes)}");
+        Console.WriteLine($"Inactive:         {DisplayFormatter.FormatBytes(mem.InactiveBytes)}");
+        Console.WriteLine($"Wired:            {DisplayFormatter.FormatBytes(mem.WiredBytes)}");
+        Console.WriteLine($"AppMemory:        {DisplayFormatter.FormatBytes(mem.AppMemoryBytes)}");
+        Console.WriteLine($"Compressed:       {DisplayFormatter.FormatBytes(mem.CompressorBytes)}");
         var compressionRatio = mem.CompressorPageCount > 0 ? (double)mem.TotalUncompressedPagesInCompressor / mem.CompressorPageCount : 0;
         Console.WriteLine($"CompressionRatio: {compressionRatio:F2}");
 
         return ValueTask.CompletedTask;
     }
-
-    private static string FormatBytes(ulong bytes) => bytes switch
-    {
-        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B"
-    };
 }
 
 //--------------------------------------------------------------------------------
@@ -156,22 +187,13 @@ public sealed class SwapCommand : ICommandHandler
     {
         var swap = PlatformProvider.GetSwapUsage();
         var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
-        Console.WriteLine($"Total:     {FormatBytes(swap.TotalBytes)}");
-        Console.WriteLine($"Used:      {FormatBytes(swap.UsedBytes)}  ({usage:F1}%)");
-        Console.WriteLine($"Available: {FormatBytes(swap.AvailableBytes)}");
+        Console.WriteLine($"Total:     {DisplayFormatter.FormatBytes(swap.TotalBytes)}");
+        Console.WriteLine($"Used:      {DisplayFormatter.FormatBytes(swap.UsedBytes)}  ({usage:F1}%)");
+        Console.WriteLine($"Available: {DisplayFormatter.FormatBytes(swap.AvailableBytes)}");
         Console.WriteLine($"Encrypted: {swap.IsEncrypted}");
 
         return ValueTask.CompletedTask;
     }
-
-    private static string FormatBytes(ulong bytes) => bytes switch
-    {
-        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B"
-    };
 }
 
 //--------------------------------------------------------------------------------
@@ -235,9 +257,9 @@ public sealed class FileSystemCommand : ICommandHandler
             Console.WriteLine($"Option:        {fs.Option}");
             Console.WriteLine($"BlockSize:     {fs.BlockSize}");
             Console.WriteLine($"IOSize:        {fs.IOSize}");
-            Console.WriteLine($"TotalSize:     {FormatBytes(fs.TotalSize)}");
-            Console.WriteLine($"FreeSize:      {FormatBytes(fs.FreeSize)}");
-            Console.WriteLine($"AvailableSize: {FormatBytes(fs.AvailableSize)}");
+            Console.WriteLine($"TotalSize:     {DisplayFormatter.FormatBytes(fs.TotalSize)}");
+            Console.WriteLine($"FreeSize:      {DisplayFormatter.FormatBytes(fs.FreeSize)}");
+            Console.WriteLine($"AvailableSize: {DisplayFormatter.FormatBytes(fs.AvailableSize)}");
             Console.WriteLine($"TotalFiles:    {fs.TotalFiles}");
             Console.WriteLine($"FreeFiles:     {fs.FreeFiles}");
             Console.WriteLine();
@@ -245,15 +267,6 @@ public sealed class FileSystemCommand : ICommandHandler
 
         return ValueTask.CompletedTask;
     }
-
-    private static string FormatBytes(ulong bytes) => bytes switch
-    {
-        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B"
-    };
 }
 
 //--------------------------------------------------------------------------------
@@ -355,18 +368,6 @@ public sealed class PowerCommand : ICommandHandler
         Console.WriteLine($"  PCI Power:  {(power.Pci - prevPci) / elapsed:F2} W");
         Console.WriteLine($"  Total:      {(power.Total - prevTotal) / elapsed:F2} W");
     }
-}
-
-public static class DisplayFormatter
-{
-    public static string FormatBytes(ulong bytes) => bytes switch
-    {
-        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-        _ => $"{bytes} B"
-    };
 }
 
 //// CPU

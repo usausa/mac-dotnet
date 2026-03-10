@@ -10,8 +10,7 @@ public static class PlatformProvider
     // TODO
     //public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
-    // TODO
-    //public static KernelInfo GetKernel() => KernelInfo.Create();
+    public static KernelInfo GetKernel() => new();
 
     public static Uptime GetUptime() => new();
 

@@ -141,14 +141,6 @@ internal static class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct timeval_boot
-    {
-        public long tv_sec;
-        public int tv_usec;
-        private readonly int _padding;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     internal struct vm_statistics64
     {
         public uint free_count;
