@@ -1,6 +1,7 @@
 namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
+
 using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class KernelInfo
@@ -37,7 +38,7 @@ public sealed class KernelInfo
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal unsafe KernelInfo()
+    internal KernelInfo()
     {
         // ReSharper disable StringLiteralTypo
         OsType = GetSystemControlString("kern.ostype") ?? string.Empty;
