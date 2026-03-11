@@ -45,7 +45,7 @@ public sealed class CpuStat
 
     public unsafe bool Update()
     {
-        var host = mach_host_self();
+        using var host = new MachPortRef(mach_host_self());
         var result = host_processor_info(host, PROCESSOR_CPU_LOAD_INFO, out var processorCount, out var info, out var infoCount);
         if (result != KERN_SUCCESS)
         {

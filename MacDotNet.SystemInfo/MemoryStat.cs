@@ -4,8 +4,6 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class MemoryStat
 {
-    private readonly uint host;
-
     public DateTime UpdateAt { get; private set; }
 
     // Physical Memory
@@ -118,7 +116,7 @@ public sealed class MemoryStat
     internal MemoryStat()
     {
         PhysicalMemory = GetSystemControlUInt64("hw.memsize");
-        host = mach_host_self();
+        using var host = new MachPortRef(mach_host_self());
         _ = host_page_size(host, out var pageSize);
         PageSize = pageSize;
         Update();
@@ -131,6 +129,7 @@ public sealed class MemoryStat
 
     public unsafe bool Update()
     {
+        using var host = new MachPortRef(mach_host_self());
         var count = HOST_VM_INFO64_COUNT;
         vm_statistics64 vmStat;
         var ret = host_statistics64(host, HOST_VM_INFO64, &vmStat, ref count);

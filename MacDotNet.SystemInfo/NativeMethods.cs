@@ -419,6 +419,12 @@ internal static class NativeMethods
     public static extern uint mach_host_self();
 
     [DllImport("libSystem.dylib")]
+    public static extern uint mach_task_self();
+
+    [DllImport("libSystem.dylib")]
+    public static extern int mach_port_deallocate(uint task, uint name);
+
+    [DllImport("libSystem.dylib")]
     public static extern uint task_self_trap();
 
     [DllImport("libSystem.dylib")]
