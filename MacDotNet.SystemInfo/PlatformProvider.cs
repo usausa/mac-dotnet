@@ -64,8 +64,7 @@ public static class PlatformProvider
     // GPU
     //--------------------------------------------------------------------------------
 
-    // TODO
-    //public static IReadOnlyList<GpuEntry> GetGpus() => GpuInfo.GetGpus();
+    public static GpuStat GetGpuStat() => new();
 
     //--------------------------------------------------------------------------------
     // Power
@@ -77,6 +76,7 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
+    // TODO
     //public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
 
     //public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
@@ -84,6 +84,4 @@ public static class PlatformProvider
     //public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
 
     //public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
-
-    //public static double? GetTotalSystemPower() => SmcInfo.GetTotalSystemPower();
 }
