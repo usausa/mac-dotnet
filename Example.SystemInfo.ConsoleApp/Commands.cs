@@ -24,8 +24,8 @@ public static class CommandBuilderExtensions
         commands.AddCommand<NetworkCommand>();
         commands.AddCommand<ProcessCommand>();
         commands.AddCommand<ProcessesCommand>();
-        commands.AddCommand<PowerCommand>();
         commands.AddCommand<GpuCommand>();
+        commands.AddCommand<PowerCommand>();
         //commands.AddCommand<TemperatureCommand>();
         //commands.AddCommand<FanCommand>();
         //commands.AddCommand<VoltageCommand>();
@@ -481,6 +481,44 @@ public sealed class NetworkCommand : ICommandHandler
     }
 }
 
+// TODO CPU?
+
+//--------------------------------------------------------------------------------
+// GPU
+//--------------------------------------------------------------------------------
+[Command("gpu", "Get gpu stat")]
+public sealed class GpuCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var devices = PlatformProvider.GetGpuDevices();
+        if (devices.Count == 0)
+        {
+            Console.WriteLine("No GPU found.");
+            return ValueTask.CompletedTask;
+        }
+
+        for (var i = 0; i < devices.Count; i++)
+        {
+            var device = devices[i];
+            Console.WriteLine($"Name:                {device.Name}");
+            Console.WriteLine($"DeviceUtilization:   {device.DeviceUtilization}%");
+            Console.WriteLine($"RendererUtilization: {device.RendererUtilization}%");
+            Console.WriteLine($"TilerUtilization:    {device.TilerUtilization}%");
+            Console.WriteLine($"AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
+            Console.WriteLine($"InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
+            Console.WriteLine($"Temperature:         {device.Temperature} C");
+            Console.WriteLine($"FanSpeed:            {device.FanSpeed}%");
+            Console.WriteLine($"CoreClock:           {device.CoreClock} MHz");
+            Console.WriteLine($"MemoryClock:         {device.MemoryClock} MHz");
+            Console.WriteLine($"PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
+            Console.WriteLine();
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
 //--------------------------------------------------------------------------------
 // Power
 //--------------------------------------------------------------------------------
@@ -529,44 +567,6 @@ public sealed class PowerCommand : ICommandHandler
         Console.WriteLine($"  RAM Power:  {(power.Ram - prevRam) / elapsed:F2} W");
         Console.WriteLine($"  PCI Power:  {(power.Pci - prevPci) / elapsed:F2} W");
         Console.WriteLine($"  Total:      {(power.Total - prevTotal) / elapsed:F2} W");
-    }
-}
-
-// TODO CPU?
-
-//--------------------------------------------------------------------------------
-// GPU
-//--------------------------------------------------------------------------------
-[Command("gpu", "Get gpu stat")]
-public sealed class GpuCommand : ICommandHandler
-{
-    public ValueTask ExecuteAsync(CommandContext context)
-    {
-        var devices = PlatformProvider.GetGpuDevices();
-        if (devices.Count == 0)
-        {
-            Console.WriteLine("No GPU found.");
-            return ValueTask.CompletedTask;
-        }
-
-        for (var i = 0; i < devices.Count; i++)
-        {
-            var device = devices[i];
-            Console.WriteLine($"Name:                {device.Name}");
-            Console.WriteLine($"DeviceUtilization:   {device.DeviceUtilization}%");
-            Console.WriteLine($"RendererUtilization: {device.RendererUtilization}%");
-            Console.WriteLine($"TilerUtilization:    {device.TilerUtilization}%");
-            Console.WriteLine($"AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
-            Console.WriteLine($"InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
-            Console.WriteLine($"Temperature:         {device.Temperature} C");
-            Console.WriteLine($"FanSpeed:            {device.FanSpeed}%");
-            Console.WriteLine($"CoreClock:           {device.CoreClock} MHz");
-            Console.WriteLine($"MemoryClock:         {device.MemoryClock} MHz");
-            Console.WriteLine($"PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
-            Console.WriteLine();
-        }
-
-        return ValueTask.CompletedTask;
     }
 }
 
