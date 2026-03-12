@@ -15,7 +15,6 @@ public static class CommandBuilderExtensions
         //commands.AddCommand<HardwareCommand>();
         commands.AddCommand<KernelCommand>();
         commands.AddCommand<UptimeCommand>();
-        commands.AddCommand<CpuCommand>();
         commands.AddCommand<LoadCommand>();
         commands.AddCommand<MemoryCommand>();
         commands.AddCommand<SwapCommand>();
@@ -24,6 +23,7 @@ public static class CommandBuilderExtensions
         commands.AddCommand<NetworkCommand>();
         commands.AddCommand<ProcessCommand>();
         commands.AddCommand<ProcessesCommand>();
+        commands.AddCommand<CpuCommand>();
         commands.AddCommand<GpuCommand>();
         commands.AddCommand<PowerCommand>();
         //commands.AddCommand<TemperatureCommand>();
@@ -185,117 +185,6 @@ public sealed class ProcessesCommand : ICommandHandler
         return name.Length <= maxLength ? name : name[..(maxLength - 3)] + "...";
     }
 }
-
-//--------------------------------------------------------------------------------
-// Cpu
-//--------------------------------------------------------------------------------
-[Command("cpu", "Get cpu stat")]
-public sealed class CpuCommand : ICommandHandler
-{
-    public async ValueTask ExecuteAsync(CommandContext context)
-    {
-        var stat = PlatformProvider.GetCpuStat();
-
-        Console.WriteLine($"User:   {stat.CpuTotal.User}");
-        Console.WriteLine($"Nice:   {stat.CpuTotal.Nice}");
-        Console.WriteLine($"System: {stat.CpuTotal.System}");
-        Console.WriteLine($"Idle:   {stat.CpuTotal.Idle}");
-        Console.WriteLine();
-
-        for (var i = 0; i < 10; i++)
-        {
-            var previousValues = stat.CpuCores
-                .Select(static x => new
-                {
-                    Idle = CalcCpuIdle(x),
-                    Total = CalcCpuTotal(x)
-                })
-                .ToList();
-
-            await Task.Delay(1000);
-
-            stat.Update();
-
-            for (var j = 0; j < stat.CpuCores.Count; j++)
-            {
-                var core = stat.CpuCores[j];
-                var idle = CalcCpuIdle(core);
-                var total = CalcCpuTotal(core);
-
-                var idleDiff = idle - previousValues[j].Idle;
-                var totalDiff = total - previousValues[j].Total;
-                var usage = totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
-
-                Console.WriteLine($"Name:  cpu{core.Name}");
-                Console.WriteLine($"Usage: {usage}");
-            }
-
-            Console.WriteLine();
-        }
-
-        static long CalcCpuIdle(CpuCoreStat cpu)
-        {
-            return cpu.Idle;
-        }
-
-        static long CalcCpuTotal(CpuCoreStat cpu)
-        {
-            return cpu.User + cpu.Nice + cpu.System + cpu.Idle;
-        }
-    }
-}
-
-// TODO
-//// CPU Load (detailed)
-//[Command("cpuload", "CPU Load Info (User/System/Idle, per core)")]
-//public sealed class CpuLoadCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var cpuLoad = PlatformProvider.GetCpuLoad();
-
-//        Console.WriteLine("=== CPU Load Info ===");
-//        Console.WriteLine($"Logical CPUs:       {cpuLoad.LogicalCpu}");
-//        Console.WriteLine($"Physical CPUs:      {cpuLoad.PhysicalCpu}");
-//        Console.WriteLine($"Hyperthreading:     {cpuLoad.HasHyperthreading}");
-//        Console.WriteLine();
-
-//        cpuLoad.Update();
-//        Thread.Sleep(500);
-//        cpuLoad.Update();
-
-//        Console.WriteLine("=== Usage ===");
-//        Console.WriteLine($"User Load:          {cpuLoad.UserLoad:P1}");
-//        Console.WriteLine($"System Load:        {cpuLoad.SystemLoad:P1}");
-//        Console.WriteLine($"Idle Load:          {cpuLoad.IdleLoad:P1}");
-//        Console.WriteLine($"Total Load:         {cpuLoad.TotalLoad:P1}");
-//        Console.WriteLine();
-
-//        if (cpuLoad.ECoreUsage.HasValue || cpuLoad.PCoreUsage.HasValue)
-//        {
-//            Console.WriteLine("=== Apple Silicon Core Usage ===");
-//            if (cpuLoad.ECoreUsage.HasValue)
-//            {
-//                Console.WriteLine($"E-Core Usage:       {cpuLoad.ECoreUsage:P1}");
-//            }
-
-//            if (cpuLoad.PCoreUsage.HasValue)
-//            {
-//                Console.WriteLine($"P-Core Usage:       {cpuLoad.PCoreUsage:P1}");
-//            }
-
-//            Console.WriteLine();
-//        }
-
-//        Console.WriteLine("=== Per Core Usage ===");
-//        for (var i = 0; i < cpuLoad.UsagePerCore.Length; i++)
-//        {
-//            Console.WriteLine($"  Core {i,2}: {cpuLoad.UsagePerCore[i]:P1}");
-//        }
-
-//        return ValueTask.CompletedTask;
-//    }
-//}
 
 //--------------------------------------------------------------------------------
 // LoadAverage
@@ -481,7 +370,116 @@ public sealed class NetworkCommand : ICommandHandler
     }
 }
 
-// TODO CPU?
+//--------------------------------------------------------------------------------
+// Cpu
+//--------------------------------------------------------------------------------
+[Command("cpu", "Get cpu stat")]
+public sealed class CpuCommand : ICommandHandler
+{
+    public async ValueTask ExecuteAsync(CommandContext context)
+    {
+        var stat = PlatformProvider.GetCpuStat();
+
+        Console.WriteLine($"User:   {stat.CpuTotal.User}");
+        Console.WriteLine($"Nice:   {stat.CpuTotal.Nice}");
+        Console.WriteLine($"System: {stat.CpuTotal.System}");
+        Console.WriteLine($"Idle:   {stat.CpuTotal.Idle}");
+        Console.WriteLine();
+
+        for (var i = 0; i < 10; i++)
+        {
+            var previousValues = stat.CpuCores
+                .Select(static x => new
+                {
+                    Idle = CalcCpuIdle(x),
+                    Total = CalcCpuTotal(x)
+                })
+                .ToList();
+
+            await Task.Delay(1000);
+
+            stat.Update();
+
+            for (var j = 0; j < stat.CpuCores.Count; j++)
+            {
+                var core = stat.CpuCores[j];
+                var idle = CalcCpuIdle(core);
+                var total = CalcCpuTotal(core);
+
+                var idleDiff = idle - previousValues[j].Idle;
+                var totalDiff = total - previousValues[j].Total;
+                var usage = totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
+
+                Console.WriteLine($"Name:  cpu{core.Name}");
+                Console.WriteLine($"Usage: {usage}");
+            }
+
+            Console.WriteLine();
+        }
+
+        static long CalcCpuIdle(CpuCore cpu)
+        {
+            return cpu.Idle;
+        }
+
+        static long CalcCpuTotal(CpuCore cpu)
+        {
+            return cpu.User + cpu.Nice + cpu.System + cpu.Idle;
+        }
+    }
+}
+
+// TODO
+//// CPU Load (detailed)
+//[Command("cpuload", "CPU Load Info (User/System/Idle, per core)")]
+//public sealed class CpuLoadCommand : ICommandHandler
+//{
+//    public ValueTask ExecuteAsync(CommandContext context)
+//    {
+//        var cpuLoad = PlatformProvider.GetCpuLoad();
+
+//        Console.WriteLine("=== CPU Load Info ===");
+//        Console.WriteLine($"Logical CPUs:       {cpuLoad.LogicalCpu}");
+//        Console.WriteLine($"Physical CPUs:      {cpuLoad.PhysicalCpu}");
+//        Console.WriteLine($"Hyperthreading:     {cpuLoad.HasHyperthreading}");
+//        Console.WriteLine();
+
+//        cpuLoad.Update();
+//        Thread.Sleep(500);
+//        cpuLoad.Update();
+
+//        Console.WriteLine("=== Usage ===");
+//        Console.WriteLine($"User Load:          {cpuLoad.UserLoad:P1}");
+//        Console.WriteLine($"System Load:        {cpuLoad.SystemLoad:P1}");
+//        Console.WriteLine($"Idle Load:          {cpuLoad.IdleLoad:P1}");
+//        Console.WriteLine($"Total Load:         {cpuLoad.TotalLoad:P1}");
+//        Console.WriteLine();
+
+//        if (cpuLoad.ECoreUsage.HasValue || cpuLoad.PCoreUsage.HasValue)
+//        {
+//            Console.WriteLine("=== Apple Silicon Core Usage ===");
+//            if (cpuLoad.ECoreUsage.HasValue)
+//            {
+//                Console.WriteLine($"E-Core Usage:       {cpuLoad.ECoreUsage:P1}");
+//            }
+
+//            if (cpuLoad.PCoreUsage.HasValue)
+//            {
+//                Console.WriteLine($"P-Core Usage:       {cpuLoad.PCoreUsage:P1}");
+//            }
+
+//            Console.WriteLine();
+//        }
+
+//        Console.WriteLine("=== Per Core Usage ===");
+//        for (var i = 0; i < cpuLoad.UsagePerCore.Length; i++)
+//        {
+//            Console.WriteLine($"  Core {i,2}: {cpuLoad.UsagePerCore[i]:P1}");
+//        }
+
+//        return ValueTask.CompletedTask;
+//    }
+//}
 
 //--------------------------------------------------------------------------------
 // GPU

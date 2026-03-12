@@ -576,6 +576,9 @@ internal static class NativeMethods
     public static extern uint IOIteratorNext(IntPtr iterator);
 
     [DllImport(IOKitLib)]
+    public static extern int IORegistryEntryGetChildIterator(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out IntPtr iterator);
+
+    [DllImport(IOKitLib)]
     public static extern int IOObjectRelease(IntPtr @object);
 
     [DllImport(IOKitLib)]
