@@ -83,6 +83,19 @@ public sealed class CpuDevice
         try
         {
             var ptr = (uint*)info;
+            var totalUser = 0u;
+            var totalSystem = 0u;
+            var totalIdle = 0u;
+            var totalNice = 0u;
+            var efficiencyUser = 0u;
+            var efficiencySystem = 0u;
+            var efficiencyIdle = 0u;
+            var efficiencyNice = 0u;
+            var performanceUser = 0u;
+            var performanceSystem = 0u;
+            var performanceIdle = 0u;
+            var performanceNice = 0u;
+
             while (cpuCores.Count < processorCount)
             {
                 var logicalCpuId = cpuCores.Count;
@@ -112,9 +125,42 @@ public sealed class CpuDevice
                 cpuCores[i].System = system;
                 cpuCores[i].Idle = idle;
                 cpuCores[i].Nice = nice;
+
+                totalUser += user;
+                totalSystem += system;
+                totalIdle += idle;
+                totalNice += nice;
+
+                if (cpuCores[i].CoreType == CpuCoreType.Efficiency)
+                {
+                    efficiencyUser += user;
+                    efficiencySystem += system;
+                    efficiencyIdle += idle;
+                    efficiencyNice += nice;
+                }
+                else if (cpuCores[i].CoreType == CpuCoreType.Performance)
+                {
+                    performanceUser += user;
+                    performanceSystem += system;
+                    performanceIdle += idle;
+                    performanceNice += nice;
+                }
             }
 
-            // TODO CpuTotal, EfficiencyTotal,PerformanceTotalのメンバを更新
+            CpuTotal.User = totalUser;
+            CpuTotal.System = totalSystem;
+            CpuTotal.Idle = totalIdle;
+            CpuTotal.Nice = totalNice;
+
+            EfficiencyTotal.User = efficiencyUser;
+            EfficiencyTotal.System = efficiencySystem;
+            EfficiencyTotal.Idle = efficiencyIdle;
+            EfficiencyTotal.Nice = efficiencyNice;
+
+            PerformanceTotal.User = performanceUser;
+            PerformanceTotal.System = performanceSystem;
+            PerformanceTotal.Idle = performanceIdle;
+            PerformanceTotal.Nice = performanceNice;
 
             UpdateAt = DateTime.Now;
 
@@ -130,7 +176,6 @@ public sealed class CpuDevice
     // Helper
     //--------------------------------------------------------------------------------
 
-    // TODO
     private static Dictionary<int, CpuCoreType> ReadCoreTypes()
     {
         var coreTypes = new Dictionary<int, CpuCoreType>();
