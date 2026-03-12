@@ -18,6 +18,8 @@ public static class PlatformProvider
     // Load
     //--------------------------------------------------------------------------------
 
+    public static CpuStat GetCpuStat() => new();
+
     public static LoadAverage GetLoadAverage() => new();
 
     //--------------------------------------------------------------------------------
@@ -58,13 +60,14 @@ public static class PlatformProvider
     // CPU
     //--------------------------------------------------------------------------------
 
-    public static CpuStat GetCpuStat() => new();
+    // TODO Frequency, static information ?, Stat & Device merge ?
 
     //--------------------------------------------------------------------------------
     // GPU
     //--------------------------------------------------------------------------------
 
-    public static GpuStat GetGpuStat() => new();
+    // static information ?
+    public static IReadOnlyList<GpuDevice> GetGpuDevices() => GpuDevice.GetDevices();
 
     //--------------------------------------------------------------------------------
     // Power
