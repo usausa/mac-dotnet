@@ -39,7 +39,8 @@ class Program
         {
             while (!cts.Token.IsCancellationRequested)
             {
-                // Update() を呼び出して各コアの Frequency を最新化 (約500ms)
+                // 1秒待機してから Update() を呼び出す
+                Thread.Sleep(1000);
                 cpu.Update();
 
                 // ----- 集計は呼び出し側の責務 -----

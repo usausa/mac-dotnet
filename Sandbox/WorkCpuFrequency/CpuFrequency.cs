@@ -24,10 +24,6 @@ public sealed class CpuFrequency : IDisposable
     private IntPtr _subscription;
     private IntPtr _prevSample;
 
-    /// <summary>1回サンプリング × 1000ms = 1秒</summary>
-    private const int MeasurementCount = 1;
-    private const int StepMs = 1000;
-
     /// <summary>コアごとの周波数情報リスト。Update() により値が更新される。</summary>
     public IReadOnlyList<CpuCoreFrequency> Cores { get; }
 
@@ -123,52 +119,43 @@ public sealed class CpuFrequency : IDisposable
     }
 
     /// <summary>
-    /// IOReport でサンプリングを行い、各コアの Frequency を最新値に更新する。
-    /// 1000ms (1000ms × 1回) のブロッキング処理。
-    ///
-    /// Swift版: FrequencyReader.read() に対応。
-    /// ただし E-Core/P-Core 平均の算出は行わず、コア単位の値のみ更新する。
+    /// 前回サンプルとの差分から各コアの Frequency を更新する。
+    /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
     /// </summary>
     public void Update()
     {
-        // コア種別ごとに測定値を蓄積するバッファ
-        // key: ("ECPU0" などのチャンネル名) → value: 測定ごとの周波数リスト
-        var accumulator = new Dictionary<string, List<double>>();
+        var current = TakeSample();
+        if (current == null) return;
 
-        foreach (var samples in GetSamples())
+        if (_prevSample != IntPtr.Zero)
         {
-            foreach (var sample in samples)
+            var diffPtr = IOReportCreateSamplesDelta(_prevSample, current.Value, IntPtr.Zero);
+            CFRelease(_prevSample);
+            _prevSample = current.Value;
+
+            if (diffPtr == IntPtr.Zero) return;
+
+            var deltaSamples = CollectIOSamples(diffPtr);
+
+            foreach (var core in Cores)
+                core.Frequency = 0;
+
+            foreach (var sample in deltaSamples)
             {
                 if (sample.Group != "CPU Stats") continue;
                 if (sample.SubGroup != "CPU Core Performance States") continue;
-
                 if (!_channelToCoreMap.TryGetValue(sample.Channel, out var core)) continue;
 
                 int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
-                double freq = CalculateFrequencies(sample.Delta, freqTable);
+                core.Frequency = CalculateFrequencies(sample.Delta, freqTable);
 
-                if (!accumulator.TryGetValue(sample.Channel, out var list))
-                {
-                    list = new List<double>(MeasurementCount);
-                    accumulator[sample.Channel] = list;
-                }
-                list.Add(freq);
             }
+
+            CFRelease(diffPtr);
         }
-
-        // ----- 全コアを 0 にリセットしてから測定結果を反映 -----
-        foreach (var core in Cores)
-            core.Frequency = 0;
-
-        foreach (var (channelName, measurements) in accumulator)
+        else
         {
-            if (!_channelToCoreMap.TryGetValue(channelName, out var core)) continue;
-            if (measurements.Count == 0) continue;
-
-            double avg = measurements.Sum() / measurements.Count;
-            int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
-            double minFreq = freqTable.Length > 0 ? freqTable.Min() : 0;
-            core.Frequency = Math.Max(avg, minFreq);
+            _prevSample = current.Value;
         }
     }
 
@@ -201,16 +188,19 @@ public sealed class CpuFrequency : IDisposable
         }
         if (offset < 0) return 0;
 
-        double usage = 0;
-        for (int i = offset; i < items.Count; i++)
-            usage += items[i].Residency;
+        // 全ステート (IDLE/DOWN含む) の合計を分母にすることで実効周波数を算出する。
+        // アクティブ時間のみを分母にすると、P-Core のようにアクティブ時は常に最高周波数で
+        // 動作するコアが常に最大値を返し、負荷に応じた変化が表れなくなるため。
+        double totalTime = 0;
+        for (int i = 0; i < items.Count; i++)
+            totalTime += items[i].Residency;
 
         double avgFreq = 0;
         for (int i = 0; i < freqs.Length; i++)
         {
             int key = i + offset;
             if (key >= items.Count) continue;
-            double percent = usage == 0 ? 0 : items[key].Residency / usage;
+            double percent = totalTime == 0 ? 0 : items[key].Residency / totalTime;
             avgFreq += percent * freqs[i];
         }
 
@@ -270,35 +260,6 @@ public sealed class CpuFrequency : IDisposable
         CFRelease(key);
 
         return hasChannels ? mutableCopy : IntPtr.Zero;
-    }
-
-    /// <summary>
-    /// Swift版: FrequencyReader.getSamples()
-    /// </summary>
-    private IEnumerable<List<IOSample>> GetSamples()
-    {
-        var initial = TakeSample();
-        if (initial == null) yield break;
-
-        var prev = (_prevSample != IntPtr.Zero)
-            ? _prevSample
-            : initial.Value;
-
-        for (int i = 0; i < MeasurementCount; i++)
-        {
-            Thread.Sleep(StepMs);
-            var next = TakeSample();
-            if (next == null) continue;
-
-            var diffPtr = IOReportCreateSamplesDelta(prev, next.Value, IntPtr.Zero);
-            if (diffPtr != IntPtr.Zero)
-            {
-                yield return CollectIOSamples(diffPtr);
-                CFRelease(diffPtr);
-            }
-            prev = next.Value;
-        }
-        _prevSample = prev;
     }
 
     /// <summary>
