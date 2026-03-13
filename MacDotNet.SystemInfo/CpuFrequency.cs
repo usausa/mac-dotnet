@@ -34,8 +34,7 @@ public sealed class CpuCoreFrequency
 
 public sealed class CpuFrequency
 {
-    private readonly int[] eCoreFrequencyTable;
-    private readonly int[] pCoreFrequencyTable;
+    private static readonly Lazy<(int[] ECore, int[] PCore)> FrequencyTables = new(ReadFrequencyTables);
 
     private readonly List<CpuCoreFrequency> cores = [];
 
@@ -51,83 +50,26 @@ public sealed class CpuFrequency
 
     public IReadOnlyList<CpuCoreFrequency> PerformanceCores => performanceCores;
 
-    public int MaxEfficiencyCoreFrequency => eCoreFrequencyTable.Length > 0 ? eCoreFrequencyTable[^1] : 0;
+#pragma warning disable CA1822
+    public int MaxEfficiencyCoreFrequency => FrequencyTables.Value.ECore.Length > 0 ? FrequencyTables.Value.ECore[^1] : 0;
 
-    public int MaxPerformanceCoreFrequency => pCoreFrequencyTable.Length > 0 ? pCoreFrequencyTable[^1] : 0;
+    public int MaxPerformanceCoreFrequency => FrequencyTables.Value.PCore.Length > 0 ? FrequencyTables.Value.PCore[^1] : 0;
+#pragma warning restore CA1822
 
-        //--------------------------------------------------------------------------------
-        // Constructor
-        //--------------------------------------------------------------------------------
+    //--------------------------------------------------------------------------------
+    // Constructor
+    //--------------------------------------------------------------------------------
 
-    internal unsafe CpuFrequency()
+    internal CpuFrequency()
     {
-        var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
-        var multiplier = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase) || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase)
-            ? 1000u
-            : 1_000_000u;
-
-        eCoreFrequencyTable = [];
-        pCoreFrequencyTable = [];
-
-        var matching = IOServiceMatching("AppleARMIODevice");
-        if (matching != IntPtr.Zero && IOServiceGetMatchingServices(0, matching, out var iterator) == 0)
-        {
-            var nameBuf = stackalloc byte[128];
-
-            using var it = new IOObj(iterator);
-            uint child;
-            while ((child = IOIteratorNext(it)) != 0)
-            {
-                using var entry = new IOObj(child);
-
-                if (IORegistryEntryGetName(entry, nameBuf) != 0 ||
-                    Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr" ||
-                    IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
-                {
-                    continue;
-                }
-
-                using var props = new CFRef(propsRef);
-
-                using var eKey = CFRef.CreateString("voltage-states1-sram");
-                var eData = CFDictionaryGetValue(props, eKey);
-                if (eData != IntPtr.Zero)
-                {
-                    eCoreFrequencyTable = ConvertToFrequencyTable(eData, multiplier);
-                }
-
-                using var pKey = CFRef.CreateString("voltage-states5-sram");
-                var pData = CFDictionaryGetValue(props, pKey);
-                if (pData != IntPtr.Zero)
-                {
-                    pCoreFrequencyTable = ConvertToFrequencyTable(pData, multiplier);
-                }
-            }
-        }
-
         Update();
-    }
-
-    private static unsafe int[] ConvertToFrequencyTable(IntPtr cfData, uint multiplier)
-    {
-        var length = (int)CFDataGetLength(cfData);
-        var ptr = CFDataGetBytePtr(cfData);
-        var bytes = new ReadOnlySpan<byte>((void*)ptr, length);
-
-        var result = new int[length / 8];
-        for (var i = 0; i < result.Length; i++)
-        {
-            var v = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(i * 8, 4));
-            result[i] = (int)(v / multiplier);
-        }
-
-        return result;
     }
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
+    // ReSharper disable StringLiteralTypo
     public bool Update()
     {
         using var channels = new CFRef(GetChannels());
@@ -156,50 +98,52 @@ public sealed class CpuFrequency
             return false;
         }
 
+        // Reset frequencies
         for (var i = 0; i < cores.Count; i++)
         {
             cores[i].Frequency = 0;
         }
 
         var count = CFArrayGetCount(items);
-        for (var idx = 0L; idx < count; idx++)
+        for (var i = 0L; i < count; i++)
         {
-            var item = CFArrayGetValueAtIndex(items, idx);
+            var item = CFArrayGetValueAtIndex(items, i);
             var channelName = ToManagedString(IOReportChannelGetChannelName(item));
             if (channelName is null)
             {
                 continue;
             }
 
-            var isECore = channelName.StartsWith("ECPU", StringComparison.Ordinal);
-            var targetCores = isECore ? efficiencyCores : performanceCores;
+            var isEfficiencyCore = channelName.StartsWith("ECPU", StringComparison.Ordinal);
+            var targetCores = isEfficiencyCore ? efficiencyCores : performanceCores;
+
             var core = FindCore(targetCores, channelName);
             if (core is null)
             {
-                // 初回: チャンネルに対応するコアを新規作成し PreviousResidencies にベースラインを記録する
-                var coreType = isECore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
+                var coreType = isEfficiencyCore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
                 core = new CpuCoreFrequency(targetCores.Count, coreType)
                 {
                     ChannelName = channelName,
-                    FrequencyTable = isECore ? eCoreFrequencyTable : pCoreFrequencyTable
+                    FrequencyTable = isEfficiencyCore ? FrequencyTables.Value.ECore : FrequencyTables.Value.PCore
                 };
 
                 var newStateCount = IOReportStateGetCount(item);
                 core.PreviousResidencies = new long[newStateCount];
                 core.CurrentResidencies = new long[newStateCount];
 
-                for (var s = 0; s < newStateCount; s++)
+                // TODO ?
+                for (var j = 0; j < newStateCount; j++)
                 {
                     if (core.ResidencyOffset < 0)
                     {
-                        var name = ToManagedString(IOReportStateGetNameForIndex(item, s));
+                        var name = ToManagedString(IOReportStateGetNameForIndex(item, j));
                         if (name is not ("IDLE" or "DOWN" or "OFF"))
                         {
-                            core.ResidencyOffset = s;
+                            core.ResidencyOffset = j;
                         }
                     }
 
-                    core.PreviousResidencies[s] = IOReportStateGetResidency(item, s);
+                    core.PreviousResidencies[j] = IOReportStateGetResidency(item, j);
                 }
 
                 targetCores.Add(core);
@@ -207,22 +151,95 @@ public sealed class CpuFrequency
             }
             else
             {
-                // 2回目以降: 周波数を更新する
+                // Update frequency
                 var stateCount = IOReportStateGetCount(item);
-                for (var s = 0; s < stateCount && s < core.CurrentResidencies.Length; s++)
+                for (var j = 0; j < stateCount && j < core.CurrentResidencies.Length; j++)
                 {
-                    core.CurrentResidencies[s] = IOReportStateGetResidency(item, s);
+                    core.CurrentResidencies[j] = IOReportStateGetResidency(item, j);
                 }
 
                 core.Frequency = CalculateFrequencies(core.CurrentResidencies, core.PreviousResidencies, core.FrequencyTable, core.ResidencyOffset);
 
-                // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
+                // Swap current to previous for the next round
                 (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
             }
         }
 
         UpdateAt = DateTime.Now;
+
         return true;
+    }
+    // ReSharper restore StringLiteralTypo
+
+    //--------------------------------------------------------------------------------
+    // Helper
+    //--------------------------------------------------------------------------------
+
+    // ReSharper disable StringLiteralTypo
+    private static unsafe (int[] ECore, int[] PCore) ReadFrequencyTables()
+    {
+        var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
+        var multiplier = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase) || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase)
+            ? 1000u
+            : 1_000_000u;
+
+        int[] eCore = [];
+        int[] pCore = [];
+
+        var matching = IOServiceMatching("AppleARMIODevice");
+        if ((matching != IntPtr.Zero) && (IOServiceGetMatchingServices(0, matching, out var iterator) == 0))
+        {
+            var nameBuf = stackalloc byte[128];
+
+            using var it = new IOObj(iterator);
+            uint child;
+            while ((child = IOIteratorNext(it)) != 0)
+            {
+                using var entry = new IOObj(child);
+
+                if ((IORegistryEntryGetName(entry, nameBuf) != 0) ||
+                    (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr") ||
+                    (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0))
+                {
+                    continue;
+                }
+
+                using var props = new CFRef(propsRef);
+
+                using var eKey = CFRef.CreateString("voltage-states1-sram");
+                var eData = CFDictionaryGetValue(props, eKey);
+                if (eData != IntPtr.Zero)
+                {
+                    eCore = ConvertToFrequencyTable(eData, multiplier);
+                }
+
+                using var pKey = CFRef.CreateString("voltage-states5-sram");
+                var pData = CFDictionaryGetValue(props, pKey);
+                if (pData != IntPtr.Zero)
+                {
+                    pCore = ConvertToFrequencyTable(pData, multiplier);
+                }
+            }
+        }
+
+        return (eCore, pCore);
+    }
+    // ReSharper restore StringLiteralTypo
+
+    private static unsafe int[] ConvertToFrequencyTable(IntPtr cfData, uint multiplier)
+    {
+        var length = (int)CFDataGetLength(cfData);
+        var ptr = CFDataGetBytePtr(cfData);
+        var bytes = new ReadOnlySpan<byte>((void*)ptr, length);
+
+        var result = new int[length / 8];
+        for (var i = 0; i < result.Length; i++)
+        {
+            var v = BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(i * 8, 4));
+            result[i] = (int)(v / multiplier);
+        }
+
+        return result;
     }
 
     private static IntPtr GetChannels()
@@ -235,7 +252,7 @@ public sealed class CpuFrequency
             return IntPtr.Zero;
         }
 
-        // IOReportCreateSubscription には CFMutableDictionary が必要なため mutable コピーを作成する
+        // IOReportCreateSubscription requires a mutable dictionary
         var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
         if (mutableCopy == IntPtr.Zero)
         {
@@ -265,33 +282,31 @@ public sealed class CpuFrequency
         return null;
     }
 
-    /// 前回・今回のレジデンシー差分から実効周波数 (MHz) を算出する。
-    /// 全ステートの差分合計を分母にすることでアイドル時間を反映した実効周波数を得る。
-    private static double CalculateFrequencies(long[] curr, long[] prev, int[] freqs, int offset)
+    private static double CalculateFrequencies(long[] currentValues, long[] previousValues, int[] table, int offset)
     {
         if (offset < 0)
         {
             return 0;
         }
 
-        double totalDelta = 0;
-        for (var i = 0; i < curr.Length; i++)
+        var totalDelta = 0L;
+        for (var i = 0; i < currentValues.Length; i++)
         {
-            totalDelta += curr[i] - prev[i];
+            totalDelta += currentValues[i] - previousValues[i];
         }
 
-        double avgFreq = 0;
-        for (var i = 0; i < freqs.Length; i++)
+        var avgFreq = 0d;
+        for (var i = 0; i < table.Length; i++)
         {
             var key = i + offset;
-            if (key >= curr.Length)
+            if (key >= currentValues.Length)
             {
                 continue;
             }
 
-            var delta = (double)(curr[key] - prev[key]);
-            var percent = totalDelta == 0 ? 0 : delta / totalDelta;
-            avgFreq += percent * freqs[i];
+            var delta = currentValues[key] - previousValues[key];
+            var percent = totalDelta == 0 ? 0d : (double)delta / totalDelta;
+            avgFreq += percent * table[i];
         }
 
         return avgFreq;
