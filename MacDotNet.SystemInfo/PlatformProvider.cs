@@ -59,7 +59,7 @@ public static class PlatformProvider
     //--------------------------------------------------------------------------------
 
     // TODO Frequency, static information ?, Stat & Device merge ?
-    public static CpuDevice GetCpuStat() => new();
+    public static CpuStat GetCpuStat() => new();
 
     //--------------------------------------------------------------------------------
     // GPU

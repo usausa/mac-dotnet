@@ -415,22 +415,22 @@ public sealed class CpuCommand : ICommandHandler
 
         return;
 
-        static (long Idle, long Total) CreateSnapshot(CpuCore cpu)
+        static (long Idle, long Total) CreateSnapshot(CpuCoreStat cpu)
         {
             return (CalcCpuIdle(cpu), CalcCpuTotal(cpu));
         }
 
-        static long CalcCpuIdle(CpuCore cpu)
+        static long CalcCpuIdle(CpuCoreStat cpu)
         {
             return cpu.Idle;
         }
 
-        static long CalcCpuTotal(CpuCore cpu)
+        static long CalcCpuTotal(CpuCoreStat cpu)
         {
             return cpu.User + cpu.Nice + cpu.System + cpu.Idle;
         }
 
-        static int CalcUsage(CpuCore cpu, (long Idle, long Total) previous)
+        static int CalcUsage(CpuCoreStat cpu, (long Idle, long Total) previous)
         {
             var idle = CalcCpuIdle(cpu);
             var total = CalcCpuTotal(cpu);

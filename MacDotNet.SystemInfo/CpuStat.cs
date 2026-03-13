@@ -13,7 +13,7 @@ public enum CpuCoreType
     Performance = 1
 }
 
-public sealed class CpuUsage
+public sealed class CpuCoreStat
 {
     public string Name { get; }
 
@@ -27,7 +27,7 @@ public sealed class CpuUsage
 
     public uint Nice { get; internal set; }
 
-    internal CpuUsage(CpuCoreType coreType, string name)
+    internal CpuCoreStat(CpuCoreType coreType, string name)
     {
         CoreType = coreType;
         Name = name;
@@ -36,36 +36,36 @@ public sealed class CpuUsage
 
 // TODO Frequency
 
-public sealed class CpuDevice
+public sealed class CpuStat
 {
     // TODO
-    private readonly List<CpuUsage> cpuCores = [];
+    private readonly List<CpuCoreStat> cpuCores = [];
 
-    private readonly List<CpuUsage> efficiencyCores = [];
+    private readonly List<CpuCoreStat> efficiencyCores = [];
 
-    private readonly List<CpuUsage> performanceCores = [];
+    private readonly List<CpuCoreStat> performanceCores = [];
 
     private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(valueFactory: ReadCoreTypes);
 
     public DateTime UpdateAt { get; private set; }
 
-    public CpuUsage CpuTotal { get; } = new(CpuCoreType.Total, "total");
+    public CpuCoreStat CpuTotal { get; } = new(CpuCoreType.Total, "total");
 
-    public CpuUsage EfficiencyTotal { get; } = new(CpuCoreType.Total, "efficiency");
+    public CpuCoreStat EfficiencyTotal { get; } = new(CpuCoreType.Total, "efficiency");
 
-    public CpuUsage PerformanceTotal { get; } = new(CpuCoreType.Total, "performance");
+    public CpuCoreStat PerformanceTotal { get; } = new(CpuCoreType.Total, "performance");
 
-    public IReadOnlyList<CpuUsage> CpuCores => cpuCores;
+    public IReadOnlyList<CpuCoreStat> CpuCores => cpuCores;
 
-    public IReadOnlyList<CpuUsage> EfficiencyCores => efficiencyCores;
+    public IReadOnlyList<CpuCoreStat> EfficiencyCores => efficiencyCores;
 
-    public IReadOnlyList<CpuUsage> PerformanceCores => performanceCores;
+    public IReadOnlyList<CpuCoreStat> PerformanceCores => performanceCores;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal CpuDevice()
+    internal CpuStat()
     {
         Update();
     }
@@ -103,7 +103,7 @@ public sealed class CpuDevice
             {
                 var logicalCpuId = cpuCores.Count;
                 var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
-                var core = new CpuCore(coreType: coreType, name: $"{logicalCpuId}");
+                var core = new CpuCoreStat(coreType: coreType, name: $"{logicalCpuId}");
 
                 cpuCores.Add(core);
                 if (coreType == CpuCoreType.Efficiency)
