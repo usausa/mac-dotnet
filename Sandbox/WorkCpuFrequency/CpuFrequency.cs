@@ -24,9 +24,9 @@ public sealed class CpuFrequency : IDisposable
     private IntPtr _subscription;
     private IntPtr _prevSample;
 
-    /// <summary>Swift版と同じ: 4回サンプリング × 125ms = 500ms</summary>
-    private const int MeasurementCount = 4;
-    private const int StepMs = 125;
+    /// <summary>1回サンプリング × 1000ms = 1秒</summary>
+    private const int MeasurementCount = 1;
+    private const int StepMs = 1000;
 
     /// <summary>コアごとの周波数情報リスト。Update() により値が更新される。</summary>
     public IReadOnlyList<CpuCoreFrequency> Cores { get; }
@@ -124,7 +124,7 @@ public sealed class CpuFrequency : IDisposable
 
     /// <summary>
     /// IOReport でサンプリングを行い、各コアの Frequency を最新値に更新する。
-    /// 500ms (125ms × 4回) のブロッキング処理。
+    /// 1000ms (1000ms × 1回) のブロッキング処理。
     ///
     /// Swift版: FrequencyReader.read() に対応。
     /// ただし E-Core/P-Core 平均の算出は行わず、コア単位の値のみ更新する。
@@ -165,7 +165,7 @@ public sealed class CpuFrequency : IDisposable
             if (!_channelToCoreMap.TryGetValue(channelName, out var core)) continue;
             if (measurements.Count == 0) continue;
 
-            double avg = measurements.Sum() / MeasurementCount;
+            double avg = measurements.Sum() / measurements.Count;
             int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
             double minFreq = freqTable.Length > 0 ? freqTable.Min() : 0;
             core.Frequency = Math.Max(avg, minFreq);
