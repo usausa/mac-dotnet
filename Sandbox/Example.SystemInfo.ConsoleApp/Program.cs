@@ -598,8 +598,8 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 12. CPU Frequency (Apple Silicon IOReport)
-// コンストラクタでベースラインレジデンシーを記録済みのため、
-// PlatformProvider.GetCpuFrequency() 直後の 1 回目の Update() から実効周波数が得られる。
+// GetCpuFrequency() 内部でベースラインレジデンシーを記録済みのため、
+// 1 回目の Update() から実効周波数が得られる。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 12. CPU Frequency (Apple Silicon IOReport) ###");
 try

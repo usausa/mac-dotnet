@@ -173,7 +173,7 @@ public sealed class CpuFrequency
             var core = FindCore(channelName, isECore);
             if (core is null)
             {
-                // 初回: チャンネルに対応するコアを新規作成する
+                // 初回: チャンネルに対応するコアを新規作成し PrevResidencies にベースラインを記録する
                 var coreType = isECore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
                 core = new CpuCoreFrequency(isECore ? eCores.Count : pCores.Count, coreType);
                 core.ChannelName = channelName;
@@ -191,6 +191,8 @@ public sealed class CpuFrequency
                         if (name is not ("IDLE" or "DOWN" or "OFF"))
                             core.ResidencyOffset = s;
                     }
+
+                    core.PrevResidencies[s] = IOReportStateGetResidency(item, s);
                 }
 
                 if (isECore)
@@ -199,16 +201,18 @@ public sealed class CpuFrequency
                     pCores.Add(core);
                 cores.Add(core);
             }
+            else
+            {
+                // 2回目以降: 周波数を更新する
+                var stateCount = IOReportStateGetCount(item);
+                for (var s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
+                    core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
 
-            // 周波数を更新する (初回はブート時からの累積で算出 / On first call, computes boot-time average)
-            var stateCount = IOReportStateGetCount(item);
-            for (var s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
-                core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
+                core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
 
-            core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
-
-            // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
-            (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
+                // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
+                (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
+            }
         }
 
         UpdateAt = DateTime.Now;
