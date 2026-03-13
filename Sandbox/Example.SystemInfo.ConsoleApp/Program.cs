@@ -606,8 +606,8 @@ try
 {
     var cpuFreq = PlatformProvider.GetCpuFrequency();
 
-    Console.WriteLine($"  E-Core 周波数テーブル: {string.Join(", ", cpuFreq.ECoreFrequencyTable)} MHz");
-    Console.WriteLine($"  P-Core 周波数テーブル: {string.Join(", ", cpuFreq.PCoreFrequencyTable)} MHz");
+    Console.WriteLine($"  E-Core 最大周波数: {cpuFreq.MaxECoreFrequency} MHz");
+    Console.WriteLine($"  P-Core 最大周波数: {cpuFreq.MaxPCoreFrequency} MHz");
     var eCoreCountFreq = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Efficiency);
     var pCoreCountFreq = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Performance);
     Console.WriteLine($"  コア数: {cpuFreq.Cores.Count} (E-Core: {eCoreCountFreq}, P-Core: {pCoreCountFreq})");

@@ -22,11 +22,11 @@ public sealed class CpuFrequency
     /// <summary>コアごとの周波数情報リスト。Update() により値が更新される。</summary>
     public IReadOnlyList<CpuCoreFrequency> Cores { get; }
 
-    /// <summary>E-Core の周波数テーブル (MHz)</summary>
-    public IReadOnlyList<int> ECoreFrequencyTable => _eCoreFreqs;
+    /// <summary>E-Core の最大周波数 (MHz)</summary>
+    public int MaxECoreFrequency => _eCoreFreqs.Length > 0 ? _eCoreFreqs[^1] : 0;
 
-    /// <summary>P-Core の周波数テーブル (MHz)</summary>
-    public IReadOnlyList<int> PCoreFrequencyTable => _pCoreFreqs;
+    /// <summary>P-Core の最大周波数 (MHz)</summary>
+    public int MaxPCoreFrequency => _pCoreFreqs.Length > 0 ? _pCoreFreqs[^1] : 0;
 
     /// <summary>
     /// コンストラクタ。周波数テーブルとコア一覧を構築する。

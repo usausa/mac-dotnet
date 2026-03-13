@@ -21,8 +21,8 @@ class Program
         var cpu = new CpuFrequency(cpuName);
 
         // 周波数テーブルの表示
-        Console.WriteLine($"E-Core 周波数テーブル: {string.Join(", ", cpu.ECoreFrequencyTable)} MHz");
-        Console.WriteLine($"P-Core 周波数テーブル: {string.Join(", ", cpu.PCoreFrequencyTable)} MHz");
+        Console.WriteLine($"E-Core 最大周波数: {cpu.MaxECoreFrequency} MHz");
+        Console.WriteLine($"P-Core 最大周波数: {cpu.MaxPCoreFrequency} MHz");
         Console.WriteLine($"コア数: {cpu.Cores.Count} "
             + $"(E-Core: {cpu.Cores.Count(c => c.CoreType == CpuCoreType.Efficiency)}, "
             + $"P-Core: {cpu.Cores.Count(c => c.CoreType == CpuCoreType.Performance)})");
@@ -59,7 +59,7 @@ class Program
                 // コアごとの周波数
                 foreach (var core in cpu.Cores)
                 {
-                    string bar = MakeBar(core.Frequency, cpu.PCoreFrequencyTable.Max());
+                    string bar = MakeBar(core.Frequency, cpu.MaxPCoreFrequency);
                     Console.WriteLine($"  {core.CoreType.ToString()[0]}-Core {core.Number}: "
                         + $"{core.Frequency,7:F1} MHz  {bar}");
                 }
