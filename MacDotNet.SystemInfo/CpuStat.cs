@@ -70,20 +70,25 @@ public sealed class CpuStat
         {
             var ptr = (uint*)info;
 
-            while (cpuCores.Count < processorCount)
+            if (cpuCores.Count < processorCount)
             {
-                var logicalCpuId = cpuCores.Count;
-                var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
-                var core = new CpuCoreStat(logicalCpuId, coreType);
+                while (cpuCores.Count < processorCount)
+                {
+                    var logicalCpuId = cpuCores.Count;
+                    var coreType = CoreTypes.Value.GetValueOrDefault(logicalCpuId, CpuCoreType.Unknown);
+                    var core = new CpuCoreStat(logicalCpuId, coreType);
 
-                cpuCores.Add(core);
-                if (coreType == CpuCoreType.Efficiency)
-                {
-                    efficiencyCores.Add(core);
-                }
-                else if (coreType == CpuCoreType.Performance)
-                {
-                    performanceCores.Add(core);
+                    cpuCores.Add(core);
+                    // TODO cpuCoresをEコア優先、同コアの場合は論理CPU ID順でソートする
+
+                    if (coreType == CpuCoreType.Efficiency)
+                    {
+                        efficiencyCores.Add(core);
+                    }
+                    else if (coreType == CpuCoreType.Performance)
+                    {
+                        performanceCores.Add(core);
+                    }
                 }
             }
 
