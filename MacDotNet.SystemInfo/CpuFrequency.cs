@@ -104,6 +104,7 @@ public sealed class CpuFrequency
             cores[i].Frequency = 0;
         }
 
+        var coreAdded = false;
         var count = CFArrayGetCount(items);
         for (var i = 0L; i < count; i++)
         {
@@ -131,7 +132,7 @@ public sealed class CpuFrequency
                 core.PreviousResidencies = new long[newStateCount];
                 core.CurrentResidencies = new long[newStateCount];
 
-                // TODO ?
+                // Calc residency offset
                 for (var j = 0; j < newStateCount; j++)
                 {
                     if (core.ResidencyOffset < 0)
@@ -148,6 +149,7 @@ public sealed class CpuFrequency
 
                 targetCores.Add(core);
                 cores.Add(core);
+                coreAdded = true;
             }
             else
             {
@@ -163,6 +165,15 @@ public sealed class CpuFrequency
                 // Swap current to previous for the next round
                 (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
             }
+        }
+
+        if (coreAdded)
+        {
+            cores.Sort(static (x, y) =>
+            {
+                var cmp = x.CoreType.CompareTo(y.CoreType);
+                return cmp != 0 ? cmp : x.Number.CompareTo(y.Number);
+            });
         }
 
         UpdateAt = DateTime.Now;

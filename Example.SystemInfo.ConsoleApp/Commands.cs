@@ -4,11 +4,11 @@
 // ReSharper disable MemberCanBePrivate.Global
 namespace Example.SystemInfo.ConsoleApp;
 
+using System.Collections.Generic;
+
 using MacDotNet.SystemInfo;
 
 using Smart.CommandLine.Hosting;
-
-using System.Collections.Generic;
 
 public static class CommandBuilderExtensions
 {
