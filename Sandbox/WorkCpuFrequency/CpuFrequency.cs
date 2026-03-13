@@ -16,6 +16,10 @@ public sealed class CpuFrequency : IDisposable
     private readonly int[] _eCoreFreqs;   // E-Core 周波数テーブル (MHz)
     private readonly int[] _pCoreFreqs;   // P-Core 周波数テーブル (MHz)
 
+    // IOReport チャンネル名 → CpuCoreFrequency のマッピング
+    // "CPU Core Performance States" チャンネルをアルファベット順にソートしてインデックスを割り当て
+    private readonly Dictionary<string, CpuCoreFrequency> _channelToCoreMap;
+
     private IntPtr _channels;
     private IntPtr _subscription;
     private IntPtr _prevSample;
@@ -68,6 +72,54 @@ public sealed class CpuFrequency : IDisposable
 
         if (_subscription == IntPtr.Zero)
             throw new InvalidOperationException("IOReport サブスクリプションの作成に失敗しました。");
+
+        // ----- チャンネル名 → コアのマッピングを構築 -----
+        // IOReport のチャンネル名は "ECPU000", "ECPU010", "PCPU000", "PCPU100" 等の形式。
+        // アルファベット順にソートして各コア種別の連番 (0, 1, 2, ...) に割り当てる。
+        _channelToCoreMap = BuildChannelToCoreMap(cores);
+    }
+
+    /// <summary>
+    /// 初期サンプルを取得してチャンネル名を列挙し、コアへのマッピングを構築する。
+    /// </summary>
+    private Dictionary<string, CpuCoreFrequency> BuildChannelToCoreMap(List<CpuCoreFrequency> cores)
+    {
+        var map = new Dictionary<string, CpuCoreFrequency>();
+        var sample = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
+        if (sample == IntPtr.Zero) return map;
+
+        // 初回サンプルをデルタ計算のベースとして保持
+        _prevSample = sample;
+
+        var allSamples = CollectIOSamples(sample);
+
+        // "CPU Core Performance States" サブグループのチャンネルのみ対象
+        var eCoreChannels = allSamples
+            .Where(s => s.SubGroup == "CPU Core Performance States"
+                     && s.Channel.StartsWith("ECPU", StringComparison.Ordinal))
+            .Select(s => s.Channel)
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+
+        var pCoreChannels = allSamples
+            .Where(s => s.SubGroup == "CPU Core Performance States"
+                     && s.Channel.StartsWith("PCPU", StringComparison.Ordinal))
+            .Select(s => s.Channel)
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+
+        var eCores = cores.Where(c => c.CoreType == CpuCoreType.Efficiency).ToList();
+        var pCores = cores.Where(c => c.CoreType == CpuCoreType.Performance).ToList();
+
+        for (int i = 0; i < eCoreChannels.Count && i < eCores.Count; i++)
+            map[eCoreChannels[i]] = eCores[i];
+
+        for (int i = 0; i < pCoreChannels.Count && i < pCores.Count; i++)
+            map[pCoreChannels[i]] = pCores[i];
+
+        return map;
     }
 
     /// <summary>
@@ -88,16 +140,11 @@ public sealed class CpuFrequency : IDisposable
             foreach (var sample in samples)
             {
                 if (sample.Group != "CPU Stats") continue;
+                if (sample.SubGroup != "CPU Core Performance States") continue;
 
-                // Swift版: sample.channel.starts(with: "ECPU") / "PCPU"
-                int[] freqTable;
-                if (sample.Channel.StartsWith("ECPU"))
-                    freqTable = _eCoreFreqs;
-                else if (sample.Channel.StartsWith("PCPU"))
-                    freqTable = _pCoreFreqs;
-                else
-                    continue;
+                if (!_channelToCoreMap.TryGetValue(sample.Channel, out var core)) continue;
 
+                int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
                 double freq = CalculateFrequencies(sample.Delta, freqTable);
 
                 if (!accumulator.TryGetValue(sample.Channel, out var list))
@@ -109,22 +156,19 @@ public sealed class CpuFrequency : IDisposable
             }
         }
 
-        // ----- 測定結果を各 CpuCoreFrequency へ反映 -----
-        // IOReport のチャンネル名は "ECPU0", "ECPU1", "PCPU0", "PCPU1" ... の形式
+        // ----- 全コアを 0 にリセットしてから測定結果を反映 -----
         foreach (var core in Cores)
+            core.Frequency = 0;
+
+        foreach (var (channelName, measurements) in accumulator)
         {
-            string channelPrefix = core.CoreType == CpuCoreType.Efficiency ? "ECPU" : "PCPU";
-            string channelName = $"{channelPrefix}{core.Number}";
+            if (!_channelToCoreMap.TryGetValue(channelName, out var core)) continue;
+            if (measurements.Count == 0) continue;
 
-            if (accumulator.TryGetValue(channelName, out var measurements) && measurements.Count > 0)
-            {
-                double avg = measurements.Sum() / MeasurementCount;
-
-                // Swift版と同じ: 最低周波数を下限とする
-                int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
-                double minFreq = freqTable.Length > 0 ? freqTable.Min() : 0;
-                core.Frequency = Math.Max(avg, minFreq);
-            }
+            double avg = measurements.Sum() / MeasurementCount;
+            int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
+            double minFreq = freqTable.Length > 0 ? freqTable.Min() : 0;
+            core.Frequency = Math.Max(avg, minFreq);
         }
     }
 

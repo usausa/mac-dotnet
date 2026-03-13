@@ -112,7 +112,7 @@ static class NativeBindings
     // IOReport  (bridge.h と同じシグネチャ)
     // =========================================================================
 
-    const string IOReport = "/System/Library/PrivateFrameworks/IOReport.framework/IOReport";
+    const string IOReport = "/usr/lib/libIOReport.dylib";
 
     /// <summary>IOReportCopyChannelsInGroup — 指定グループ/サブグループのチャンネルを取得</summary>
     [DllImport(IOReport)]
