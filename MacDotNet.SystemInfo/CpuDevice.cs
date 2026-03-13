@@ -13,7 +13,7 @@ public enum CpuCoreType
     Performance = 1
 }
 
-public sealed class CpuCore
+public sealed class CpuUsage
 {
     public string Name { get; }
 
@@ -27,36 +27,39 @@ public sealed class CpuCore
 
     public uint Nice { get; internal set; }
 
-    internal CpuCore(CpuCoreType coreType, string name)
+    internal CpuUsage(CpuCoreType coreType, string name)
     {
         CoreType = coreType;
         Name = name;
     }
 }
 
+// TODO Frequency
+
 public sealed class CpuDevice
 {
-    private readonly List<CpuCore> cpuCores = [];
+    // TODO
+    private readonly List<CpuUsage> cpuCores = [];
 
-    private readonly List<CpuCore> efficiencyCores = [];
+    private readonly List<CpuUsage> efficiencyCores = [];
 
-    private readonly List<CpuCore> performanceCores = [];
+    private readonly List<CpuUsage> performanceCores = [];
 
     private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(valueFactory: ReadCoreTypes);
 
     public DateTime UpdateAt { get; private set; }
 
-    public CpuCore CpuTotal { get; } = new(CpuCoreType.Total, "total");
+    public CpuUsage CpuTotal { get; } = new(CpuCoreType.Total, "total");
 
-    public CpuCore EfficiencyTotal { get; } = new(CpuCoreType.Total, "efficiency");
+    public CpuUsage EfficiencyTotal { get; } = new(CpuCoreType.Total, "efficiency");
 
-    public CpuCore PerformanceTotal { get; } = new(CpuCoreType.Total, "performance");
+    public CpuUsage PerformanceTotal { get; } = new(CpuCoreType.Total, "performance");
 
-    public IReadOnlyList<CpuCore> CpuCores => cpuCores;
+    public IReadOnlyList<CpuUsage> CpuCores => cpuCores;
 
-    public IReadOnlyList<CpuCore> EfficiencyCores => efficiencyCores;
+    public IReadOnlyList<CpuUsage> EfficiencyCores => efficiencyCores;
 
-    public IReadOnlyList<CpuCore> PerformanceCores => performanceCores;
+    public IReadOnlyList<CpuUsage> PerformanceCores => performanceCores;
 
     //--------------------------------------------------------------------------------
     // Constructor
