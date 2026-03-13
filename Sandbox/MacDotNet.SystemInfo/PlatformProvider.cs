@@ -19,6 +19,8 @@ public static class PlatformProvider
 
     public static CpuStat GetCpuStat() => CpuStat.Create();
 
+    public static CpuFrequency? GetCpuFrequency() => CpuFrequency.Create();
+
     //--------------------------------------------------------------------------------
     // Memory
     //--------------------------------------------------------------------------------
