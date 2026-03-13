@@ -31,13 +31,13 @@ public sealed class CpuCoreStat
 
 public sealed class CpuStat
 {
+    private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(ReadCoreTypes);
+
     private readonly List<CpuCoreStat> cpuCores = [];
 
     private readonly List<CpuCoreStat> efficiencyCores = [];
 
     private readonly List<CpuCoreStat> performanceCores = [];
-
-    private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(ReadCoreTypes);
 
     public DateTime UpdateAt { get; private set; }
 

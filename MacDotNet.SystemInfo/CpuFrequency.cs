@@ -38,7 +38,9 @@ public sealed class CpuFrequency
     private readonly int[] pCoreFrequencyTable;
 
     private readonly List<CpuCoreFrequency> cores = [];
+
     private readonly List<CpuCoreFrequency> efficiencyCores = [];
+
     private readonly List<CpuCoreFrequency> performanceCores = [];
 
     public DateTime UpdateAt { get; private set; }
@@ -176,9 +178,11 @@ public sealed class CpuFrequency
             {
                 // 初回: チャンネルに対応するコアを新規作成し PreviousResidencies にベースラインを記録する
                 var coreType = isECore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
-                core = new CpuCoreFrequency(targetCores.Count, coreType);
-                core.ChannelName = channelName;
-                core.FrequencyTable = isECore ? eCoreFrequencyTable : pCoreFrequencyTable;
+                core = new CpuCoreFrequency(targetCores.Count, coreType)
+                {
+                    ChannelName = channelName,
+                    FrequencyTable = isECore ? eCoreFrequencyTable : pCoreFrequencyTable
+                };
 
                 var newStateCount = IOReportStateGetCount(item);
                 core.PreviousResidencies = new long[newStateCount];
