@@ -35,82 +35,42 @@ public sealed class CpuFrequency
 {
     private readonly int[] eCoreFreqs;
     private readonly int[] pCoreFreqs;
-    private readonly CpuCoreFrequency[] eCores;
-    private readonly CpuCoreFrequency[] pCores;
-    private bool initialized;
+    private readonly List<CpuCoreFrequency> eCores = [];
+    private readonly List<CpuCoreFrequency> pCores = [];
+    private readonly List<CpuCoreFrequency> cores = [];
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
 
     /// <summary>コアごとの実効周波数リスト。Update() により値が更新される。<br/>Per-core effective frequency list. Updated by Update().</summary>
-    public IReadOnlyList<CpuCoreFrequency> Cores { get; }
+    public IReadOnlyList<CpuCoreFrequency> Cores => cores;
 
-    /// <summary>E-Core の周波数テーブル (MHz)<br/>E-Core frequency table (MHz)</summary>
-    public IReadOnlyList<int> ECoreFrequencyTable => eCoreFreqs;
+    /// <summary>E-Core の最大周波数 (MHz)<br/>E-Core maximum frequency (MHz)</summary>
+    public int MaxECoreFrequency => eCoreFreqs.Length > 0 ? eCoreFreqs[^1] : 0;
 
-    /// <summary>P-Core の周波数テーブル (MHz)<br/>P-Core frequency table (MHz)</summary>
-    public IReadOnlyList<int> PCoreFrequencyTable => pCoreFreqs;
+    /// <summary>P-Core の最大周波数 (MHz)<br/>P-Core maximum frequency (MHz)</summary>
+    public int MaxPCoreFrequency => pCoreFreqs.Length > 0 ? pCoreFreqs[^1] : 0;
 
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal CpuFrequency()
+    internal unsafe CpuFrequency()
     {
         var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
-        var tables = GetFrequencyTables(cpuName);
-        if (tables is not { } t || (t.eCoreFreqs.Length == 0 && t.pCoreFreqs.Length == 0))
-        {
-            throw new InvalidOperationException("周波数テーブルを取得できませんでした。Apple Silicon Mac で実行してください。");
-        }
-
-        eCoreFreqs = t.eCoreFreqs;
-        pCoreFreqs = t.pCoreFreqs;
-
-        var eCoreCount = GetSystemControlInt32("hw.perflevel1.logicalcpu");
-        var pCoreCount = GetSystemControlInt32("hw.perflevel0.logicalcpu");
-
-        eCores = new CpuCoreFrequency[eCoreCount];
-        pCores = new CpuCoreFrequency[pCoreCount];
-        for (var i = 0; i < eCoreCount; i++)
-        {
-            eCores[i] = new CpuCoreFrequency(i, CpuCoreType.Efficiency);
-        }
-
-        for (var i = 0; i < pCoreCount; i++)
-        {
-            pCores[i] = new CpuCoreFrequency(i, CpuCoreType.Performance);
-        }
-
-        var allCores = new CpuCoreFrequency[eCoreCount + pCoreCount];
-        eCores.CopyTo(allCores, 0);
-        pCores.CopyTo(allCores, eCoreCount);
-        Cores = allCores;
-    }
-
-    private static unsafe (int[] eCoreFreqs, int[] pCoreFreqs)? GetFrequencyTables(string cpuName)
-    {
-        var matching = IOServiceMatching("AppleARMIODevice");
-        if (matching == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        if (IOServiceGetMatchingServices(0, matching, out var iterator) != 0)
-        {
-            return null;
-        }
-
         var isM4OrLater = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase)
                        || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase);
 
-        int[] eFreqs = [];
-        int[] pFreqs = [];
+        eCoreFreqs = [];
+        pCoreFreqs = [];
 
-        try
+        var matching = IOServiceMatching("AppleARMIODevice");
+        if (matching != IntPtr.Zero && IOServiceGetMatchingServices(0, matching, out var iterator) == 0)
         {
+            using var iter = new IOObj(iterator);
+
             uint child;
-            while ((child = IOIteratorNext(iterator)) != 0)
+            while ((child = IOIteratorNext(iter)) != 0)
             {
                 using var entry = new IOObj(child);
 
@@ -119,12 +79,10 @@ public sealed class CpuFrequency
                 {
                     continue;
                 }
-
                 if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
                 {
                     continue;
                 }
-
                 if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
                 {
                     continue;
@@ -136,23 +94,19 @@ public sealed class CpuFrequency
                 var eData = CFDictionaryGetValue(props, eKey);
                 if (eData != IntPtr.Zero)
                 {
-                    eFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
+                    eCoreFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
                 }
 
                 using var pKey = CFRef.CreateString("voltage-states5-sram");
                 var pData = CFDictionaryGetValue(props, pKey);
                 if (pData != IntPtr.Zero)
                 {
-                    pFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
+                    pCoreFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
                 }
             }
         }
-        finally
-        {
-            IOObjectRelease(iterator);
-        }
 
-        return (eFreqs, pFreqs);
+        Update();
     }
 
     /// <summary>
@@ -189,127 +143,69 @@ public sealed class CpuFrequency
     /// <summary>
     /// IOReport を Open して各コアの実効周波数を更新し、Close する。
     /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
-    /// 初回呼び出しは前回サンプルの記録のみを行うため 0 を返す。
     /// <para>
     /// Opens IOReport, updates each core's effective frequency, then closes it.
     /// Does not sleep; the caller controls the sampling interval (e.g. Thread.Sleep(1000)).
-    /// The first call only records the initial sample and returns false.
     /// </para>
     /// </summary>
     public bool Update()
     {
-        var channels = GetChannels();
-        if (channels == IntPtr.Zero)
+        using var channels = new CFRef(GetChannels());
+        if (!channels.IsValid)
         {
             return false;
         }
 
-        var subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero);
+        using var subscription = new CFRef(IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero));
         using var subDict = new CFRef(dict);
-
-        if (subscription == IntPtr.Zero)
+        if (!subscription.IsValid)
         {
-            CFRelease(channels);
             return false;
         }
 
-        var updated = false;
         using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
-        if (sample.IsValid)
+        if (!sample.IsValid)
         {
-            using var key = CFRef.CreateString("IOReportChannels");
-            var items = CFDictionaryGetValue(sample, key);
-            if (items != IntPtr.Zero)
-            {
-                if (!initialized)
-                {
-                    SetupCoreChannels(items);
-                    initialized = true;
-                }
-                else
-                {
-                    UpdateFrequencies(items);
-                    UpdateAt = DateTime.Now;
-                    updated = true;
-                }
-            }
+            return false;
         }
 
-        CFRelease(subscription);
-        CFRelease(channels);
-        return updated;
-    }
+        using var key = CFRef.CreateString("IOReportChannels");
+        var items = CFDictionaryGetValue(sample, key);
+        if (items == IntPtr.Zero)
+        {
+            return false;
+        }
 
-    //--------------------------------------------------------------------------------
-    // Setup (first Update call only)
-    //--------------------------------------------------------------------------------
-
-    private void SetupCoreChannels(IntPtr items)
-    {
-        var eCoreNames = new List<string>();
-        var pCoreNames = new List<string>();
+        for (var i = 0; i < cores.Count; i++)
+        {
+            cores[i].Frequency = 0;
+        }
 
         var count = CFArrayGetCount(items);
         for (var idx = 0L; idx < count; idx++)
         {
             var item = CFArrayGetValueAtIndex(items, idx);
-            if (ToManagedString(IOReportChannelGetSubGroup(item)) != "CPU Core Performance States")
-            {
-                continue;
-            }
-
             var channelName = ToManagedString(IOReportChannelGetChannelName(item));
-            if (channelName == null)
+            if (channelName is null)
             {
                 continue;
             }
 
-            if (channelName.StartsWith("ECPU", StringComparison.Ordinal))
+            var isECore = channelName.StartsWith("ECPU", StringComparison.Ordinal);
+            var core = FindCore(channelName, isECore);
+            if (core is null)
             {
-                if (!eCoreNames.Contains(channelName))
-                {
-                    eCoreNames.Add(channelName);
-                }
-            }
-            else if (channelName.StartsWith("PCPU", StringComparison.Ordinal))
-            {
-                if (!pCoreNames.Contains(channelName))
-                {
-                    pCoreNames.Add(channelName);
-                }
-            }
-        }
+                // 初回: チャンネルに対応するコアを新規作成し PrevResidencies にベースラインを記録する
+                var coreType = isECore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
+                core = new CpuCoreFrequency(isECore ? eCores.Count : pCores.Count, coreType);
+                core.ChannelName = channelName;
+                core.FreqTable = isECore ? eCoreFreqs : pCoreFreqs;
 
-        eCoreNames.Sort(StringComparer.Ordinal);
-        pCoreNames.Sort(StringComparer.Ordinal);
+                var newStateCount = IOReportStateGetCount(item);
+                core.PrevResidencies = new long[newStateCount];
+                core.CurrResidencies = new long[newStateCount];
 
-        AssignChannels(eCores, eCoreNames, eCoreFreqs, items, count);
-        AssignChannels(pCores, pCoreNames, pCoreFreqs, items, count);
-    }
-
-    private static void AssignChannels(
-        CpuCoreFrequency[] cores, List<string> channelNames, int[] freqTable,
-        IntPtr items, long itemCount)
-    {
-        for (var ci = 0; ci < channelNames.Count && ci < cores.Length; ci++)
-        {
-            var core = cores[ci];
-            core.ChannelName = channelNames[ci];
-            core.FreqTable = freqTable;
-
-            for (var idx = 0L; idx < itemCount; idx++)
-            {
-                var item = CFArrayGetValueAtIndex(items, idx);
-                if (ToManagedString(IOReportChannelGetChannelName(item)) != core.ChannelName)
-                {
-                    continue;
-                }
-
-                var stateCount = IOReportStateGetCount(item);
-                core.PrevResidencies = new long[stateCount];
-                core.CurrResidencies = new long[stateCount];
-
-                for (var s = 0; s < stateCount; s++)
+                for (var s = 0; s < newStateCount; s++)
                 {
                     if (core.ResidencyOffset < 0)
                     {
@@ -323,79 +219,49 @@ public sealed class CpuFrequency
                     core.PrevResidencies[s] = IOReportStateGetResidency(item, s);
                 }
 
-                break;
+                if (isECore)
+                {
+                    eCores.Add(core);
+                }
+                else
+                {
+                    pCores.Add(core);
+                }
+                cores.Add(core);
+            }
+            else
+            {
+                // 2回目以降: 周波数を更新する
+                var stateCount = IOReportStateGetCount(item);
+                for (var s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
+                {
+                    core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
+                }
+
+                core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
+
+                // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
+                (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
             }
         }
+
+        UpdateAt = DateTime.Now;
+        return true;
     }
 
-    //--------------------------------------------------------------------------------
-    // Frequency update (subsequent Update calls)
-    //--------------------------------------------------------------------------------
-
-    private void UpdateFrequencies(IntPtr items)
+    private CpuCoreFrequency? FindCore(string channelName, bool isECore)
     {
-        for (var i = 0; i < eCores.Length; i++)
+        var list = isECore ? eCores : pCores;
+        for (var i = 0; i < list.Count; i++)
         {
-            eCores[i].Frequency = 0;
-        }
-
-        for (var i = 0; i < pCores.Length; i++)
-        {
-            pCores[i].Frequency = 0;
-        }
-
-        var count = CFArrayGetCount(items);
-        for (var idx = 0L; idx < count; idx++)
-        {
-            var item = CFArrayGetValueAtIndex(items, idx);
-            var core = FindCore(ToManagedString(IOReportChannelGetChannelName(item)));
-            if (core is null || core.CurrResidencies.Length == 0)
+            if (list[i].ChannelName == channelName)
             {
-                continue;
-            }
-
-            var stateCount = IOReportStateGetCount(item);
-            for (var s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
-            {
-                core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
-            }
-
-            core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
-
-            // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
-            (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
-        }
-    }
-
-    private CpuCoreFrequency? FindCore(string? channelName)
-    {
-        if (channelName is null)
-        {
-            return null;
-        }
-
-        for (var i = 0; i < eCores.Length; i++)
-        {
-            if (eCores[i].ChannelName == channelName)
-            {
-                return eCores[i];
-            }
-        }
-
-        for (var i = 0; i < pCores.Length; i++)
-        {
-            if (pCores[i].ChannelName == channelName)
-            {
-                return pCores[i];
+                return list[i];
             }
         }
 
         return null;
     }
-
-    //--------------------------------------------------------------------------------
-    // Frequency calculation
-    //--------------------------------------------------------------------------------
 
     /// <summary>
     /// 前回・今回のレジデンシー差分から実効周波数 (MHz) を算出する。
@@ -435,50 +301,20 @@ public sealed class CpuFrequency
         return avgFreq;
     }
 
-    //--------------------------------------------------------------------------------
-    // IOReport channel setup
-    //--------------------------------------------------------------------------------
-
     private static IntPtr GetChannels()
     {
         try
         {
-            var channelDefs = new[]
-            {
-                ("CPU Stats", "CPU Complex Performance States"),
-                ("CPU Stats", "CPU Core Performance States"),
-            };
-
-            var merged = IntPtr.Zero;
-            foreach (var (gname, sname) in channelDefs)
-            {
-                using var g = CFRef.CreateString(gname);
-                using var s = CFRef.CreateString(sname);
-                var channel = IOReportCopyChannelsInGroup(g, s, 0, 0, 0);
-                if (channel == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                if (merged == IntPtr.Zero)
-                {
-                    merged = channel;
-                }
-                else
-                {
-                    IOReportMergeChannels(merged, channel, IntPtr.Zero);
-                    CFRelease(channel);
-                }
-            }
-
-            if (merged == IntPtr.Zero)
+            using var group = CFRef.CreateString("CPU Stats");
+            using var subGroup = CFRef.CreateString("CPU Core Performance States");
+            using var channel = new CFRef(IOReportCopyChannelsInGroup(group, subGroup, 0, 0, 0));
+            if (!channel.IsValid)
             {
                 return IntPtr.Zero;
             }
 
-            var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, merged);
-            CFRelease(merged);
-
+            // IOReportCreateSubscription には CFMutableDictionary が必要なため mutable コピーを作成する
+            var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
             if (mutableCopy == IntPtr.Zero)
             {
                 return IntPtr.Zero;
