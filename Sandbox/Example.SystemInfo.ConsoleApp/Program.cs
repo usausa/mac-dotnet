@@ -598,57 +598,55 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 12. CPU Frequency (Apple Silicon IOReport)
-// CpuFrequency.Create() で周波数テーブルとコア情報を構築する。
-// 初回 Update() はベースライン取得のみ (0 MHz)、2回目以降から実効周波数が得られる。
+// コンストラクタでベースラインレジデンシーを記録済みのため、
+// PlatformProvider.GetCpuFrequency() 直後の 1 回目の Update() から実効周波数が得られる。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 12. CPU Frequency (Apple Silicon IOReport) ###");
-var cpuFreq = PlatformProvider.GetCpuFrequency();
-if (cpuFreq is null)
+try
 {
-    Console.WriteLine("  Apple Silicon not detected.");
-}
-else
-{
+    var cpuFreq = PlatformProvider.GetCpuFrequency();
+
     Console.WriteLine($"  E-Core 周波数テーブル: {string.Join(", ", cpuFreq.ECoreFrequencyTable)} MHz");
     Console.WriteLine($"  P-Core 周波数テーブル: {string.Join(", ", cpuFreq.PCoreFrequencyTable)} MHz");
-    var eCoreCount = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Efficiency);
-    var pCoreCount = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Performance);
-    Console.WriteLine($"  コア数: {cpuFreq.Cores.Count} (E-Core: {eCoreCount}, P-Core: {pCoreCount})");
+    var eCoreCountFreq = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Efficiency);
+    var pCoreCountFreq = cpuFreq.Cores.Count(c => c.CoreType == CpuCoreType.Performance);
+    Console.WriteLine($"  コア数: {cpuFreq.Cores.Count} (E-Core: {eCoreCountFreq}, P-Core: {pCoreCountFreq})");
     Console.WriteLine();
 
-    // 初回: ベースライン取得
-    cpuFreq.Update();
-    Console.WriteLine("  Measuring (1000ms)...");
+    // --- 確認 1: GetCpuFrequency() 直後の 1 回目の Update() で周波数が得られること ---
+    Console.WriteLine("  [1st Update — 1000ms after GetCpuFrequency()]");
     Thread.Sleep(1000);
-
-    // 2回目: 実効周波数を算出
     cpuFreq.Update();
+    Console.WriteLine($"  UpdateAt: {cpuFreq.UpdateAt:HH:mm:ss.fff}");
 
-    Console.WriteLine($"  Updated at: {cpuFreq.UpdateAt:HH:mm:ss.fff}");
+    foreach (var core in cpuFreq.Cores)
+    {
+        Console.WriteLine($"    {core.CoreType.ToString()[0]}-Core {core.Number}: {core.Frequency,7:F1} MHz");
+    }
+
+    var eAvg1 = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Efficiency).Average(c => c.Frequency);
+    var pAvg1 = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Performance).Average(c => c.Frequency);
+    Console.WriteLine($"  E-Core 平均: {eAvg1,7:F1} MHz  P-Core 平均: {pAvg1,7:F1} MHz");
     Console.WriteLine();
 
-    var eCoreSamples = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Efficiency).ToList();
-    var pCoreSamples = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Performance).ToList();
-    var maxFreq = cpuFreq.PCoreFrequencyTable.Count > 0 ? cpuFreq.PCoreFrequencyTable.Max() : 1;
+    // --- 確認 2: 繰り返し呼び出しが正常に動作すること ---
+    Console.WriteLine("  [2nd Update — repeated call after another 1000ms]");
+    Thread.Sleep(1000);
+    cpuFreq.Update();
+    Console.WriteLine($"  UpdateAt: {cpuFreq.UpdateAt:HH:mm:ss.fff}");
 
-    Console.WriteLine("  [E-Core]");
-    foreach (var core in eCoreSamples)
+    foreach (var core in cpuFreq.Cores)
     {
-        Console.WriteLine($"    E-Core {core.Number}: {core.Frequency,7:F1} MHz");
+        Console.WriteLine($"    {core.CoreType.ToString()[0]}-Core {core.Number}: {core.Frequency,7:F1} MHz");
     }
-    Console.WriteLine("  [P-Core]");
-    foreach (var core in pCoreSamples)
-    {
-        Console.WriteLine($"    P-Core {core.Number}: {core.Frequency,7:F1} MHz");
-    }
-    Console.WriteLine();
 
-    var eAvg = eCoreSamples.Count > 0 ? eCoreSamples.Average(c => c.Frequency) : 0;
-    var pAvg = pCoreSamples.Count > 0 ? pCoreSamples.Average(c => c.Frequency) : 0;
-    var allAvg = cpuFreq.Cores.Count > 0 ? cpuFreq.Cores.Average(c => c.Frequency) : 0;
-    Console.WriteLine($"  E-Core 平均: {eAvg,7:F1} MHz ({eAvg / 1000.0:F2} GHz)");
-    Console.WriteLine($"  P-Core 平均: {pAvg,7:F1} MHz ({pAvg / 1000.0:F2} GHz)");
-    Console.WriteLine($"  全体   平均: {allAvg,7:F1} MHz ({allAvg / 1000.0:F2} GHz)");
+    var eAvg2 = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Efficiency).Average(c => c.Frequency);
+    var pAvg2 = cpuFreq.Cores.Where(c => c.CoreType == CpuCoreType.Performance).Average(c => c.Frequency);
+    Console.WriteLine($"  E-Core 平均: {eAvg2,7:F1} MHz  P-Core 平均: {pAvg2,7:F1} MHz");
+}
+catch (InvalidOperationException ex)
+{
+    Console.WriteLine($"  CPU Frequency not available: {ex.Message}");
 }
 Console.WriteLine();
 

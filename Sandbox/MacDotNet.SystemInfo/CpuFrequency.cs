@@ -37,7 +37,6 @@ public sealed class CpuFrequency
     private readonly int[] pCoreFreqs;
     private readonly CpuCoreFrequency[] eCores;
     private readonly CpuCoreFrequency[] pCores;
-    private bool initialized;
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
@@ -57,6 +56,7 @@ public sealed class CpuFrequency
 
     internal CpuFrequency()
     {
+        // 周波数テーブル取得
         var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
         var tables = GetFrequencyTables(cpuName);
         if (tables is not { } t || (t.eCoreFreqs.Length == 0 && t.pCoreFreqs.Length == 0))
@@ -67,6 +67,7 @@ public sealed class CpuFrequency
         eCoreFreqs = t.eCoreFreqs;
         pCoreFreqs = t.pCoreFreqs;
 
+        // コアオブジェクト生成
         var eCoreCount = GetSystemControlInt32("hw.perflevel1.logicalcpu");
         var pCoreCount = GetSystemControlInt32("hw.perflevel0.logicalcpu");
 
@@ -86,6 +87,65 @@ public sealed class CpuFrequency
         eCores.CopyTo(allCores, 0);
         pCores.CopyTo(allCores, eCoreCount);
         Cores = allCores;
+
+        // IOReport を開いてチャンネルを検出し、ベースラインレジデンシーを記録する
+        using var channels = new CFRef(GetChannels());
+        if (channels.IsValid)
+        {
+            using var subscription = new CFRef(IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero));
+            using var subDict = new CFRef(dict);
+            if (subscription.IsValid)
+            {
+                using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
+                if (sample.IsValid)
+                {
+                    using var key = CFRef.CreateString("IOReportChannels");
+                    var items = CFDictionaryGetValue(sample, key);
+                    if (items != IntPtr.Zero)
+                    {
+                        var eCoreNames = new List<string>();
+                        var pCoreNames = new List<string>();
+                        var count = CFArrayGetCount(items);
+
+                        for (var idx = 0L; idx < count; idx++)
+                        {
+                            var item = CFArrayGetValueAtIndex(items, idx);
+                            if (ToManagedString(IOReportChannelGetSubGroup(item)) != "CPU Core Performance States")
+                            {
+                                continue;
+                            }
+
+                            var channelName = ToManagedString(IOReportChannelGetChannelName(item));
+                            if (channelName == null)
+                            {
+                                continue;
+                            }
+
+                            if (channelName.StartsWith("ECPU", StringComparison.Ordinal))
+                            {
+                                if (!eCoreNames.Contains(channelName))
+                                {
+                                    eCoreNames.Add(channelName);
+                                }
+                            }
+                            else if (channelName.StartsWith("PCPU", StringComparison.Ordinal))
+                            {
+                                if (!pCoreNames.Contains(channelName))
+                                {
+                                    pCoreNames.Add(channelName);
+                                }
+                            }
+                        }
+
+                        eCoreNames.Sort(StringComparer.Ordinal);
+                        pCoreNames.Sort(StringComparer.Ordinal);
+
+                        AssignChannels(eCores, eCoreNames, eCoreFreqs, items, count);
+                        AssignChannels(pCores, pCoreNames, pCoreFreqs, items, count);
+                    }
+                }
+            }
+        }
     }
 
     private static unsafe (int[] eCoreFreqs, int[] pCoreFreqs)? GetFrequencyTables(string cpuName)
@@ -101,55 +161,50 @@ public sealed class CpuFrequency
             return null;
         }
 
+        using var iter = new IOObj(iterator);
+
         var isM4OrLater = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase)
                        || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase);
 
         int[] eFreqs = [];
         int[] pFreqs = [];
 
-        try
+        uint child;
+        while ((child = IOIteratorNext(iter)) != 0)
         {
-            uint child;
-            while ((child = IOIteratorNext(iterator)) != 0)
+            using var entry = new IOObj(child);
+
+            byte* nameBuf = stackalloc byte[128];
+            if (IORegistryEntryGetName(entry, nameBuf) != 0)
             {
-                using var entry = new IOObj(child);
-
-                byte* nameBuf = stackalloc byte[128];
-                if (IORegistryEntryGetName(entry, nameBuf) != 0)
-                {
-                    continue;
-                }
-
-                if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
-                {
-                    continue;
-                }
-
-                if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
-                {
-                    continue;
-                }
-
-                using var props = new CFRef(propsRef);
-
-                using var eKey = CFRef.CreateString("voltage-states1-sram");
-                var eData = CFDictionaryGetValue(props, eKey);
-                if (eData != IntPtr.Zero)
-                {
-                    eFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
-                }
-
-                using var pKey = CFRef.CreateString("voltage-states5-sram");
-                var pData = CFDictionaryGetValue(props, pKey);
-                if (pData != IntPtr.Zero)
-                {
-                    pFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
-                }
+                continue;
             }
-        }
-        finally
-        {
-            IOObjectRelease(iterator);
+
+            if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
+            {
+                continue;
+            }
+
+            if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
+            {
+                continue;
+            }
+
+            using var props = new CFRef(propsRef);
+
+            using var eKey = CFRef.CreateString("voltage-states1-sram");
+            var eData = CFDictionaryGetValue(props, eKey);
+            if (eData != IntPtr.Zero)
+            {
+                eFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
+            }
+
+            using var pKey = CFRef.CreateString("voltage-states5-sram");
+            var pData = CFDictionaryGetValue(props, pKey);
+            if (pData != IntPtr.Zero)
+            {
+                pFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
+            }
         }
 
         return (eFreqs, pFreqs);
@@ -180,111 +235,6 @@ public sealed class CpuFrequency
         }
 
         return result.ToArray();
-    }
-
-    //--------------------------------------------------------------------------------
-    // Update
-    //--------------------------------------------------------------------------------
-
-    /// <summary>
-    /// IOReport を Open して各コアの実効周波数を更新し、Close する。
-    /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
-    /// 初回呼び出しは前回サンプルの記録のみを行うため 0 を返す。
-    /// <para>
-    /// Opens IOReport, updates each core's effective frequency, then closes it.
-    /// Does not sleep; the caller controls the sampling interval (e.g. Thread.Sleep(1000)).
-    /// The first call only records the initial sample and returns false.
-    /// </para>
-    /// </summary>
-    public bool Update()
-    {
-        var channels = GetChannels();
-        if (channels == IntPtr.Zero)
-        {
-            return false;
-        }
-
-        var subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero);
-        using var subDict = new CFRef(dict);
-
-        if (subscription == IntPtr.Zero)
-        {
-            CFRelease(channels);
-            return false;
-        }
-
-        var updated = false;
-        using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
-        if (sample.IsValid)
-        {
-            using var key = CFRef.CreateString("IOReportChannels");
-            var items = CFDictionaryGetValue(sample, key);
-            if (items != IntPtr.Zero)
-            {
-                if (!initialized)
-                {
-                    SetupCoreChannels(items);
-                    initialized = true;
-                }
-                else
-                {
-                    UpdateFrequencies(items);
-                    UpdateAt = DateTime.Now;
-                    updated = true;
-                }
-            }
-        }
-
-        CFRelease(subscription);
-        CFRelease(channels);
-        return updated;
-    }
-
-    //--------------------------------------------------------------------------------
-    // Setup (first Update call only)
-    //--------------------------------------------------------------------------------
-
-    private void SetupCoreChannels(IntPtr items)
-    {
-        var eCoreNames = new List<string>();
-        var pCoreNames = new List<string>();
-
-        var count = CFArrayGetCount(items);
-        for (var idx = 0L; idx < count; idx++)
-        {
-            var item = CFArrayGetValueAtIndex(items, idx);
-            if (ToManagedString(IOReportChannelGetSubGroup(item)) != "CPU Core Performance States")
-            {
-                continue;
-            }
-
-            var channelName = ToManagedString(IOReportChannelGetChannelName(item));
-            if (channelName == null)
-            {
-                continue;
-            }
-
-            if (channelName.StartsWith("ECPU", StringComparison.Ordinal))
-            {
-                if (!eCoreNames.Contains(channelName))
-                {
-                    eCoreNames.Add(channelName);
-                }
-            }
-            else if (channelName.StartsWith("PCPU", StringComparison.Ordinal))
-            {
-                if (!pCoreNames.Contains(channelName))
-                {
-                    pCoreNames.Add(channelName);
-                }
-            }
-        }
-
-        eCoreNames.Sort(StringComparer.Ordinal);
-        pCoreNames.Sort(StringComparer.Ordinal);
-
-        AssignChannels(eCores, eCoreNames, eCoreFreqs, items, count);
-        AssignChannels(pCores, pCoreNames, pCoreFreqs, items, count);
     }
 
     private static void AssignChannels(
@@ -327,6 +277,52 @@ public sealed class CpuFrequency
             }
         }
     }
+
+    //--------------------------------------------------------------------------------
+    // Update
+    //--------------------------------------------------------------------------------
+
+    /// <summary>
+    /// IOReport を Open して各コアの実効周波数を更新し、Close する。
+    /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
+    /// <para>
+    /// Opens IOReport, updates each core's effective frequency, then closes it.
+    /// Does not sleep; the caller controls the sampling interval (e.g. Thread.Sleep(1000)).
+    /// </para>
+    /// </summary>
+    public bool Update()
+    {
+        using var channels = new CFRef(GetChannels());
+        if (!channels.IsValid)
+        {
+            return false;
+        }
+
+        using var subscription = new CFRef(IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero));
+        using var subDict = new CFRef(dict);
+
+        if (!subscription.IsValid)
+        {
+            return false;
+        }
+
+        var updated = false;
+        using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
+        if (sample.IsValid)
+        {
+            using var key = CFRef.CreateString("IOReportChannels");
+            var items = CFDictionaryGetValue(sample, key);
+            if (items != IntPtr.Zero)
+            {
+                UpdateFrequencies(items);
+                UpdateAt = DateTime.Now;
+                updated = true;
+            }
+        }
+
+        return updated;
+    }
+
 
     //--------------------------------------------------------------------------------
     // Frequency update (subsequent Update calls)
@@ -393,10 +389,6 @@ public sealed class CpuFrequency
         return null;
     }
 
-    //--------------------------------------------------------------------------------
-    // Frequency calculation
-    //--------------------------------------------------------------------------------
-
     /// <summary>
     /// 前回・今回のレジデンシー差分から実効周波数 (MHz) を算出する。
     /// 全ステートの差分合計を分母にすることでアイドル時間を反映した実効周波数を得る。
@@ -434,10 +426,6 @@ public sealed class CpuFrequency
 
         return avgFreq;
     }
-
-    //--------------------------------------------------------------------------------
-    // IOReport channel setup
-    //--------------------------------------------------------------------------------
 
     private static IntPtr GetChannels()
     {
