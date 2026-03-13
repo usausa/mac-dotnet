@@ -4,42 +4,25 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-/// <summary>
-/// CPU コアの種別。Apple Silicon の Efficiency Core / Performance Core に対応。
-/// <para>CPU core type. Corresponds to Apple Silicon Efficiency Core / Performance Core.</para>
-/// </summary>
-public enum CpuCoreType
-{
-    /// <summary>高効率コア (E-Core)<br/>High-efficiency core (E-Core)</summary>
-    Efficiency = 0,
-
-    /// <summary>高性能コア (P-Core)<br/>High-performance core (P-Core)</summary>
-    Performance = 1,
-}
-
-/// <summary>
-/// 個々の CPU コアの実効周波数を保持するクラス。
-/// <para>Holds the effective clock frequency for an individual CPU core.</para>
-/// </summary>
 public sealed class CpuCoreFrequency
 {
-    /// <summary>コア番号 (コア種別ごとの 0 始まり連番)<br/>Core number (0-based, per core type)</summary>
     public int Number { get; }
 
-    /// <summary>コア種別 (Efficiency / Performance)<br/>Core type (Efficiency / Performance)</summary>
     public CpuCoreType CoreType { get; }
 
-    /// <summary>
-    /// 実効周波数 (MHz)。Update() により更新される。
-    /// <para>Effective frequency in MHz. Updated by Update().</para>
-    /// </summary>
     public double Frequency { get; internal set; }
 
+#pragma warning disable SA1401
     internal string ChannelName = string.Empty;
+
     internal int[] FreqTable = [];
+
     internal long[] PrevResidencies = [];
+
     internal long[] CurrResidencies = [];
+
     internal int ResidencyOffset = -1;
+#pragma warning restore SA1401
 
     internal CpuCoreFrequency(int number, CpuCoreType coreType)
     {
@@ -48,18 +31,6 @@ public sealed class CpuCoreFrequency
     }
 }
 
-/// <summary>
-/// Apple Silicon CPU の全コアの実効周波数を管理するクラス。
-/// Update() のたびに IOReport を Open/Close してサンプリングを行い、
-/// 前回サンプルとの差分から実効周波数を算出する。
-/// Apple Silicon (ARM64) 以外の環境では Create() が null を返す。
-/// <para>
-/// Manages the effective clock frequencies for all cores of an Apple Silicon CPU.
-/// Each Update() call opens and closes IOReport to take a new sample, then computes
-/// effective frequency from the delta against the previous sample.
-/// Create() returns null on non-Apple Silicon (non-ARM64) hardware.
-/// </para>
-/// </summary>
 public sealed class CpuFrequency
 {
     private readonly int[] eCoreFreqs;
@@ -81,11 +52,12 @@ public sealed class CpuFrequency
     public IReadOnlyList<int> PCoreFrequencyTable => pCoreFreqs;
 
     //--------------------------------------------------------------------------------
-    // Constructor / Factory
+    // Constructor
     //--------------------------------------------------------------------------------
 
-    private CpuFrequency(string cpuName)
+    internal CpuFrequency()
     {
+        var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
         var tables = GetFrequencyTables(cpuName);
         if (tables is not { } t || (t.eCoreFreqs.Length == 0 && t.pCoreFreqs.Length == 0))
         {
@@ -116,30 +88,98 @@ public sealed class CpuFrequency
         Cores = allCores;
     }
 
-    /// <summary>
-    /// CpuFrequency インスタンスを生成する。
-    /// Apple Silicon (ARM64) 以外の環境、または周波数テーブルの取得に失敗した場合は null を返す。
-    /// <para>
-    /// Creates a CpuFrequency instance.
-    /// Returns null on non-Apple Silicon (non-ARM64) hardware or if the frequency table cannot be retrieved.
-    /// </para>
-    /// </summary>
-    public static CpuFrequency? Create()
+    private static unsafe (int[] eCoreFreqs, int[] pCoreFreqs)? GetFrequencyTables(string cpuName)
     {
-        if (RuntimeInformation.ProcessArchitecture != Architecture.Arm64)
+        var matching = IOServiceMatching("AppleARMIODevice");
+        if (matching == IntPtr.Zero)
         {
             return null;
         }
 
-        var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;
-        try
-        {
-            return new CpuFrequency(cpuName);
-        }
-        catch
+        if (IOServiceGetMatchingServices(0, matching, out var iterator) != 0)
         {
             return null;
         }
+
+        var isM4OrLater = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase)
+                       || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase);
+
+        int[] eFreqs = [];
+        int[] pFreqs = [];
+
+        try
+        {
+            uint child;
+            while ((child = IOIteratorNext(iterator)) != 0)
+            {
+                using var entry = new IOObj(child);
+
+                byte* nameBuf = stackalloc byte[128];
+                if (IORegistryEntryGetName(entry, nameBuf) != 0)
+                {
+                    continue;
+                }
+
+                if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
+                {
+                    continue;
+                }
+
+                if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
+                {
+                    continue;
+                }
+
+                using var props = new CFRef(propsRef);
+
+                using var eKey = CFRef.CreateString("voltage-states1-sram");
+                var eData = CFDictionaryGetValue(props, eKey);
+                if (eData != IntPtr.Zero)
+                {
+                    eFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
+                }
+
+                using var pKey = CFRef.CreateString("voltage-states5-sram");
+                var pData = CFDictionaryGetValue(props, pKey);
+                if (pData != IntPtr.Zero)
+                {
+                    pFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
+                }
+            }
+        }
+        finally
+        {
+            IOObjectRelease(iterator);
+        }
+
+        return (eFreqs, pFreqs);
+    }
+
+    /// <summary>
+    /// CFData からバイト列を読み取り、8 バイトチャンクごとに周波数 (MHz) へ変換する。
+    /// <para>Reads raw bytes from CFData and converts each 8-byte chunk to a frequency value in MHz.</para>
+    /// </summary>
+    private static int[] ConvertCFDataToFrequencyArray(IntPtr cfData, bool isM4)
+    {
+        var length = (int)CFDataGetLength(cfData);
+        var ptr = CFDataGetBytePtr(cfData);
+
+        var bytes = new byte[length];
+        Marshal.Copy(ptr, bytes, 0, length);
+
+        var multiplier = isM4 ? 1000u : 1_000_000u;
+
+        var result = new List<int>();
+        for (var i = 0; i + 7 < length; i += 8)
+        {
+            var v = (uint)bytes[i]
+                  | ((uint)bytes[i + 1] << 8)
+                  | ((uint)bytes[i + 2] << 16)
+                  | ((uint)bytes[i + 3] << 24);
+            result.Add((int)(v / multiplier));
+        }
+
+        return result.ToArray();
     }
 
     //--------------------------------------------------------------------------------
@@ -457,103 +497,5 @@ public sealed class CpuFrequency
         {
             return IntPtr.Zero;
         }
-    }
-
-    //--------------------------------------------------------------------------------
-    // Frequency table (AppleARMIODevice "pmgr")
-    //--------------------------------------------------------------------------------
-
-    private static unsafe (int[] eCoreFreqs, int[] pCoreFreqs)? GetFrequencyTables(string cpuName)
-    {
-        var matching = IOServiceMatching("AppleARMIODevice");
-        if (matching == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        if (IOServiceGetMatchingServices(0, matching, out var iterator) != 0)
-        {
-            return null;
-        }
-
-        var isM4OrLater = cpuName.Contains("M4", StringComparison.OrdinalIgnoreCase)
-                       || cpuName.Contains("M5", StringComparison.OrdinalIgnoreCase);
-
-        int[] eFreqs = [];
-        int[] pFreqs = [];
-
-        try
-        {
-            uint child;
-            while ((child = IOIteratorNext(iterator)) != 0)
-            {
-                using var entry = new IOObj(child);
-
-                byte* nameBuf = stackalloc byte[128];
-                if (IORegistryEntryGetName(entry, nameBuf) != 0)
-                {
-                    continue;
-                }
-
-                if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
-                {
-                    continue;
-                }
-
-                if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
-                {
-                    continue;
-                }
-
-                using var props = new CFRef(propsRef);
-
-                using var eKey = CFRef.CreateString("voltage-states1-sram");
-                var eData = CFDictionaryGetValue(props, eKey);
-                if (eData != IntPtr.Zero)
-                {
-                    eFreqs = ConvertCFDataToFrequencyArray(eData, isM4OrLater);
-                }
-
-                using var pKey = CFRef.CreateString("voltage-states5-sram");
-                var pData = CFDictionaryGetValue(props, pKey);
-                if (pData != IntPtr.Zero)
-                {
-                    pFreqs = ConvertCFDataToFrequencyArray(pData, isM4OrLater);
-                }
-            }
-        }
-        finally
-        {
-            IOObjectRelease(iterator);
-        }
-
-        return (eFreqs, pFreqs);
-    }
-
-    /// <summary>
-    /// CFData からバイト列を読み取り、8 バイトチャンクごとに周波数 (MHz) へ変換する。
-    /// <para>Reads raw bytes from CFData and converts each 8-byte chunk to a frequency value in MHz.</para>
-    /// </summary>
-    private static int[] ConvertCFDataToFrequencyArray(IntPtr cfData, bool isM4)
-    {
-        var length = (int)CFDataGetLength(cfData);
-        var ptr = CFDataGetBytePtr(cfData);
-
-        var bytes = new byte[length];
-        Marshal.Copy(ptr, bytes, 0, length);
-
-        var multiplier = isM4 ? 1000u : 1_000_000u;
-
-        var result = new List<int>();
-        for (var i = 0; i + 7 < length; i += 8)
-        {
-            var v = (uint)bytes[i]
-                  | ((uint)bytes[i + 1] << 8)
-                  | ((uint)bytes[i + 2] << 16)
-                  | ((uint)bytes[i + 3] << 24);
-            result.Add((int)(v / multiplier));
-        }
-
-        return result.ToArray();
     }
 }

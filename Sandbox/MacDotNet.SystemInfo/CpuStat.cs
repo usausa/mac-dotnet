@@ -1,85 +1,66 @@
 namespace MacDotNet.SystemInfo;
 
+using System.Runtime.InteropServices;
+using System.Text;
+
 using static MacDotNet.SystemInfo.NativeMethods;
 
-/// <summary>
-/// CPU コアごとの累積ティック数。内部で更新されるミュータブルクラス。
-/// <para>Cumulative CPU tick counts per core. Mutable class updated internally.</para>
-/// </summary>
 public sealed class CpuCoreStat
 {
-    /// <summary>コア番号 (0 始まり)。CpuTotal の場合は -1<br/>Core number (0-based). -1 for the aggregate CpuTotal.</summary>
-    public int CpuNumber { get; }
+    public int Number { get; }
 
-    /// <summary>ユーザーモードで消費した累積ティック数<br/>Cumulative ticks spent in user mode</summary>
+    public CpuCoreType CoreType { get; }
+
     public uint User { get; internal set; }
 
-    /// <summary>カーネルモードで消費した累積ティック数<br/>Cumulative ticks spent in kernel mode</summary>
     public uint System { get; internal set; }
 
-    /// <summary>アイドル状態の累積ティック数<br/>Cumulative ticks spent idle</summary>
     public uint Idle { get; internal set; }
 
-    /// <summary>nice 値で実行されたユーザーモードの累積ティック数<br/>Cumulative ticks spent in user mode with a nice priority</summary>
     public uint Nice { get; internal set; }
 
-    internal CpuCoreStat(int cpuNumber)
+    internal CpuCoreStat(int number, CpuCoreType coreType)
     {
-        CpuNumber = cpuNumber;
+        Number = number;
+        CoreType = coreType;
     }
 }
 
-/// <summary>
-/// ホスト全体および各コアの CPU 累積ティック数を管理するクラス。
-/// LinuxDotNet.SystemInfo の SystemStat / CpuStat と同じパターンで、
-/// 累積値をそのまま保持し、使用率の計算は呼び出しがわで行う。
-/// <para>
-/// Manages cumulative CPU tick counts for all cores and the host as a whole.
-/// Follows the same pattern as LinuxDotNet.SystemInfo's SystemStat/CpuStat:
-/// raw cumulative values are stored as-is, and usage-rate calculation is left to the caller.
-/// </para>
-/// </summary>
 public sealed class CpuStat
 {
     private readonly List<CpuCoreStat> cpuCores = [];
 
-    /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
+    private readonly List<CpuCoreStat> efficiencyCores = [];
+
+    private readonly List<CpuCoreStat> performanceCores = [];
+
+    private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(valueFactory: ReadCoreTypes);
+
     public DateTime UpdateAt { get; private set; }
 
-    /// <summary>全コア合計の累積ティック数<br/>Aggregate cumulative tick counts across all cores</summary>
-    public CpuCoreStat CpuTotal { get; } = new(-1);
-
-    /// <summary>コアごとの累積ティック数 (インデックスはコア番号に対応)<br/>Per-core cumulative tick counts (index corresponds to core number)</summary>
     public IReadOnlyList<CpuCoreStat> CpuCores => cpuCores;
 
+    public IReadOnlyList<CpuCoreStat> EfficiencyCores => efficiencyCores;
+
+    public IReadOnlyList<CpuCoreStat> PerformanceCores => performanceCores;
+
     //--------------------------------------------------------------------------------
-    // Constructor / Factory
+    // Constructor
     //--------------------------------------------------------------------------------
 
-    private CpuStat()
+    internal CpuStat()
     {
         Update();
     }
-
-    /// <summary>CPU 統計スナップショットを生成し、初回 Update() を実行する。<br/>Creates a CPU statistics instance and performs the initial Update().</summary>
-    public static CpuStat Create() => new();
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
-    /// <summary>
-    /// host_processor_info() を呼び出して各コアの累積ティック数を更新する。
-    /// 成功時は true、カーネル呼び出し失敗時は false を返す。
-    /// <para>
-    /// Refreshes cumulative tick counts for each core by calling host_processor_info().
-    /// Returns true on success, false if the kernel call fails.
-    /// </para>
-    /// </summary>
     public unsafe bool Update()
     {
-        var host = mach_host_self();
-        var result = host_processor_info(host, PROCESSOR_CPU_LOAD_INFO, out var processorCount, out var info, out var infoCnt);
+        using var host = new MachPortRef(port: mach_host_self());
+        var result = host_processor_info(host: host, flavor: PROCESSOR_CPU_LOAD_INFO, processorCount: out var processorCount, processorInfo: out var info, processorInfoCnt: out var infoCount);
         if (result != KERN_SUCCESS)
         {
             return false;
@@ -88,11 +69,22 @@ public sealed class CpuStat
         try
         {
             var ptr = (uint*)info;
-            uint totalUser = 0, totalSystem = 0, totalIdle = 0, totalNice = 0;
 
             while (cpuCores.Count < processorCount)
             {
-                cpuCores.Add(new CpuCoreStat(cpuCores.Count));
+                var logicalCpuId = cpuCores.Count;
+                var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
+                var core = new CpuCoreStat(logicalCpuId, coreType);
+
+                cpuCores.Add(core);
+                if (coreType == CpuCoreType.Efficiency)
+                {
+                    efficiencyCores.Add(core);
+                }
+                else if (coreType == CpuCoreType.Performance)
+                {
+                    performanceCores.Add(core);
+                }
             }
 
             for (var i = 0; i < processorCount; i++)
@@ -107,17 +99,7 @@ public sealed class CpuStat
                 cpuCores[i].System = system;
                 cpuCores[i].Idle = idle;
                 cpuCores[i].Nice = nice;
-
-                totalUser += user;
-                totalSystem += system;
-                totalIdle += idle;
-                totalNice += nice;
             }
-
-            CpuTotal.User = totalUser;
-            CpuTotal.System = totalSystem;
-            CpuTotal.Idle = totalIdle;
-            CpuTotal.Nice = totalNice;
 
             UpdateAt = DateTime.Now;
 
@@ -125,7 +107,121 @@ public sealed class CpuStat
         }
         finally
         {
-            _ = vm_deallocate(task_self_trap(), info, (IntPtr)(infoCnt * sizeof(int)));
+            _ = vm_deallocate(targetTask: task_self_trap(), address: info, size: sizeof(int) * infoCount);
         }
+    }
+
+    //--------------------------------------------------------------------------------
+    // Helper
+    //--------------------------------------------------------------------------------
+
+    private static Dictionary<int, CpuCoreType> ReadCoreTypes()
+    {
+        var coreTypes = new Dictionary<int, CpuCoreType>();
+        var matching = IOServiceMatching(name: "AppleARMPE");
+        if (matching == IntPtr.Zero)
+        {
+            return coreTypes;
+        }
+
+        var iterator = IntPtr.Zero;
+        if (IOServiceGetMatchingServices(mainPort: 0, matching: matching, existing: ref iterator) != KERN_SUCCESS || iterator == IntPtr.Zero)
+        {
+            return coreTypes;
+        }
+
+        using var services = new IORef(pointer: iterator);
+        uint service;
+        while ((service = IOIteratorNext(iterator: services)) != 0)
+        {
+            using var serviceObject = new IOObj(handle: service);
+            if (IORegistryEntryGetChildIterator(entry: serviceObject, plane: "IOService", iterator: out var childIterator) != KERN_SUCCESS || childIterator == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            using var children = new IORef(pointer: childIterator);
+            uint child;
+            while ((child = IOIteratorNext(iterator: children)) != 0)
+            {
+                using var childObject = new IOObj(handle: child);
+                var name = GetEntryName(entry: childObject);
+                if (string.IsNullOrEmpty(value: name) || !name.StartsWith(value: "cpu", comparisonType: StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(c: name[index: 3]))
+                {
+                    continue;
+                }
+
+                if (IORegistryEntryCreateCFProperties(entry: childObject, properties: out var properties, allocator: IntPtr.Zero, options: 0) != KERN_SUCCESS || properties == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                using var values = new CFRef(pointer: properties);
+                var logicalCpuId = GetLogicalCpuId(properties: values);
+                if (logicalCpuId < 0)
+                {
+                    continue;
+                }
+
+                coreTypes[key: logicalCpuId] = GetCoreType(properties: values);
+            }
+        }
+
+        return coreTypes;
+    }
+
+    private static unsafe string? GetEntryName(IOObj entry)
+    {
+        var buffer = stackalloc byte[128];
+        return IORegistryEntryGetName(entry: entry, name: buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8(ptr: (IntPtr)buffer) : null;
+    }
+
+    private static int GetLogicalCpuId(CFRef properties)
+    {
+        using var key = CFRef.CreateString(s: "logical-cpu-id");
+        if (!key.IsValid)
+        {
+            return -1;
+        }
+
+        var value = CFDictionaryGetValue(theDict: properties, key: key);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(cf: value) != CFNumberGetTypeID()))
+        {
+            return -1;
+        }
+
+        return CFNumberGetValue(number: value, theType: kCFNumberSInt32Type, valuePtr: out var logicalCpuId) ? logicalCpuId : -1;
+    }
+
+    private static CpuCoreType GetCoreType(CFRef properties)
+    {
+        using var key = CFRef.CreateString(s: "cluster-type");
+        if (!key.IsValid)
+        {
+            return CpuCoreType.Unknown;
+        }
+
+        var value = CFDictionaryGetValue(theDict: properties, key: key);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(cf: value) != CFDataGetTypeID()))
+        {
+            return CpuCoreType.Unknown;
+        }
+
+        var length = CFDataGetLength(theData: value).ToInt32();
+        if (length <= 0)
+        {
+            return CpuCoreType.Unknown;
+        }
+
+        var bytes = new byte[length];
+        Marshal.Copy(source: CFDataGetBytePtr(theData: value), destination: bytes, startIndex: 0, length: length);
+        var clusterType = Encoding.UTF8.GetString(bytes: bytes).TrimEnd(trimChar: '\0');
+
+        return clusterType switch
+        {
+            "E" => CpuCoreType.Efficiency,
+            "P" => CpuCoreType.Performance,
+            _ => CpuCoreType.Unknown
+        };
     }
 }

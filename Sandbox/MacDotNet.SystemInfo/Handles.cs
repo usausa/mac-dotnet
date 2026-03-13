@@ -4,6 +4,25 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+internal readonly ref struct MachPortRef(uint port)
+{
+    public static MachPortRef Zero => default;
+
+    public uint Port { get; } = port;
+
+    public bool IsValid => Port != 0;
+
+    public static implicit operator uint(MachPortRef r) => r.Port;
+
+    public void Dispose()
+    {
+        if (IsValid)
+        {
+            _ = mach_port_deallocate(mach_task_self(), Port);
+        }
+    }
+}
+
 internal readonly ref struct CFRef(IntPtr pointer)
 {
     public static CFRef Zero => default;

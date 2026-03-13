@@ -9,7 +9,7 @@ public static class PlatformProvider
 
     public static HardwareInfo GetHardware() => HardwareInfo.Create();
 
-    public static KernelInfo GetKernel() => KernelInfo.Create();
+    public static KernelInfo GetKernel() => new();
 
     public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
 
@@ -17,9 +17,9 @@ public static class PlatformProvider
     // CPU
     //--------------------------------------------------------------------------------
 
-    public static CpuStat GetCpuStat() => CpuStat.Create();
+    public static CpuStat GetCpuStat() => new();
 
-    public static CpuFrequency? GetCpuFrequency() => CpuFrequency.Create();
+    public static CpuFrequency GetCpuFrequency() => new();
 
     //--------------------------------------------------------------------------------
     // Memory

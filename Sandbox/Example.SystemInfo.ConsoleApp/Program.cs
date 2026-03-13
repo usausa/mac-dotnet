@@ -16,7 +16,7 @@ Console.WriteLine($"  Kernel Version:   {kernel.KernelVersion}");
 Console.WriteLine($"  UUID:             {kernel.Uuid}");
 Console.WriteLine($"  Boot Time:        {kernel.BootTime:yyyy-MM-dd HH:mm:ss zzz}");
 Console.WriteLine($"  Uptime:           {DateTimeOffset.UtcNow - kernel.BootTime:d\\.hh\\:mm\\:ss}");
-Console.WriteLine($"  Max Processes:    {kernel.MaxProc}");
+Console.WriteLine($"  Max Processes:    {kernel.MaxProcesses}");
 Console.WriteLine($"  Max Files:        {kernel.MaxFiles}");
 Console.WriteLine($"  Secure Level:     {kernel.SecureLevel}");
 Console.WriteLine();
@@ -71,20 +71,20 @@ Console.WriteLine("  Measuring (500ms)...");
 var cpuStat = PlatformProvider.GetCpuStat();
 
 // 1回目スナップショットを保存 (CpuCoreStat はミュータブルなため値をコピー)
-var prevTotalUser = cpuStat.CpuTotal.User;
-var prevTotalSystem = cpuStat.CpuTotal.System;
-var prevTotalIdle = cpuStat.CpuTotal.Idle;
-var prevTotalNice = cpuStat.CpuTotal.Nice;
 var prevCores = cpuStat.CpuCores.Select(c => (c.User, c.System, c.Idle, c.Nice)).ToArray();
+var prevTotalUser   = prevCores.Aggregate(0u, (s, c) => s + c.User);
+var prevTotalSystem = prevCores.Aggregate(0u, (s, c) => s + c.System);
+var prevTotalIdle   = prevCores.Aggregate(0u, (s, c) => s + c.Idle);
+var prevTotalNice   = prevCores.Aggregate(0u, (s, c) => s + c.Nice);
 
 Thread.Sleep(500);
 cpuStat.Update();
 
-// 全体の使用率を計算
-var dUser = cpuStat.CpuTotal.User - prevTotalUser;
-var dSystem = cpuStat.CpuTotal.System - prevTotalSystem;
-var dIdle = cpuStat.CpuTotal.Idle - prevTotalIdle;
-var dNice = cpuStat.CpuTotal.Nice - prevTotalNice;
+// 全体の使用率を計算 (全コアの合計から算出)
+var dUser   = cpuStat.CpuCores.Aggregate(0u, (s, c) => s + c.User)   - prevTotalUser;
+var dSystem = cpuStat.CpuCores.Aggregate(0u, (s, c) => s + c.System) - prevTotalSystem;
+var dIdle   = cpuStat.CpuCores.Aggregate(0u, (s, c) => s + c.Idle)   - prevTotalIdle;
+var dNice   = cpuStat.CpuCores.Aggregate(0u, (s, c) => s + c.Nice)   - prevTotalNice;
 var dTotal = dUser + dSystem + dIdle + dNice;
 var userLoad = dTotal > 0 ? (double)dUser / dTotal : 0;
 var systemLoad = dTotal > 0 ? (double)dSystem / dTotal : 0;
