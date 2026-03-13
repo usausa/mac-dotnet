@@ -146,6 +146,9 @@ public sealed class CpuFrequency
                 }
             }
         }
+
+        // 初期周波数を設定する
+        Update();
     }
 
     private static unsafe (int[] eCoreFreqs, int[] pCoreFreqs)? GetFrequencyTables(string cpuName)
@@ -294,51 +297,27 @@ public sealed class CpuFrequency
     {
         using var channels = new CFRef(GetChannels());
         if (!channels.IsValid)
-        {
             return false;
-        }
 
         using var subscription = new CFRef(IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero));
         using var subDict = new CFRef(dict);
-
         if (!subscription.IsValid)
-        {
             return false;
-        }
 
-        var updated = false;
         using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
-        if (sample.IsValid)
-        {
-            using var key = CFRef.CreateString("IOReportChannels");
-            var items = CFDictionaryGetValue(sample, key);
-            if (items != IntPtr.Zero)
-            {
-                UpdateFrequencies(items);
-                UpdateAt = DateTime.Now;
-                updated = true;
-            }
-        }
+        if (!sample.IsValid)
+            return false;
 
-        return updated;
-    }
+        using var key = CFRef.CreateString("IOReportChannels");
+        var items = CFDictionaryGetValue(sample, key);
+        if (items == IntPtr.Zero)
+            return false;
 
-
-    //--------------------------------------------------------------------------------
-    // Frequency update (subsequent Update calls)
-    //--------------------------------------------------------------------------------
-
-    private void UpdateFrequencies(IntPtr items)
-    {
         for (var i = 0; i < eCores.Length; i++)
-        {
             eCores[i].Frequency = 0;
-        }
 
         for (var i = 0; i < pCores.Length; i++)
-        {
             pCores[i].Frequency = 0;
-        }
 
         var count = CFArrayGetCount(items);
         for (var idx = 0L; idx < count; idx++)
@@ -346,21 +325,20 @@ public sealed class CpuFrequency
             var item = CFArrayGetValueAtIndex(items, idx);
             var core = FindCore(ToManagedString(IOReportChannelGetChannelName(item)));
             if (core is null || core.CurrResidencies.Length == 0)
-            {
                 continue;
-            }
 
             var stateCount = IOReportStateGetCount(item);
             for (var s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
-            {
                 core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
-            }
 
             core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
 
             // バッファをスワップ: 今回値が次回の前回値になる / Swap buffers: current becomes previous for the next call
             (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
         }
+
+        UpdateAt = DateTime.Now;
+        return true;
     }
 
     private CpuCoreFrequency? FindCore(string? channelName)
