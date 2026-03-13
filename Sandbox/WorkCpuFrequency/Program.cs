@@ -18,7 +18,7 @@ class Program
         Console.WriteLine();
 
         // ----- CpuFrequency の生成 -----
-        using var cpu = new CpuFrequency(cpuName);
+        var cpu = new CpuFrequency(cpuName);
 
         // 周波数テーブルの表示
         Console.WriteLine($"E-Core 周波数テーブル: {string.Join(", ", cpu.ECoreFrequencyTable)} MHz");

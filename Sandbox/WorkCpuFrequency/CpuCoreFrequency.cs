@@ -14,7 +14,7 @@ public enum CpuCoreType
 
 /// <summary>
 /// 個々のCPUコアの周波数情報を保持するクラス。
-/// IOReport の "ECPU0", "ECPU1", "PCPU0" 等の各チャンネルに対応する。
+/// IOReport の "ECPU000", "ECPU010", "PCPU000" 等の各チャンネルに対応する。
 /// </summary>
 public sealed class CpuCoreFrequency
 {
@@ -26,6 +26,12 @@ public sealed class CpuCoreFrequency
 
     /// <summary>現在の周波数 (MHz)。Update() により更新される。</summary>
     public double Frequency { get; internal set; }
+
+    /// <summary>IOReport チャンネル名 (例: "ECPU000", "PCPU100")。初期化時に設定される。</summary>
+    internal string ChannelName = string.Empty;
+
+    /// <summary>このコアに対応する周波数テーブル (MHz)。初期化時に設定される。</summary>
+    internal int[] FreqTable = [];
 
     internal CpuCoreFrequency(int number, CpuCoreType coreType)
     {

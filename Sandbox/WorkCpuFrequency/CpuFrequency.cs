@@ -7,25 +7,27 @@ namespace CpuFrequencySample;
 /// CPU全コアの周波数を管理するクラス。
 /// Update() を呼び出すと IOReport でサンプリングを行い、
 /// 各 CpuCoreFrequency の Frequency プロパティを最新値に更新する。
-///
-/// Swift版 FrequencyReader の測定ロジックを内包するが、
-/// 平均計算などの集計は呼び出し側の責務とする。
 /// </summary>
-public sealed class CpuFrequency : IDisposable
+public sealed class CpuFrequency
 {
-    private readonly int[] _eCoreFreqs;   // E-Core 周波数テーブル (MHz)
-    private readonly int[] _pCoreFreqs;   // P-Core 周波数テーブル (MHz)
-
-    // IOReport チャンネル名 → CpuCoreFrequency のマッピング
-    // "CPU Core Performance States" チャンネルをアルファベット順にソートしてインデックスを割り当て
-    private readonly Dictionary<string, CpuCoreFrequency> _channelToCoreMap;
+    private readonly int[] _eCoreFreqs;
+    private readonly int[] _pCoreFreqs;
+    private readonly CpuCoreFrequency[] _eCores;
+    private readonly CpuCoreFrequency[] _pCores;
 
     private IntPtr _channels;
     private IntPtr _subscription;
     private IntPtr _prevSample;
+    private readonly IntPtr _ioReportChannelsKey; // "IOReportChannels" CFString をキャッシュ
 
     /// <summary>コアごとの周波数情報リスト。Update() により値が更新される。</summary>
     public IReadOnlyList<CpuCoreFrequency> Cores { get; }
+
+    /// <summary>E-Core の周波数テーブル (MHz)</summary>
+    public IReadOnlyList<int> ECoreFrequencyTable => _eCoreFreqs;
+
+    /// <summary>P-Core の周波数テーブル (MHz)</summary>
+    public IReadOnlyList<int> PCoreFrequencyTable => _pCoreFreqs;
 
     /// <summary>
     /// コンストラクタ。AppleARMIODevice から周波数テーブルを取得し、
@@ -35,7 +37,6 @@ public sealed class CpuFrequency : IDisposable
     /// <exception cref="InvalidOperationException">Apple Silicon でない場合</exception>
     public CpuFrequency(string cpuName)
     {
-        // ----- 周波数テーブルの取得 (Swift版: SystemKit.getFrequencies) -----
         var tables = FrequencyTableReader.GetFrequencyTables(cpuName);
         if (tables == null)
             throw new InvalidOperationException("周波数テーブルの取得に失敗しました。");
@@ -46,19 +47,21 @@ public sealed class CpuFrequency : IDisposable
         if (_eCoreFreqs.Length == 0 && _pCoreFreqs.Length == 0)
             throw new InvalidOperationException("周波数テーブルが空です。Apple Silicon Mac で実行してください。");
 
-        // ----- コア数の取得 (sysctl) -----
         int eCoreCount = GetSysctlInt("hw.perflevel1.logicalcpu") ?? 0;
         int pCoreCount = GetSysctlInt("hw.perflevel0.logicalcpu") ?? 0;
 
-        // ----- Cores リストの構築 -----
-        var cores = new List<CpuCoreFrequency>();
+        _eCores = new CpuCoreFrequency[eCoreCount];
+        _pCores = new CpuCoreFrequency[pCoreCount];
         for (int i = 0; i < eCoreCount; i++)
-            cores.Add(new CpuCoreFrequency(i, CpuCoreType.Efficiency));
+            _eCores[i] = new CpuCoreFrequency(i, CpuCoreType.Efficiency);
         for (int i = 0; i < pCoreCount; i++)
-            cores.Add(new CpuCoreFrequency(i, CpuCoreType.Performance));
-        Cores = cores.AsReadOnly();
+            _pCores[i] = new CpuCoreFrequency(i, CpuCoreType.Performance);
 
-        // ----- IOReport サブスクリプションの作成 (Swift版: FrequencyReader.setup) -----
+        var allCores = new CpuCoreFrequency[eCoreCount + pCoreCount];
+        _eCores.CopyTo(allCores, 0);
+        _pCores.CopyTo(allCores, eCoreCount);
+        Cores = allCores;
+
         _channels = GetChannels();
         if (_channels == IntPtr.Zero)
             throw new InvalidOperationException("IOReport チャンネルの取得に失敗しました。");
@@ -69,54 +72,76 @@ public sealed class CpuFrequency : IDisposable
         if (_subscription == IntPtr.Zero)
             throw new InvalidOperationException("IOReport サブスクリプションの作成に失敗しました。");
 
-        // ----- チャンネル名 → コアのマッピングを構築 -----
-        // IOReport のチャンネル名は "ECPU000", "ECPU010", "PCPU000", "PCPU100" 等の形式。
-        // アルファベット順にソートして各コア種別の連番 (0, 1, 2, ...) に割り当てる。
-        _channelToCoreMap = BuildChannelToCoreMap(cores);
+        _ioReportChannelsKey = CreateCFString("IOReportChannels");
+        InitializeCoreChannels();
     }
+
+    ~CpuFrequency()
+    {
+        if (_prevSample != IntPtr.Zero) CFRelease(_prevSample);
+        if (_ioReportChannelsKey != IntPtr.Zero) CFRelease(_ioReportChannelsKey);
+        if (_channels != IntPtr.Zero) CFRelease(_channels);
+        if (_subscription != IntPtr.Zero) CFRelease(_subscription);
+    }
+
+    // =====================================================================
+    // 初期化
+    // =====================================================================
 
     /// <summary>
-    /// 初期サンプルを取得してチャンネル名を列挙し、コアへのマッピングを構築する。
+    /// 初期サンプルを取得してチャンネル名を列挙し、各コアに ChannelName と FreqTable を設定する。
     /// </summary>
-    private Dictionary<string, CpuCoreFrequency> BuildChannelToCoreMap(List<CpuCoreFrequency> cores)
+    private void InitializeCoreChannels()
     {
-        var map = new Dictionary<string, CpuCoreFrequency>();
         var sample = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
-        if (sample == IntPtr.Zero) return map;
+        if (sample == IntPtr.Zero) return;
 
-        // 初回サンプルをデルタ計算のベースとして保持
         _prevSample = sample;
 
-        var allSamples = CollectIOSamples(sample);
+        if (!CFDictionaryGetValueIfPresent(sample, _ioReportChannelsKey, out IntPtr items))
+            return;
 
-        // "CPU Core Performance States" サブグループのチャンネルのみ対象
-        var eCoreChannels = allSamples
-            .Where(s => s.SubGroup == "CPU Core Performance States"
-                     && s.Channel.StartsWith("ECPU", StringComparison.Ordinal))
-            .Select(s => s.Channel)
-            .Distinct()
-            .OrderBy(s => s)
-            .ToList();
+        var eCoreNames = new List<string>();
+        var pCoreNames = new List<string>();
 
-        var pCoreChannels = allSamples
-            .Where(s => s.SubGroup == "CPU Core Performance States"
-                     && s.Channel.StartsWith("PCPU", StringComparison.Ordinal))
-            .Select(s => s.Channel)
-            .Distinct()
-            .OrderBy(s => s)
-            .ToList();
+        long count = CFArrayGetCount(items);
+        for (long idx = 0; idx < count; idx++)
+        {
+            var item = CFArrayGetValueAtIndex(items, idx);
+            var subGroup = CFStringToString(IOReportChannelGetSubGroup(item));
+            if (subGroup != "CPU Core Performance States") continue;
 
-        var eCores = cores.Where(c => c.CoreType == CpuCoreType.Efficiency).ToList();
-        var pCores = cores.Where(c => c.CoreType == CpuCoreType.Performance).ToList();
+            var channelName = CFStringToString(IOReportChannelGetChannelName(item));
+            if (channelName == null) continue;
 
-        for (int i = 0; i < eCoreChannels.Count && i < eCores.Count; i++)
-            map[eCoreChannels[i]] = eCores[i];
+            if (channelName.StartsWith("ECPU", StringComparison.Ordinal))
+            {
+                if (!eCoreNames.Contains(channelName)) eCoreNames.Add(channelName);
+            }
+            else if (channelName.StartsWith("PCPU", StringComparison.Ordinal))
+            {
+                if (!pCoreNames.Contains(channelName)) pCoreNames.Add(channelName);
+            }
+        }
 
-        for (int i = 0; i < pCoreChannels.Count && i < pCores.Count; i++)
-            map[pCoreChannels[i]] = pCores[i];
+        eCoreNames.Sort(StringComparer.Ordinal);
+        pCoreNames.Sort(StringComparer.Ordinal);
 
-        return map;
+        for (int i = 0; i < eCoreNames.Count && i < _eCores.Length; i++)
+        {
+            _eCores[i].ChannelName = eCoreNames[i];
+            _eCores[i].FreqTable = _eCoreFreqs;
+        }
+        for (int i = 0; i < pCoreNames.Count && i < _pCores.Length; i++)
+        {
+            _pCores[i].ChannelName = pCoreNames[i];
+            _pCores[i].FreqTable = _pCoreFreqs;
+        }
     }
+
+    // =====================================================================
+    // Update
+    // =====================================================================
 
     /// <summary>
     /// 前回サンプルとの差分から各コアの Frequency を更新する。
@@ -124,63 +149,73 @@ public sealed class CpuFrequency : IDisposable
     /// </summary>
     public void Update()
     {
-        var current = TakeSample();
-        if (current == null) return;
+        var current = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
+        if (current == IntPtr.Zero) return;
 
-        if (_prevSample != IntPtr.Zero)
+        if (_prevSample == IntPtr.Zero)
         {
-            var diffPtr = IOReportCreateSamplesDelta(_prevSample, current.Value, IntPtr.Zero);
-            CFRelease(_prevSample);
-            _prevSample = current.Value;
+            _prevSample = current;
+            return;
+        }
 
-            if (diffPtr == IntPtr.Zero) return;
+        var diffPtr = IOReportCreateSamplesDelta(_prevSample, current, IntPtr.Zero);
+        CFRelease(_prevSample);
+        _prevSample = current;
 
-            var deltaSamples = CollectIOSamples(diffPtr);
+        if (diffPtr == IntPtr.Zero) return;
 
-            foreach (var core in Cores)
-                core.Frequency = 0;
+        for (int i = 0; i < _eCores.Length; i++) _eCores[i].Frequency = 0;
+        for (int i = 0; i < _pCores.Length; i++) _pCores[i].Frequency = 0;
 
-            foreach (var sample in deltaSamples)
+        if (CFDictionaryGetValueIfPresent(diffPtr, _ioReportChannelsKey, out IntPtr items))
+        {
+            long count = CFArrayGetCount(items);
+            for (long idx = 0; idx < count; idx++)
             {
-                if (sample.Group != "CPU Stats") continue;
-                if (sample.SubGroup != "CPU Core Performance States") continue;
-                if (!_channelToCoreMap.TryGetValue(sample.Channel, out var core)) continue;
-
-                int[] freqTable = core.CoreType == CpuCoreType.Efficiency ? _eCoreFreqs : _pCoreFreqs;
-                core.Frequency = CalculateFrequencies(sample.Delta, freqTable);
-
+                var item = CFArrayGetValueAtIndex(items, idx);
+                var channelName = CFStringToString(IOReportChannelGetChannelName(item));
+                var core = FindCore(channelName);
+                if (core == null) continue;
+                core.Frequency = CalculateFrequencies(item, core.FreqTable);
             }
+        }
 
-            CFRelease(diffPtr);
-        }
-        else
-        {
-            _prevSample = current.Value;
-        }
+        CFRelease(diffPtr);
     }
 
-    /// <summary>E-Core の周波数テーブル (MHz)</summary>
-    public IReadOnlyList<int> ECoreFrequencyTable => _eCoreFreqs;
-
-    /// <summary>P-Core の周波数テーブル (MHz)</summary>
-    public IReadOnlyList<int> PCoreFrequencyTable => _pCoreFreqs;
+    /// <summary>
+    /// チャンネル名でコアを検索する。E-Core → P-Core の順に線形探索。
+    /// </summary>
+    private CpuCoreFrequency? FindCore(string? channelName)
+    {
+        if (channelName == null) return null;
+        for (int i = 0; i < _eCores.Length; i++)
+            if (_eCores[i].ChannelName == channelName) return _eCores[i];
+        for (int i = 0; i < _pCores.Length; i++)
+            if (_pCores[i].ChannelName == channelName) return _pCores[i];
+        return null;
+    }
 
     // =====================================================================
-    // 以下、IOReport を使った内部実装 (Swift版 FrequencyReader と同一ロジック)
+    // 周波数計算
     // =====================================================================
 
     /// <summary>
-    /// ステートの residency から加重平均周波数を計算する。
+    /// ステートの residency から実効周波数 (MHz) を計算する。
+    /// 分母に全ステート (IDLE/DOWN 含む) の合計を使うことで、
+    /// アイドル時間を反映した実効周波数を算出する。
     /// Swift版: FrequencyReader.calculateFrequencies(dict:freqs:)
     /// </summary>
-    private double CalculateFrequencies(IntPtr dict, int[] freqs)
+    private static double CalculateFrequencies(IntPtr dict, int[] freqs)
     {
-        var items = GetResidencies(dict);
+        int stateCount = IOReportStateGetCount(dict);
 
+        // IDLE / DOWN / OFF より後の最初のステートを周波数テーブルの起点とする
         int offset = -1;
-        for (int i = 0; i < items.Count; i++)
+        for (int i = 0; i < stateCount; i++)
         {
-            if (items[i].Name is not ("IDLE" or "DOWN" or "OFF"))
+            var name = CFStringToString(IOReportStateGetNameForIndex(dict, i));
+            if (name is not ("IDLE" or "DOWN" or "OFF"))
             {
                 offset = i;
                 break;
@@ -188,45 +223,26 @@ public sealed class CpuFrequency : IDisposable
         }
         if (offset < 0) return 0;
 
-        // 全ステート (IDLE/DOWN含む) の合計を分母にすることで実効周波数を算出する。
-        // アクティブ時間のみを分母にすると、P-Core のようにアクティブ時は常に最高周波数で
-        // 動作するコアが常に最大値を返し、負荷に応じた変化が表れなくなるため。
         double totalTime = 0;
-        for (int i = 0; i < items.Count; i++)
-            totalTime += items[i].Residency;
+        for (int i = 0; i < stateCount; i++)
+            totalTime += IOReportStateGetResidency(dict, i);
 
         double avgFreq = 0;
         for (int i = 0; i < freqs.Length; i++)
         {
             int key = i + offset;
-            if (key >= items.Count) continue;
-            double percent = totalTime == 0 ? 0 : items[key].Residency / totalTime;
+            if (key >= stateCount) continue;
+            double percent = totalTime == 0 ? 0 : (double)IOReportStateGetResidency(dict, key) / totalTime;
             avgFreq += percent * freqs[i];
         }
 
         return avgFreq;
     }
 
-    /// <summary>
-    /// Swift版: FrequencyReader.getResidencies(dict:)
-    /// </summary>
-    private static List<(string Name, double Residency)> GetResidencies(IntPtr dict)
-    {
-        int count = IOReportStateGetCount(dict);
-        var result = new List<(string, double)>(count);
-        for (int i = 0; i < count; i++)
-        {
-            var namePtr = IOReportStateGetNameForIndex(dict, i);
-            var name = CFStringToString(namePtr) ?? "";
-            var residency = IOReportStateGetResidency(dict, i);
-            result.Add((name, (double)residency));
-        }
-        return result;
-    }
+    // =====================================================================
+    // IOReport チャンネル取得 (Swift版: FrequencyReader.getChannels())
+    // =====================================================================
 
-    /// <summary>
-    /// Swift版: FrequencyReader.getChannels()
-    /// </summary>
     private static IntPtr GetChannels()
     {
         var channelDefs = new[]
@@ -261,49 +277,6 @@ public sealed class CpuFrequency : IDisposable
 
         return hasChannels ? mutableCopy : IntPtr.Zero;
     }
-
-    /// <summary>
-    /// Swift版: FrequencyReader.getSample()
-    /// </summary>
-    private IntPtr? TakeSample()
-    {
-        var sample = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
-        return sample == IntPtr.Zero ? null : sample;
-    }
-
-    /// <summary>
-    /// Swift版: FrequencyReader.collectIOSamples(data:)
-    /// </summary>
-    private static List<IOSample> CollectIOSamples(IntPtr data)
-    {
-        var key = CreateCFString("IOReportChannels");
-        if (!CFDictionaryGetValueIfPresent(data, key, out IntPtr items))
-        {
-            CFRelease(key);
-            return [];
-        }
-        CFRelease(key);
-
-        long count = CFArrayGetCount(items);
-        var samples = new List<IOSample>((int)count);
-        for (long idx = 0; idx < count; idx++)
-        {
-            var item = CFArrayGetValueAtIndex(items, idx);
-            var group = CFStringToString(IOReportChannelGetGroup(item)) ?? "";
-            var subGroup = CFStringToString(IOReportChannelGetSubGroup(item)) ?? "";
-            var channel = CFStringToString(IOReportChannelGetChannelName(item)) ?? "";
-            samples.Add(new IOSample(group, subGroup, channel, item));
-        }
-        return samples;
-    }
-
-    public void Dispose()
-    {
-        if (_channels != IntPtr.Zero) { CFRelease(_channels); _channels = IntPtr.Zero; }
-        if (_prevSample != IntPtr.Zero) { CFRelease(_prevSample); _prevSample = IntPtr.Zero; }
-    }
-
-    private record IOSample(string Group, string SubGroup, string Channel, IntPtr Delta);
 
     // =====================================================================
     // sysctl ヘルパー
