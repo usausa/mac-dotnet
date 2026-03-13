@@ -79,7 +79,6 @@ public sealed class CpuStat
                     var core = new CpuCoreStat(logicalCpuId, coreType);
 
                     cpuCores.Add(core);
-                    // TODO cpuCoresをEコア優先、同コアの場合は論理CPU ID順でソートする
 
                     if (coreType == CpuCoreType.Efficiency)
                     {
@@ -90,20 +89,26 @@ public sealed class CpuStat
                         performanceCores.Add(core);
                     }
                 }
+
+                cpuCores.Sort(static (x, y) =>
+                {
+                    var cmp = x.CoreType.CompareTo(y.CoreType);
+                    return cmp != 0 ? cmp : x.Number.CompareTo(y.Number);
+                });
             }
 
-            for (var i = 0; i < processorCount; i++)
+            foreach (var core in cpuCores)
             {
-                var offset = i * CPU_STATE_MAX;
+                var offset = core.Number * CPU_STATE_MAX;
                 var user = ptr[offset + CPU_STATE_USER];
                 var system = ptr[offset + CPU_STATE_SYSTEM];
                 var idle = ptr[offset + CPU_STATE_IDLE];
                 var nice = ptr[offset + CPU_STATE_NICE];
 
-                cpuCores[i].User = user;
-                cpuCores[i].System = system;
-                cpuCores[i].Idle = idle;
-                cpuCores[i].Nice = nice;
+                core.User = user;
+                core.System = system;
+                core.Idle = idle;
+                core.Nice = nice;
             }
 
             UpdateAt = DateTime.Now;
