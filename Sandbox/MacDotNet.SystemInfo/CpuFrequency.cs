@@ -431,42 +431,16 @@ public sealed class CpuFrequency
     {
         try
         {
-            var channelDefs = new[]
-            {
-                ("CPU Stats", "CPU Complex Performance States"),
-                ("CPU Stats", "CPU Core Performance States"),
-            };
-
-            var merged = IntPtr.Zero;
-            foreach (var (gname, sname) in channelDefs)
-            {
-                using var g = CFRef.CreateString(gname);
-                using var s = CFRef.CreateString(sname);
-                var channel = IOReportCopyChannelsInGroup(g, s, 0, 0, 0);
-                if (channel == IntPtr.Zero)
-                {
-                    continue;
-                }
-
-                if (merged == IntPtr.Zero)
-                {
-                    merged = channel;
-                }
-                else
-                {
-                    IOReportMergeChannels(merged, channel, IntPtr.Zero);
-                    CFRelease(channel);
-                }
-            }
-
-            if (merged == IntPtr.Zero)
+            using var group = CFRef.CreateString("CPU Stats");
+            using var subGroup = CFRef.CreateString("CPU Core Performance States");
+            using var channel = new CFRef(IOReportCopyChannelsInGroup(group, subGroup, 0, 0, 0));
+            if (!channel.IsValid)
             {
                 return IntPtr.Zero;
             }
 
-            var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, merged);
-            CFRelease(merged);
-
+            // IOReportCreateSubscription には CFMutableDictionary が必要なため mutable コピーを作成する
+            var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
             if (mutableCopy == IntPtr.Zero)
             {
                 return IntPtr.Zero;
