@@ -33,6 +33,15 @@ public sealed class CpuCoreFrequency
     /// <summary>このコアに対応する周波数テーブル (MHz)。初期化時に設定される。</summary>
     internal int[] FreqTable = [];
 
+    /// <summary>前回サンプルのステート別レジデンシー値。デルタ計算に使用。</summary>
+    internal long[] PrevResidencies = [];
+
+    /// <summary>今回サンプルの読み取りバッファ。毎 Update() で上書きして使い回す。</summary>
+    internal long[] CurrResidencies = [];
+
+    /// <summary>IDLE/DOWN/OFF 以外の最初のステートのインデックス。初期化時に設定される。</summary>
+    internal int ResidencyOffset = -1;
+
     internal CpuCoreFrequency(int number, CpuCoreType coreType)
     {
         Number = number;

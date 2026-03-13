@@ -5,8 +5,11 @@ namespace CpuFrequencySample;
 
 /// <summary>
 /// CPU全コアの周波数を管理するクラス。
-/// Update() を呼び出すと IOReport でサンプリングを行い、
+/// Update() を呼び出すと IOReport を Open/Close してサンプリングを行い、
 /// 各 CpuCoreFrequency の Frequency プロパティを最新値に更新する。
+///
+/// ネイティブハンドルはメンバに持たず、Update() 内で完結させる。
+/// 前回サンプルとの差分は各コアが long[] でレジデンシー値を保持することで実現する。
 /// </summary>
 public sealed class CpuFrequency
 {
@@ -14,11 +17,7 @@ public sealed class CpuFrequency
     private readonly int[] _pCoreFreqs;
     private readonly CpuCoreFrequency[] _eCores;
     private readonly CpuCoreFrequency[] _pCores;
-
-    private IntPtr _channels;
-    private IntPtr _subscription;
-    private IntPtr _prevSample;
-    private readonly IntPtr _ioReportChannelsKey; // "IOReportChannels" CFString をキャッシュ
+    private bool _initialized;
 
     /// <summary>コアごとの周波数情報リスト。Update() により値が更新される。</summary>
     public IReadOnlyList<CpuCoreFrequency> Cores { get; }
@@ -30,11 +29,9 @@ public sealed class CpuFrequency
     public IReadOnlyList<int> PCoreFrequencyTable => _pCoreFreqs;
 
     /// <summary>
-    /// コンストラクタ。AppleARMIODevice から周波数テーブルを取得し、
-    /// IOReport のサブスクリプションを作成する。
+    /// コンストラクタ。周波数テーブルとコア一覧を構築する。
+    /// IOReport の初期化は Update() 初回呼び出し時に行う。
     /// </summary>
-    /// <param name="cpuName">CPU名 (M4/M5 判定に使用)</param>
-    /// <exception cref="InvalidOperationException">Apple Silicon でない場合</exception>
     public CpuFrequency(string cpuName)
     {
         var tables = FrequencyTableReader.GetFrequencyTables(cpuName);
@@ -61,46 +58,66 @@ public sealed class CpuFrequency
         _eCores.CopyTo(allCores, 0);
         _pCores.CopyTo(allCores, eCoreCount);
         Cores = allCores;
-
-        _channels = GetChannels();
-        if (_channels == IntPtr.Zero)
-            throw new InvalidOperationException("IOReport チャンネルの取得に失敗しました。");
-
-        _subscription = IOReportCreateSubscription(IntPtr.Zero, _channels, out IntPtr dict, 0, IntPtr.Zero);
-        if (dict != IntPtr.Zero) CFRelease(dict);
-
-        if (_subscription == IntPtr.Zero)
-            throw new InvalidOperationException("IOReport サブスクリプションの作成に失敗しました。");
-
-        _ioReportChannelsKey = CreateCFString("IOReportChannels");
-        InitializeCoreChannels();
-    }
-
-    ~CpuFrequency()
-    {
-        if (_prevSample != IntPtr.Zero) CFRelease(_prevSample);
-        if (_ioReportChannelsKey != IntPtr.Zero) CFRelease(_ioReportChannelsKey);
-        if (_channels != IntPtr.Zero) CFRelease(_channels);
-        if (_subscription != IntPtr.Zero) CFRelease(_subscription);
     }
 
     // =====================================================================
-    // 初期化
+    // Update
     // =====================================================================
 
     /// <summary>
-    /// 初期サンプルを取得してチャンネル名を列挙し、各コアに ChannelName と FreqTable を設定する。
+    /// IOReport を Open して各コアの Frequency を更新し、Close する。
+    /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
     /// </summary>
-    private void InitializeCoreChannels()
+    public void Update()
     {
-        var sample = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
-        if (sample == IntPtr.Zero) return;
+        var channels = GetChannels();
+        if (channels == IntPtr.Zero) return;
 
-        _prevSample = sample;
+        var subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out IntPtr dict, 0, IntPtr.Zero);
+        if (dict != IntPtr.Zero) CFRelease(dict);
 
-        if (!CFDictionaryGetValueIfPresent(sample, _ioReportChannelsKey, out IntPtr items))
+        if (subscription == IntPtr.Zero)
+        {
+            CFRelease(channels);
             return;
+        }
 
+        var sample = IOReportCreateSamples(subscription, channels, IntPtr.Zero);
+        if (sample != IntPtr.Zero)
+        {
+            var key = CreateCFString("IOReportChannels");
+            if (CFDictionaryGetValueIfPresent(sample, key, out IntPtr items))
+            {
+                if (!_initialized)
+                {
+                    // 初回: チャンネル名・レジデンシーバッファ・オフセットを各コアに設定し、
+                    // 現在のレジデンシー値を PrevResidencies として保存する
+                    SetupCoreChannels(items);
+                    _initialized = true;
+                }
+                else
+                {
+                    UpdateFrequencies(items);
+                }
+            }
+            CFRelease(key);
+            CFRelease(sample);
+        }
+
+        CFRelease(subscription);
+        CFRelease(channels);
+    }
+
+    // =====================================================================
+    // 初期化 (初回 Update 時のみ)
+    // =====================================================================
+
+    /// <summary>
+    /// CFArray を走査してチャンネル名をコアに割り当て、
+    /// 初期レジデンシー値を PrevResidencies に格納する。
+    /// </summary>
+    private void SetupCoreChannels(IntPtr items)
+    {
         var eCoreNames = new List<string>();
         var pCoreNames = new List<string>();
 
@@ -127,65 +144,78 @@ public sealed class CpuFrequency
         eCoreNames.Sort(StringComparer.Ordinal);
         pCoreNames.Sort(StringComparer.Ordinal);
 
-        for (int i = 0; i < eCoreNames.Count && i < _eCores.Length; i++)
+        AssignChannels(_eCores, eCoreNames, _eCoreFreqs, items, count);
+        AssignChannels(_pCores, pCoreNames, _pCoreFreqs, items, count);
+    }
+
+    private static void AssignChannels(
+        CpuCoreFrequency[] cores, List<string> channelNames, int[] freqTable,
+        IntPtr items, long itemCount)
+    {
+        for (int ci = 0; ci < channelNames.Count && ci < cores.Length; ci++)
         {
-            _eCores[i].ChannelName = eCoreNames[i];
-            _eCores[i].FreqTable = _eCoreFreqs;
-        }
-        for (int i = 0; i < pCoreNames.Count && i < _pCores.Length; i++)
-        {
-            _pCores[i].ChannelName = pCoreNames[i];
-            _pCores[i].FreqTable = _pCoreFreqs;
+            var core = cores[ci];
+            core.ChannelName = channelNames[ci];
+            core.FreqTable = freqTable;
+
+            // 対応する CFArray アイテムを検索してバッファを初期化
+            for (long idx = 0; idx < itemCount; idx++)
+            {
+                var item = CFArrayGetValueAtIndex(items, idx);
+                var ch = CFStringToString(IOReportChannelGetChannelName(item));
+                if (ch != core.ChannelName) continue;
+
+                int stateCount = IOReportStateGetCount(item);
+                core.PrevResidencies = new long[stateCount];
+                core.CurrResidencies = new long[stateCount];
+
+                for (int s = 0; s < stateCount; s++)
+                {
+                    if (core.ResidencyOffset < 0)
+                    {
+                        var name = CFStringToString(IOReportStateGetNameForIndex(item, s));
+                        if (name is not ("IDLE" or "DOWN" or "OFF"))
+                            core.ResidencyOffset = s;
+                    }
+                    core.PrevResidencies[s] = IOReportStateGetResidency(item, s);
+                }
+                break;
+            }
         }
     }
 
     // =====================================================================
-    // Update
+    // 周波数更新 (2回目以降の Update)
     // =====================================================================
 
     /// <summary>
-    /// 前回サンプルとの差分から各コアの Frequency を更新する。
-    /// スリープは行わない。呼び出し側が間隔を制御する (例: Thread.Sleep(1000))。
+    /// 現在のレジデンシー値を読み取り、前回値との差分から周波数を算出する。
     /// </summary>
-    public void Update()
+    private void UpdateFrequencies(IntPtr items)
     {
-        var current = IOReportCreateSamples(_subscription, _channels, IntPtr.Zero);
-        if (current == IntPtr.Zero) return;
-
-        if (_prevSample == IntPtr.Zero)
-        {
-            _prevSample = current;
-            return;
-        }
-
-        var diffPtr = IOReportCreateSamplesDelta(_prevSample, current, IntPtr.Zero);
-        CFRelease(_prevSample);
-        _prevSample = current;
-
-        if (diffPtr == IntPtr.Zero) return;
-
         for (int i = 0; i < _eCores.Length; i++) _eCores[i].Frequency = 0;
         for (int i = 0; i < _pCores.Length; i++) _pCores[i].Frequency = 0;
 
-        if (CFDictionaryGetValueIfPresent(diffPtr, _ioReportChannelsKey, out IntPtr items))
+        long count = CFArrayGetCount(items);
+        for (long idx = 0; idx < count; idx++)
         {
-            long count = CFArrayGetCount(items);
-            for (long idx = 0; idx < count; idx++)
-            {
-                var item = CFArrayGetValueAtIndex(items, idx);
-                var channelName = CFStringToString(IOReportChannelGetChannelName(item));
-                var core = FindCore(channelName);
-                if (core == null) continue;
-                core.Frequency = CalculateFrequencies(item, core.FreqTable);
-            }
-        }
+            var item = CFArrayGetValueAtIndex(items, idx);
+            var channelName = CFStringToString(IOReportChannelGetChannelName(item));
+            var core = FindCore(channelName);
+            if (core == null || core.CurrResidencies.Length == 0) continue;
 
-        CFRelease(diffPtr);
+            int stateCount = IOReportStateGetCount(item);
+            for (int s = 0; s < stateCount && s < core.CurrResidencies.Length; s++)
+                core.CurrResidencies[s] = IOReportStateGetResidency(item, s);
+
+            core.Frequency = CalculateFrequencies(core.CurrResidencies, core.PrevResidencies, core.FreqTable, core.ResidencyOffset);
+
+            // バッファをスワップ: 今回値が次回の前回値になる (コピー不要)
+            (core.PrevResidencies, core.CurrResidencies) = (core.CurrResidencies, core.PrevResidencies);
+        }
     }
 
-    /// <summary>
-    /// チャンネル名でコアを検索する。E-Core → P-Core の順に線形探索。
-    /// </summary>
+    /// <summary>チャンネル名でコアを線形検索する。</summary>
     private CpuCoreFrequency? FindCore(string? channelName)
     {
         if (channelName == null) return null;
@@ -197,42 +227,28 @@ public sealed class CpuFrequency
     }
 
     // =====================================================================
-    // 周波数計算
+    // 周波数計算 (アロケーションなし)
     // =====================================================================
 
     /// <summary>
-    /// ステートの residency から実効周波数 (MHz) を計算する。
-    /// 分母に全ステート (IDLE/DOWN 含む) の合計を使うことで、
-    /// アイドル時間を反映した実効周波数を算出する。
-    /// Swift版: FrequencyReader.calculateFrequencies(dict:freqs:)
+    /// 前回・今回のレジデンシー差分から実効周波数 (MHz) を計算する。
+    /// 全ステートの差分合計を分母にすることでアイドル時間を反映した実効周波数を算出する。
     /// </summary>
-    private static double CalculateFrequencies(IntPtr dict, int[] freqs)
+    private static double CalculateFrequencies(long[] curr, long[] prev, int[] freqs, int offset)
     {
-        int stateCount = IOReportStateGetCount(dict);
-
-        // IDLE / DOWN / OFF より後の最初のステートを周波数テーブルの起点とする
-        int offset = -1;
-        for (int i = 0; i < stateCount; i++)
-        {
-            var name = CFStringToString(IOReportStateGetNameForIndex(dict, i));
-            if (name is not ("IDLE" or "DOWN" or "OFF"))
-            {
-                offset = i;
-                break;
-            }
-        }
         if (offset < 0) return 0;
 
-        double totalTime = 0;
-        for (int i = 0; i < stateCount; i++)
-            totalTime += IOReportStateGetResidency(dict, i);
+        double totalDelta = 0;
+        for (int i = 0; i < curr.Length; i++)
+            totalDelta += curr[i] - prev[i];
 
         double avgFreq = 0;
         for (int i = 0; i < freqs.Length; i++)
         {
             int key = i + offset;
-            if (key >= stateCount) continue;
-            double percent = totalTime == 0 ? 0 : (double)IOReportStateGetResidency(dict, key) / totalTime;
+            if (key >= curr.Length) continue;
+            double delta = curr[key] - prev[key];
+            double percent = totalDelta == 0 ? 0 : delta / totalDelta;
             avgFreq += percent * freqs[i];
         }
 
