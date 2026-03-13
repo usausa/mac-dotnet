@@ -34,7 +34,7 @@ public sealed class CpuStat
 
     private readonly List<CpuCoreStat> performanceCores = [];
 
-    private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(valueFactory: ReadCoreTypes);
+    private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(ReadCoreTypes);
 
     public DateTime UpdateAt { get; private set; }
 
@@ -59,8 +59,8 @@ public sealed class CpuStat
 
     public unsafe bool Update()
     {
-        using var host = new MachPortRef(port: mach_host_self());
-        var result = host_processor_info(host: host, flavor: PROCESSOR_CPU_LOAD_INFO, processorCount: out var processorCount, processorInfo: out var info, processorInfoCnt: out var infoCount);
+        using var host = new MachPortRef(mach_host_self());
+        var result = host_processor_info(host, PROCESSOR_CPU_LOAD_INFO, out var processorCount, out var info, out var infoCount);
         if (result != KERN_SUCCESS)
         {
             return false;
@@ -117,7 +117,7 @@ public sealed class CpuStat
         }
         finally
         {
-            _ = vm_deallocate(targetTask: task_self_trap(), address: info, size: sizeof(int) * infoCount);
+            _ = vm_deallocate(task_self_trap(), info, sizeof(int) * infoCount);
         }
     }
 
@@ -128,52 +128,52 @@ public sealed class CpuStat
     private static Dictionary<int, CpuCoreType> ReadCoreTypes()
     {
         var coreTypes = new Dictionary<int, CpuCoreType>();
-        var matching = IOServiceMatching(name: "AppleARMPE");
+        var matching = IOServiceMatching("AppleARMPE");
         if (matching == IntPtr.Zero)
         {
             return coreTypes;
         }
 
         var iterator = IntPtr.Zero;
-        if (IOServiceGetMatchingServices(mainPort: 0, matching: matching, existing: ref iterator) != KERN_SUCCESS || iterator == IntPtr.Zero)
+        if (IOServiceGetMatchingServices(0, matching, ref iterator) != KERN_SUCCESS || iterator == IntPtr.Zero)
         {
             return coreTypes;
         }
 
-        using var services = new IORef(pointer: iterator);
+        using var services = new IORef(iterator);
         uint service;
-        while ((service = IOIteratorNext(iterator: services)) != 0)
+        while ((service = IOIteratorNext(services)) != 0)
         {
-            using var serviceObject = new IOObj(handle: service);
-            if (IORegistryEntryGetChildIterator(entry: serviceObject, plane: "IOService", iterator: out var childIterator) != KERN_SUCCESS || childIterator == IntPtr.Zero)
+            using var serviceObject = new IOObj(service);
+            if (IORegistryEntryGetChildIterator(serviceObject, "IOService", out var childIterator) != KERN_SUCCESS || childIterator == IntPtr.Zero)
             {
                 continue;
             }
 
-            using var children = new IORef(pointer: childIterator);
+            using var children = new IORef(childIterator);
             uint child;
-            while ((child = IOIteratorNext(iterator: children)) != 0)
+            while ((child = IOIteratorNext(children)) != 0)
             {
-                using var childObject = new IOObj(handle: child);
-                var name = GetEntryName(entry: childObject);
-                if (string.IsNullOrEmpty(value: name) || !name.StartsWith(value: "cpu", comparisonType: StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(c: name[index: 3]))
+                using var childObject = new IOObj(child);
+                var name = GetEntryName(childObject);
+                if (string.IsNullOrEmpty(name) || !name.StartsWith("cpu", StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(name[3]))
                 {
                     continue;
                 }
 
-                if (IORegistryEntryCreateCFProperties(entry: childObject, properties: out var properties, allocator: IntPtr.Zero, options: 0) != KERN_SUCCESS || properties == IntPtr.Zero)
+                if (IORegistryEntryCreateCFProperties(childObject, out var properties, IntPtr.Zero, 0) != KERN_SUCCESS || properties == IntPtr.Zero)
                 {
                     continue;
                 }
 
-                using var values = new CFRef(pointer: properties);
-                var logicalCpuId = GetLogicalCpuId(properties: values);
+                using var values = new CFRef(properties);
+                var logicalCpuId = GetLogicalCpuId(values);
                 if (logicalCpuId < 0)
                 {
                     continue;
                 }
 
-                coreTypes[key: logicalCpuId] = GetCoreType(properties: values);
+                coreTypes[logicalCpuId] = GetCoreType(values);
             }
         }
 
@@ -183,49 +183,49 @@ public sealed class CpuStat
     private static unsafe string? GetEntryName(IOObj entry)
     {
         var buffer = stackalloc byte[128];
-        return IORegistryEntryGetName(entry: entry, name: buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8(ptr: (IntPtr)buffer) : null;
+        return IORegistryEntryGetName(entry, buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
     private static int GetLogicalCpuId(CFRef properties)
     {
-        using var key = CFRef.CreateString(s: "logical-cpu-id");
+        using var key = CFRef.CreateString("logical-cpu-id");
         if (!key.IsValid)
         {
             return -1;
         }
 
-        var value = CFDictionaryGetValue(theDict: properties, key: key);
-        if ((value == IntPtr.Zero) || (CFGetTypeID(cf: value) != CFNumberGetTypeID()))
+        var value = CFDictionaryGetValue(properties, key);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return -1;
         }
 
-        return CFNumberGetValue(number: value, theType: kCFNumberSInt32Type, valuePtr: out var logicalCpuId) ? logicalCpuId : -1;
+        return CFNumberGetValue(value, kCFNumberSInt32Type, out var logicalCpuId) ? logicalCpuId : -1;
     }
 
     private static CpuCoreType GetCoreType(CFRef properties)
     {
-        using var key = CFRef.CreateString(s: "cluster-type");
+        using var key = CFRef.CreateString("cluster-type");
         if (!key.IsValid)
         {
             return CpuCoreType.Unknown;
         }
 
-        var value = CFDictionaryGetValue(theDict: properties, key: key);
-        if ((value == IntPtr.Zero) || (CFGetTypeID(cf: value) != CFDataGetTypeID()))
+        var value = CFDictionaryGetValue(properties, key);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFDataGetTypeID()))
         {
             return CpuCoreType.Unknown;
         }
 
-        var length = CFDataGetLength(theData: value).ToInt32();
+        var length = CFDataGetLength(value).ToInt32();
         if (length <= 0)
         {
             return CpuCoreType.Unknown;
         }
 
         var bytes = new byte[length];
-        Marshal.Copy(source: CFDataGetBytePtr(theData: value), destination: bytes, startIndex: 0, length: length);
-        var clusterType = Encoding.UTF8.GetString(bytes: bytes).TrimEnd(trimChar: '\0');
+        Marshal.Copy(CFDataGetBytePtr(value), bytes, 0, length);
+        var clusterType = Encoding.UTF8.GetString(bytes).TrimEnd('\0');
 
         return clusterType switch
         {
