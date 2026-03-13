@@ -18,6 +18,8 @@ public static class PlatformProvider
     // Load
     //--------------------------------------------------------------------------------
 
+    public static CpuStat GetCpuStat() => new();
+
     public static LoadAverage GetLoadAverage() => new();
 
     //--------------------------------------------------------------------------------
@@ -58,8 +60,7 @@ public static class PlatformProvider
     // CPU
     //--------------------------------------------------------------------------------
 
-    // TODO Frequency, static information ?, Stat & Device merge ?
-    public static CpuStat GetCpuStat() => new();
+    public static CpuFrequency GetCpuFrequency() => new();
 
     //--------------------------------------------------------------------------------
     // GPU

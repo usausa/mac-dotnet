@@ -588,6 +588,12 @@ internal static class NativeMethods
     public static extern IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
 
     [DllImport(IOKitLib)]
+    public static extern int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, out uint existing);
+
+    [DllImport(IOKitLib)]
+    public static extern uint IOIteratorNext(uint iterator);
+
+    [DllImport(IOKitLib)]
     public static extern IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
 
     [DllImport(IOKitLib)]
@@ -688,6 +694,21 @@ internal static class NativeMethods
 
     [DllImport(IOReportLib)]
     public static extern long IOReportSimpleGetIntegerValue(IntPtr channel, int idx);
+
+    [DllImport(IOReportLib)]
+    public static extern void IOReportMergeChannels(IntPtr a, IntPtr b, IntPtr nil_);
+
+    [DllImport(IOReportLib)]
+    public static extern IntPtr IOReportChannelGetSubGroup(IntPtr channel);
+
+    [DllImport(IOReportLib)]
+    public static extern int IOReportStateGetCount(IntPtr channel);
+
+    [DllImport(IOReportLib)]
+    public static extern IntPtr IOReportStateGetNameForIndex(IntPtr channel, int index);
+
+    [DllImport(IOReportLib)]
+    public static extern long IOReportStateGetResidency(IntPtr channel, int index);
 
     [DllImport(CoreFoundationLib)]
     public static extern nuint CFArrayGetTypeID();

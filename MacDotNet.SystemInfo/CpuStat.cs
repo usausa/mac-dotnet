@@ -19,10 +19,10 @@ public sealed class CpuCoreStat
 
     public uint Nice { get; internal set; }
 
-    internal CpuCoreStat(CpuCoreType coreType, int number)
+    internal CpuCoreStat(int number, CpuCoreType coreType)
     {
-        CoreType = coreType;
         Number = number;
+        CoreType = coreType;
     }
 }
 
@@ -74,7 +74,7 @@ public sealed class CpuStat
             {
                 var logicalCpuId = cpuCores.Count;
                 var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
-                var core = new CpuCoreStat(coreType: coreType, number: logicalCpuId);
+                var core = new CpuCoreStat(logicalCpuId, coreType);
 
                 cpuCores.Add(core);
                 if (coreType == CpuCoreType.Efficiency)
