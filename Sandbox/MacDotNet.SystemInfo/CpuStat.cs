@@ -11,6 +11,8 @@ public sealed class CpuCoreStat
 
     public CpuCoreType CoreType { get; }
 
+    internal int LogicalCpuId { get; }
+
     public uint User { get; internal set; }
 
     public uint System { get; internal set; }
@@ -19,10 +21,11 @@ public sealed class CpuCoreStat
 
     public uint Nice { get; internal set; }
 
-    internal CpuCoreStat(int number, CpuCoreType coreType)
+    internal CpuCoreStat(int number, CpuCoreType coreType, int logicalCpuId)
     {
         Number = number;
         CoreType = coreType;
+        LogicalCpuId = logicalCpuId;
     }
 }
 
@@ -74,7 +77,13 @@ public sealed class CpuStat
             {
                 var logicalCpuId = cpuCores.Count;
                 var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
-                var core = new CpuCoreStat(logicalCpuId, coreType);
+                var number = coreType switch
+                {
+                    CpuCoreType.Efficiency => efficiencyCores.Count,
+                    CpuCoreType.Performance => performanceCores.Count,
+                    _ => logicalCpuId
+                };
+                var core = new CpuCoreStat(number, coreType, logicalCpuId);
 
                 cpuCores.Add(core);
                 if (coreType == CpuCoreType.Efficiency)
