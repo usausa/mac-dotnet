@@ -409,7 +409,7 @@ public sealed class CpuCommand : ICommandHandler
                 var core = stat.CpuCores[j];
                 var usage = CalcUsage(core, previousValues[j]);
 
-                Console.WriteLine($"Name:  cpu-{core.Name}");
+                Console.WriteLine($"Name:  cpu-{core.Number}");
                 Console.WriteLine($"Usage: {usage}");
             }
 

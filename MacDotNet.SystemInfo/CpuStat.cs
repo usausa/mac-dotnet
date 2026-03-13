@@ -5,17 +5,9 @@ using System.Text;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public enum CpuCoreType
-{
-    Unknown = -1,
-    Total = Int32.MaxValue,
-    Efficiency = 0,
-    Performance = 1
-}
-
 public sealed class CpuCoreStat
 {
-    public string Name { get; }
+    public int Number { get; }
 
     public CpuCoreType CoreType { get; }
 
@@ -27,18 +19,15 @@ public sealed class CpuCoreStat
 
     public uint Nice { get; internal set; }
 
-    internal CpuCoreStat(CpuCoreType coreType, string name)
+    internal CpuCoreStat(CpuCoreType coreType, int number)
     {
         CoreType = coreType;
-        Name = name;
+        Number = number;
     }
 }
 
-// TODO Frequency
-
 public sealed class CpuStat
 {
-    // TODO
     private readonly List<CpuCoreStat> cpuCores = [];
 
     private readonly List<CpuCoreStat> efficiencyCores = [];
@@ -85,7 +74,7 @@ public sealed class CpuStat
             {
                 var logicalCpuId = cpuCores.Count;
                 var coreType = CoreTypes.Value.GetValueOrDefault(key: logicalCpuId, defaultValue: CpuCoreType.Unknown);
-                var core = new CpuCoreStat(coreType: coreType, name: $"{logicalCpuId}");
+                var core = new CpuCoreStat(coreType: coreType, number: logicalCpuId);
 
                 cpuCores.Add(core);
                 if (coreType == CpuCoreType.Efficiency)
