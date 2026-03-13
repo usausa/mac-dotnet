@@ -38,22 +38,24 @@ public sealed class CpuFrequency
     private readonly int[] pCoreFrequencyTable;
 
     private readonly List<CpuCoreFrequency> cores = [];
-    private readonly List<CpuCoreFrequency> eCores = [];
-    private readonly List<CpuCoreFrequency> pCores = [];
+    private readonly List<CpuCoreFrequency> efficiencyCores = [];
+    private readonly List<CpuCoreFrequency> performanceCores = [];
 
     public DateTime UpdateAt { get; private set; }
 
     public IReadOnlyList<CpuCoreFrequency> Cores => cores;
 
-    // TODO CpuStatと同じくコア単位のプロパティも公開
+    public IReadOnlyList<CpuCoreFrequency> EfficiencyCores => efficiencyCores;
+
+    public IReadOnlyList<CpuCoreFrequency> PerformanceCores => performanceCores;
 
     public int MaxEfficiencyCoreFrequency => eCoreFrequencyTable.Length > 0 ? eCoreFrequencyTable[^1] : 0;
 
     public int MaxPerformanceCoreFrequency => pCoreFrequencyTable.Length > 0 ? pCoreFrequencyTable[^1] : 0;
 
-    //--------------------------------------------------------------------------------
-    // Constructor
-    //--------------------------------------------------------------------------------
+        //--------------------------------------------------------------------------------
+        // Constructor
+        //--------------------------------------------------------------------------------
 
     internal unsafe CpuFrequency()
     {
@@ -76,16 +78,9 @@ public sealed class CpuFrequency
             {
                 using var entry = new IOObj(child);
 
-                // TODO merge if
-                if (IORegistryEntryGetName(entry, nameBuf) != 0)
-                {
-                    continue;
-                }
-                if (Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr")
-                {
-                    continue;
-                }
-                if (IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
+                if (IORegistryEntryGetName(entry, nameBuf) != 0 ||
+                    Marshal.PtrToStringUTF8((IntPtr)nameBuf) != "pmgr" ||
+                    IORegistryEntryCreateCFProperties(entry, out var propsRef, IntPtr.Zero, 0) != 0)
                 {
                     continue;
                 }
@@ -175,12 +170,13 @@ public sealed class CpuFrequency
             }
 
             var isECore = channelName.StartsWith("ECPU", StringComparison.Ordinal);
-            var core = FindCore(channelName, isECore);
+            var targetCores = isECore ? efficiencyCores : performanceCores;
+            var core = FindCore(targetCores, channelName);
             if (core is null)
             {
                 // 初回: チャンネルに対応するコアを新規作成し PreviousResidencies にベースラインを記録する
                 var coreType = isECore ? CpuCoreType.Efficiency : CpuCoreType.Performance;
-                core = new CpuCoreFrequency(isECore ? eCores.Count : pCores.Count, coreType);
+                core = new CpuCoreFrequency(targetCores.Count, coreType);
                 core.ChannelName = channelName;
                 core.FrequencyTable = isECore ? eCoreFrequencyTable : pCoreFrequencyTable;
 
@@ -202,14 +198,7 @@ public sealed class CpuFrequency
                     core.PreviousResidencies[s] = IOReportStateGetResidency(item, s);
                 }
 
-                if (isECore)
-                {
-                    eCores.Add(core);
-                }
-                else
-                {
-                    pCores.Add(core);
-                }
+                targetCores.Add(core);
                 cores.Add(core);
             }
             else
@@ -259,10 +248,8 @@ public sealed class CpuFrequency
         return mutableCopy;
     }
 
-    private CpuCoreFrequency? FindCore(string channelName, bool isECore)
+    private static CpuCoreFrequency? FindCore(List<CpuCoreFrequency> list, string channelName)
     {
-        // TODO 呼び出し側でeCores : pCoresを指定して、staticメソッドにする
-        var list = isECore ? eCores : pCores;
         for (var i = 0; i < list.Count; i++)
         {
             if (list[i].ChannelName == channelName)
