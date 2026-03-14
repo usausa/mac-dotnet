@@ -11,7 +11,6 @@ public static class PlatformProvider
 
     public static KernelInfo GetKernel() => new();
 
-    public static IReadOnlyList<PerformanceLevelEntry> GetPerformanceLevels() => HardwareInfo.GetPerformanceLevels();
 
     //--------------------------------------------------------------------------------
     // CPU
@@ -56,8 +55,6 @@ public static class PlatformProvider
     //--------------------------------------------------------------------------------
     // GPU
     //--------------------------------------------------------------------------------
-
-    public static GpuInfo[] GetGpuInfos() => HardwareInfo.GetGpus();
 
     public static GpuDevice[] GetGpuDevices() => GpuDevice.GetDevices();
 

@@ -32,10 +32,6 @@ Console.WriteLine($"  CPU Brand:        {hw.CpuBrandString ?? "(unavailable)"}")
 Console.WriteLine($"  Physical CPU:     {hw.PhysicalCpu}");
 Console.WriteLine($"  Logical CPU:      {hw.LogicalCpu}");
 Console.WriteLine($"  Active CPU:       {hw.ActiveCpu}");
-if (hw.CpuFrequency > 0)
-{
-    Console.WriteLine($"  CPU Frequency:    {hw.CpuFrequency / 1_000_000_000.0:F2} GHz");
-}
 Console.WriteLine($"  Memory:           {FormatBytes((ulong)hw.MemSize)}");
 Console.WriteLine($"  Page Size:        {hw.PageSize} bytes");
 if (hw.L2CacheSize > 0)
@@ -49,12 +45,12 @@ if (hw.L3CacheSize > 0)
 Console.WriteLine();
 
 // Apple Silicon パフォーマンスレベル
-var perfLevels = PlatformProvider.GetPerformanceLevels();
-if (perfLevels.Count > 0)
+if (hw.PerformanceCoreCount > 0)
 {
     Console.WriteLine("### 2a. Performance Levels (Apple Silicon) ###");
-    foreach (var level in perfLevels)
+    foreach (var level in new[] { hw.PerformanceCoreLevel, hw.EfficiencyCoreLevel })
     {
+        if (level.LogicalCpu == 0) continue;
         var freqStr = level.CpuFrequencyMax > 0
             ? $", Freq={level.CpuFrequencyMax / 1_000_000_000.0:F2} GHz"
             : string.Empty;
@@ -96,27 +92,27 @@ Console.WriteLine($"  Idle:             {idleLoad:P2}");
 Console.WriteLine($"  Total:            {userLoad + systemLoad:P2}");
 
 // Apple Silicon P-core / E-core の平均使用率
-if (hw.PCoreCount > 0 && hw.ECoreCount > 0)
+if (hw.PerformanceCoreCount > 0 && hw.EfficiencyCoreCount > 0)
 {
     var pLoad = 0.0;
-    for (var i = 0; i < hw.PCoreCount && i < cpuStat.CpuCores.Count; i++)
+    for (var i = 0; i < hw.PerformanceCoreCount && i < cpuStat.CpuCores.Count; i++)
     {
         var c = cpuStat.CpuCores[i];
         var p = prevCores[i];
         var dt = (c.User - p.User) + (c.System - p.System) + (c.Idle - p.Idle) + (c.Nice - p.Nice);
         pLoad += dt > 0 ? (double)((c.User - p.User) + (c.System - p.System) + (c.Nice - p.Nice)) / dt : 0;
     }
-    Console.WriteLine($"  P-Core Average:   {pLoad / hw.PCoreCount:P2}");
+    Console.WriteLine($"  P-Core Average:   {pLoad / hw.PerformanceCoreCount:P2}");
 
     var eLoad = 0.0;
-    for (var i = hw.PCoreCount; i < hw.PCoreCount + hw.ECoreCount && i < cpuStat.CpuCores.Count; i++)
+    for (var i = hw.PerformanceCoreCount; i < hw.PerformanceCoreCount + hw.EfficiencyCoreCount && i < cpuStat.CpuCores.Count; i++)
     {
         var c = cpuStat.CpuCores[i];
         var p = prevCores[i];
         var dt = (c.User - p.User) + (c.System - p.System) + (c.Idle - p.Idle) + (c.Nice - p.Nice);
         eLoad += dt > 0 ? (double)((c.User - p.User) + (c.System - p.System) + (c.Nice - p.Nice)) / dt : 0;
     }
-    Console.WriteLine($"  E-Core Average:   {eLoad / hw.ECoreCount:P2}");
+    Console.WriteLine($"  E-Core Average:   {eLoad / hw.EfficiencyCoreCount:P2}");
 }
 
 // コアごとの使用率
@@ -339,10 +335,9 @@ Console.WriteLine($"  Total processes: {processes.Length}");
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 8. GPU  (HardwareInfo.GetGpuInfos: 静的情報 / GpuDevice: 動的統計・センサー)
+// 8. GPU  (hw.Gpus: 静的情報 / GpuDevice: 動的統計・センサー)
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 8. GPU ###");
-var gpuInfos = PlatformProvider.GetGpuInfos();
 var gpuDevices = PlatformProvider.GetGpuDevices();
 if (gpuDevices.Length == 0)
 {
@@ -350,16 +345,16 @@ if (gpuDevices.Length == 0)
 }
 foreach (var device in gpuDevices)
 {
-    var info = Array.Find(gpuInfos, g => g.ClassName == device.Name);
+    var info = hw.Gpus.FirstOrDefault(g => g.Name == device.Name);
     Console.WriteLine($"  {info?.Model ?? device.Name}");
     Console.WriteLine($"    Class:       {device.Name}");
     if (info is not null)
     {
         Console.WriteLine($"    Cores:       {info.CoreCount}");
         Console.WriteLine($"    VendorId:    0x{info.VendorId:X4}");
-        if (info.Configuration is not null)
+        if (info.GpuGeneration > 0)
         {
-            Console.WriteLine($"    GPU Gen:     {info.Configuration.GpuGeneration}");
+            Console.WriteLine($"    GPU Gen:     {info.GpuGeneration}");
         }
     }
     Console.WriteLine($"    Utilization: {device.DeviceUtilization}%  (Renderer={device.RendererUtilization}%, Tiler={device.TilerUtilization}%)");
@@ -525,28 +520,28 @@ else
     Console.WriteLine();
 
     Console.WriteLine("### 11a. Temperature Sensors ###");
-    var tempsLimit = Math.Min(10, monitor.Temperatures.Count);
+    var tempsLimit = Math.Min(32, monitor.Temperatures.Count);
     for (var i = 0; i < tempsLimit; i++)
     {
         var s = monitor.Temperatures[i];
         Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F1} °C");
     }
-    if (monitor.Temperatures.Count > 10)
+    if (monitor.Temperatures.Count > 32)
     {
-        Console.WriteLine($"  ... and {monitor.Temperatures.Count - 10} more sensors.");
+        Console.WriteLine($"  ... and {monitor.Temperatures.Count - 32} more sensors.");
     }
     Console.WriteLine();
 
     Console.WriteLine("### 11b. Power Readings ###");
-    var powersLimit = Math.Min(10, monitor.Powers.Count);
+    var powersLimit = Math.Min(32, monitor.Powers.Count);
     for (var i = 0; i < powersLimit; i++)
     {
         var s = monitor.Powers[i];
         Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F2} W");
     }
-    if (monitor.Powers.Count > 10)
+    if (monitor.Powers.Count > 32)
     {
-        Console.WriteLine($"  ... and {monitor.Powers.Count - 10} more readings.");
+        Console.WriteLine($"  ... and {monitor.Powers.Count - 32} more readings.");
     }
     if (monitor.TotalSystemPower is not null)
     {
@@ -555,15 +550,15 @@ else
     Console.WriteLine();
 
     Console.WriteLine("### 11c. Voltage Readings ###");
-    var voltagesLimit = Math.Min(10, monitor.Voltages.Count);
+    var voltagesLimit = Math.Min(32, monitor.Voltages.Count);
     for (var i = 0; i < voltagesLimit; i++)
     {
         var s = monitor.Voltages[i];
         Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F3} V");
     }
-    if (monitor.Voltages.Count > 10)
+    if (monitor.Voltages.Count > 32)
     {
-        Console.WriteLine($"  ... and {monitor.Voltages.Count - 10} more readings.");
+        Console.WriteLine($"  ... and {monitor.Voltages.Count - 32} more readings.");
     }
     Console.WriteLine();
 
@@ -572,15 +567,15 @@ else
     {
         Console.WriteLine("  No current sensors detected.");
     }
-    var currentsLimit = Math.Min(10, monitor.Currents.Count);
+    var currentsLimit = Math.Min(32, monitor.Currents.Count);
     for (var i = 0; i < currentsLimit; i++)
     {
         var s = monitor.Currents[i];
         Console.WriteLine($"  [{s.Key}] {(string.IsNullOrEmpty(s.Description) ? "(no desc)" : s.Description),-40} {s.Value:F3} A");
     }
-    if (monitor.Currents.Count > 10)
+    if (monitor.Currents.Count > 32)
     {
-        Console.WriteLine($"  ... and {monitor.Currents.Count - 10} more readings.");
+        Console.WriteLine($"  ... and {monitor.Currents.Count - 32} more readings.");
     }
     Console.WriteLine();
 
