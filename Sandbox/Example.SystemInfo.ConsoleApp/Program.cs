@@ -504,16 +504,16 @@ else
 Console.WriteLine();
 
 // ---------------------------------------------------------------------------
-// 11. Sensors (HardwareMonitor)
+// 11. Sensors (SmcMonitor)
 // コンストラクタで SMC 接続を確立してセンサーを検出し、Update() で最新値を取得する。
 // SMC に接続できない場合はセンサーが 0 件のインスタンスが生成される。
 // ---------------------------------------------------------------------------
-Console.WriteLine("### 11. Sensors (HardwareMonitor) ###");
-var monitor = PlatformProvider.GetHardwareMonitor();
+Console.WriteLine("### 11. Sensors (SmcMonitor) ###");
+var monitor = PlatformProvider.GetSmcMonitor();
 if (monitor.Temperatures.Count == 0 && monitor.Powers.Count == 0 &&
     monitor.Voltages.Count == 0 && monitor.Currents.Count == 0 && monitor.Fans.Count == 0)
 {
-    Console.WriteLine("  HardwareMonitor not available (AppleSMC not found).");
+    Console.WriteLine("  SmcMonitor not available (AppleSMC not found).");
 }
 else
 {

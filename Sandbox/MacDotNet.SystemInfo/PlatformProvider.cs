@@ -80,5 +80,5 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
-    public static HardwareMonitor GetHardwareMonitor() => new();
+    public static SmcMonitor GetSmcMonitor() => new();
 }
