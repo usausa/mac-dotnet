@@ -210,17 +210,6 @@ public sealed class GpuDevice
             powerState = poweredOff == 0;
         }
 
-        if (temperature is null)
-        {
-            if (Name.Contains("intel", StringComparison.OrdinalIgnoreCase))
-            {
-                temperature = HardwareMonitor.ReadTemperatureOnce("TCGC");
-            }
-            else if (Name.Contains("amd", StringComparison.OrdinalIgnoreCase))
-            {
-                temperature = HardwareMonitor.ReadTemperatureOnce("TGDD");
-            }
-        }
 
         Temperature = temperature;
         FanSpeed = fanSpeed;

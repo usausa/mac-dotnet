@@ -84,7 +84,7 @@ public sealed class HardwareInfo
     /// <summary>Mac のモデル識別子 (hw.model)。例: "Mac14,12"<br/>Mac model identifier (hw.model). Example: "Mac14,12"</summary>
     public string Model { get; }
 
-    /// <summary>CPU アーキテクチャ (hw.machine)。例: "arm64"、"x86_64"<br/>CPU architecture (hw.machine). Example: "arm64", "x86_64"</summary>
+    /// <summary>CPU アーキテクチャ (hw.machine)。例: "arm64"<br/>CPU architecture (hw.machine). Example: "arm64"</summary>
     public string Machine { get; }
 
     /// <summary>ボード識別子 (hw.targettype)。例: "J474s"。取得できない場合は null<br/>Board identifier (hw.targettype). Example: "J474s". Returns null if unavailable.</summary>
@@ -119,15 +119,6 @@ public sealed class HardwareInfo
 
     /// <summary>CPU スレッド数 (machdep.cpu.thread_count)。Apple Silicon で取得可<br/>CPU thread count (machdep.cpu.thread_count). Available on Apple Silicon.</summary>
     public int CpuThreadCount { get; }
-
-    /// <summary>CPU 周波数 (Hz) (hw.cpufrequency)。Apple Silicon では取得できない場合は 0<br/>CPU frequency in Hz (hw.cpufrequency). Returns 0 if unavailable on Apple Silicon.</summary>
-    public long CpuFrequency { get; }
-
-    /// <summary>CPU 最大周波数 (Hz) (hw.cpufrequency_max)<br/>Maximum CPU frequency in Hz (hw.cpufrequency_max)</summary>
-    public long CpuFrequencyMax { get; }
-
-    /// <summary>バス周波数 (Hz) (hw.busfrequency)。Apple Silicon では取得できない場合は 0<br/>Bus frequency in Hz (hw.busfrequency). Returns 0 if unavailable on Apple Silicon.</summary>
-    public long BusFrequency { get; }
 
     /// <summary>タイムベース周波数 (Hz) (hw.tbfrequency)。Mach 絶対時間の基準周波数<br/>Timebase frequency in Hz (hw.tbfrequency). Reference frequency for Mach absolute time.</summary>
     public long TbFrequency { get; }
@@ -196,9 +187,6 @@ public sealed class HardwareInfo
         Ncpu = GetSystemControlInt32("hw.ncpu");
         CpuCoreCount = GetSystemControlInt32("machdep.cpu.core_count");
         CpuThreadCount = GetSystemControlInt32("machdep.cpu.thread_count");
-        CpuFrequency = GetSystemControlInt64("hw.cpufrequency");
-        CpuFrequencyMax = GetSystemControlInt64("hw.cpufrequency_max");
-        BusFrequency = GetSystemControlInt64("hw.busfrequency");
         TbFrequency = GetSystemControlInt64("hw.tbfrequency");
         MemSize = GetSystemControlInt64("hw.memsize");
         PageSize = GetSystemControlInt64("hw.pagesize");
