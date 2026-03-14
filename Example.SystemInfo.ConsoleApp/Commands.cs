@@ -26,6 +26,7 @@ public static class CommandBuilderExtensions
         commands.AddCommand<ProcessCommand>();
         commands.AddCommand<ProcessesCommand>();
         commands.AddCommand<CpuCommand>();
+        commands.AddCommand<CpuFrequencyCommand>();
         commands.AddCommand<GpuCommand>();
         commands.AddCommand<PowerCommand>();
         //commands.AddCommand<TemperatureCommand>();
@@ -451,6 +452,51 @@ public sealed class CpuCommand : ICommandHandler
             var idleDiff = idle - previous.Idle;
             var totalDiff = total - previous.Total;
             return totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------
+// CPU Frequency
+//--------------------------------------------------------------------------------
+[Command("cpufreq", "Get cpu frequency")]
+public sealed class CpuFrequencyCommand : ICommandHandler
+{
+    [Option<int>("--count", "-c", Description = "Number of samples", DefaultValue = 5)]
+    public int Count { get; set; }
+
+    public async ValueTask ExecuteAsync(CommandContext context)
+    {
+        var cpuFreq = PlatformProvider.GetCpuFrequency();
+
+        Console.WriteLine($"Max E-Core Frequency: {cpuFreq.MaxEfficiencyCoreFrequency} MHz");
+        Console.WriteLine($"Max P-Core Frequency: {cpuFreq.MaxPerformanceCoreFrequency} MHz");
+        Console.WriteLine($"Cores: {cpuFreq.Cores.Count} (E-Core: {cpuFreq.EfficiencyCores.Count}, P-Core: {cpuFreq.PerformanceCores.Count})");
+        Console.WriteLine();
+
+        for (var i = 0; i < Count; i++)
+        {
+            await Task.Delay(1000);
+            cpuFreq.Update();
+
+            Console.WriteLine($"[Sample {i + 1}] {cpuFreq.UpdateAt:HH:mm:ss.fff}");
+            foreach (var core in cpuFreq.EfficiencyCores)
+            {
+                Console.WriteLine($"  E-Core {core.Number}: {core.Frequency,7:F1} MHz");
+            }
+            foreach (var core in cpuFreq.PerformanceCores)
+            {
+                Console.WriteLine($"  P-Core {core.Number}: {core.Frequency,7:F1} MHz");
+            }
+            if (cpuFreq.EfficiencyCores.Count > 0)
+            {
+                Console.WriteLine($"  E-Core Avg: {cpuFreq.EfficiencyCores.Average(static c => c.Frequency),7:F1} MHz");
+            }
+            if (cpuFreq.PerformanceCores.Count > 0)
+            {
+                Console.WriteLine($"  P-Core Avg: {cpuFreq.PerformanceCores.Average(static c => c.Frequency),7:F1} MHz");
+            }
+            Console.WriteLine();
         }
     }
 }

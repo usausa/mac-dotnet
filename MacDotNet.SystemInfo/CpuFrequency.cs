@@ -300,10 +300,10 @@ public sealed class CpuFrequency
             return 0;
         }
 
-        var totalDelta = 0L;
-        for (var i = 0; i < currentValues.Length; i++)
+        var activeDelta = 0L;
+        for (var i = offset; i < currentValues.Length; i++)
         {
-            totalDelta += currentValues[i] - previousValues[i];
+            activeDelta += currentValues[i] - previousValues[i];
         }
 
         var avgFreq = 0d;
@@ -316,7 +316,7 @@ public sealed class CpuFrequency
             }
 
             var delta = currentValues[key] - previousValues[key];
-            var percent = totalDelta == 0 ? 0d : (double)delta / totalDelta;
+            var percent = activeDelta == 0 ? 0 : (double)delta / activeDelta;
             avgFreq += percent * table[i];
         }
 
