@@ -505,12 +505,13 @@ Console.WriteLine();
 
 // ---------------------------------------------------------------------------
 // 11. Sensors (HardwareMonitor)
-// HardwareMonitor.Create() で SMC 接続を確立し、センサーを一括管理する。
-// Update() を呼ぶたびに温度・電圧・電力・ファンをまとめて更新する。
+// コンストラクタで SMC 接続を確立してセンサーを検出し、Update() で最新値を取得する。
+// SMC に接続できない場合はセンサーが 0 件のインスタンスが生成される。
 // ---------------------------------------------------------------------------
 Console.WriteLine("### 11. Sensors (HardwareMonitor) ###");
-using var monitor = PlatformProvider.GetHardwareMonitor();
-if (monitor is null)
+var monitor = PlatformProvider.GetHardwareMonitor();
+if (monitor.Temperatures.Count == 0 && monitor.Powers.Count == 0 &&
+    monitor.Voltages.Count == 0 && monitor.Currents.Count == 0 && monitor.Fans.Count == 0)
 {
     Console.WriteLine("  HardwareMonitor not available (AppleSMC not found).");
 }

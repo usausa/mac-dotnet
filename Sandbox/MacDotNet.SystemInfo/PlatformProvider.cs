@@ -80,5 +80,5 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
-    public static HardwareMonitor? GetHardwareMonitor() => HardwareMonitor.Create();
+    public static HardwareMonitor GetHardwareMonitor() => new();
 }

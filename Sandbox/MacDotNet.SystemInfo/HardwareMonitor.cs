@@ -178,20 +178,17 @@ public sealed class FanSensor
 
 /// <summary>
 /// ハードウェアモニター。温度・電圧・電力・ファンの各センサー値を管理する。
-/// <see cref="Create"/> でインスタンスを生成し、<see cref="Update"/> を呼ぶたびに最新値を更新する。
-/// SMC 接続をインスタンスの生存期間中保持するため、使用後は <see cref="Dispose"/> を呼び出すこと。
+/// コンストラクタでセンサーを検出し、<see cref="Update"/> を呼ぶたびに最新値を更新する。
+/// SMC に接続できない場合は、センサーが 0 件のインスタンスが生成される。
 /// <para>
 /// Hardware monitor that manages temperature, voltage, power, and fan sensor values.
-/// Create an instance via <see cref="Create"/> and call <see cref="Update"/> to refresh all values.
-/// Holds an SMC connection for the lifetime of the instance; call <see cref="Dispose"/> when done.
+/// Sensors are discovered in the constructor; call <see cref="Update"/> to refresh all values.
+/// If the SMC connection fails, an instance with zero sensors is created.
 /// </para>
 /// </summary>
-public sealed class HardwareMonitor : IDisposable
+public sealed class HardwareMonitor
 {
-    private readonly uint _service;
-    private readonly uint _conn;
     private readonly PowerSensor? _systemPowerSensor;
-    private bool _disposed;
 
     /// <summary>最後に Update() を呼び出した日時<br/>Timestamp of the most recent Update() call</summary>
     public DateTime UpdateAt { get; private set; }
@@ -215,52 +212,48 @@ public sealed class HardwareMonitor : IDisposable
     public double? TotalSystemPower => _systemPowerSensor?.Value;
 
     //--------------------------------------------------------------------------------
-    // Constructor / Factory
+    // Constructor
     //--------------------------------------------------------------------------------
 
-    private HardwareMonitor(
-        uint service,
-        uint conn,
-        List<TemperatureSensor> temperatures,
-        List<VoltageSensor> voltages,
-        List<PowerSensor> powers,
-        List<CurrentSensor> currents,
-        List<FanSensor> fans)
-    {
-        _service = service;
-        _conn = conn;
-        Temperatures = temperatures;
-        Voltages = voltages;
-        Powers = powers;
-        Currents = currents;
-        Fans = fans;
-        _systemPowerSensor = powers.Find(static p => p.Key == "PSTR");
-        UpdateAt = DateTime.Now;
-    }
-
     /// <summary>
-    /// SMC に接続してセンサーを検出し、HardwareMonitor インスタンスを生成する。
-    /// AppleSMC サービスが見つからない場合は null を返す。
+    /// SMC に接続してセンサーを検出する。接続できない場合はセンサーが 0 件のインスタンスを生成する。
     /// </summary>
-    public static HardwareMonitor? Create()
+    public HardwareMonitor()
     {
-        if (!TryOpenConnection(out var service, out var conn))
+        using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
+        if (!service.IsValid || IOServiceOpen(service, task_self_trap(), 0, out var connHandle) != KERN_SUCCESS)
         {
-            return null;
+            Temperatures = [];
+            Voltages = [];
+            Powers = [];
+            Currents = [];
+            Fans = [];
+            UpdateAt = DateTime.Now;
+            return;
         }
 
+        using var conn = new SmcConn(connHandle);
         try
         {
             var (temperatures, voltages, powers, currents) = DiscoverSensors(conn);
             var fans = DiscoverFans(conn);
-            return new HardwareMonitor(service, conn, temperatures, voltages, powers, currents, fans);
+            Temperatures = temperatures;
+            Voltages = voltages;
+            Powers = powers;
+            Currents = currents;
+            Fans = fans;
+            _systemPowerSensor = powers.Find(static p => p.Key == "PSTR");
         }
         catch
         {
-            IOServiceClose(conn);
-            IOObjectRelease(service);
-            return null;
+            Temperatures = [];
+            Voltages = [];
+            Powers = [];
+            Currents = [];
+            Fans = [];
         }
+
+        UpdateAt = DateTime.Now;
     }
 
     //--------------------------------------------------------------------------------
@@ -273,14 +266,17 @@ public sealed class HardwareMonitor : IDisposable
     /// </summary>
     public bool Update()
     {
-        if (_disposed)
+        using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
+        if (!service.IsValid || IOServiceOpen(service, task_self_trap(), 0, out var connHandle) != KERN_SUCCESS)
         {
             return false;
         }
 
+        using var conn = new SmcConn(connHandle);
+
         foreach (var sensor in Temperatures)
         {
-            var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
+            var value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
             if (value.HasValue)
             {
                 sensor.Value = value.Value;
@@ -289,7 +285,7 @@ public sealed class HardwareMonitor : IDisposable
 
         foreach (var sensor in Voltages)
         {
-            var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
+            var value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
             if (value.HasValue)
             {
                 sensor.Value = value.Value;
@@ -298,7 +294,7 @@ public sealed class HardwareMonitor : IDisposable
 
         foreach (var sensor in Powers)
         {
-            var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
+            var value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
             if (value.HasValue)
             {
                 sensor.Value = value.Value;
@@ -307,7 +303,7 @@ public sealed class HardwareMonitor : IDisposable
 
         foreach (var sensor in Currents)
         {
-            var value = ReadSensorValue(_conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
+            var value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
             if (value.HasValue)
             {
                 sensor.Value = value.Value;
@@ -316,25 +312,25 @@ public sealed class HardwareMonitor : IDisposable
 
         foreach (var fan in Fans)
         {
-            var actual = ReadSensorValue(_conn, fan.KeyActual, fan.DataTypeActual, fan.DataSizeActual);
+            var actual = ReadSensorValue(conn, fan.KeyActual, fan.DataTypeActual, fan.DataSizeActual);
             if (actual.HasValue)
             {
                 fan.ActualRpm = actual.Value;
             }
 
-            var min = ReadSensorValue(_conn, fan.KeyMin, fan.DataTypeMin, fan.DataSizeMin);
+            var min = ReadSensorValue(conn, fan.KeyMin, fan.DataTypeMin, fan.DataSizeMin);
             if (min.HasValue)
             {
                 fan.MinRpm = min.Value;
             }
 
-            var max = ReadSensorValue(_conn, fan.KeyMax, fan.DataTypeMax, fan.DataSizeMax);
+            var max = ReadSensorValue(conn, fan.KeyMax, fan.DataTypeMax, fan.DataSizeMax);
             if (max.HasValue)
             {
                 fan.MaxRpm = max.Value;
             }
 
-            var target = ReadSensorValue(_conn, fan.KeyTarget, fan.DataTypeTarget, fan.DataSizeTarget);
+            var target = ReadSensorValue(conn, fan.KeyTarget, fan.DataTypeTarget, fan.DataSizeTarget);
             if (target.HasValue)
             {
                 fan.TargetRpm = target.Value;
@@ -346,48 +342,20 @@ public sealed class HardwareMonitor : IDisposable
     }
 
     //--------------------------------------------------------------------------------
-    // Dispose
-    //--------------------------------------------------------------------------------
-
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        IOServiceClose(_conn);
-        IOObjectRelease(_service);
-        GC.SuppressFinalize(this);
-    }
-
-    //--------------------------------------------------------------------------------
     // Internal one-off read (GpuDevice 等の単発読み取り用)
     //--------------------------------------------------------------------------------
 
     internal static int? ReadTemperatureOnce(string key)
     {
-        if (!TryOpenConnection(out var service, out var conn))
+        using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
+        if (!service.IsValid || IOServiceOpen(service, task_self_trap(), 0, out var connHandle) != KERN_SUCCESS)
         {
             return null;
         }
 
-        try
-        {
-            var value = ReadSmcFloat(conn, key);
-            if (value is not null && value.Value != 128)
-            {
-                return (int)value.Value;
-            }
-
-            return null;
-        }
-        finally
-        {
-            IOServiceClose(conn);
-            IOObjectRelease(service);
-        }
+        using var conn = new SmcConn(connHandle);
+        var value = ReadSmcFloat(conn, key);
+        return value is not null && value.Value != 128 ? (int)value.Value : null;
     }
 
     //--------------------------------------------------------------------------------
@@ -557,26 +525,6 @@ public sealed class HardwareMonitor : IDisposable
         return SmcCall(conn, &input, &output) == KERN_SUCCESS
             ? DecodeValue(output.bytes, dataType, dataSize)
             : null;
-    }
-
-    private static bool TryOpenConnection(out uint service, out uint conn)
-    {
-        service = IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC"));
-        if (service == 0)
-        {
-            conn = 0;
-            return false;
-        }
-
-        var ret = IOServiceOpen(service, task_self_trap(), 0, out conn);
-        if (ret != KERN_SUCCESS)
-        {
-            IOObjectRelease(service);
-            conn = 0;
-            return false;
-        }
-
-        return true;
     }
 
     private static unsafe int GetKeyCount(uint conn)
