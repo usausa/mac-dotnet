@@ -381,12 +381,11 @@ public sealed class CpuCommand : ICommandHandler
     public async ValueTask ExecuteAsync(CommandContext context)
     {
         var stat = PlatformProvider.GetCpuStat();
-        var total = Aggregate(stat.CpuCores);
 
-        Console.WriteLine($"User:   {total.User}");
-        Console.WriteLine($"Nice:   {total.Nice}");
-        Console.WriteLine($"System: {total.System}");
-        Console.WriteLine($"Idle:   {total.Idle}");
+        Console.WriteLine($"User:   {stat.CpuCores.Sum(static x => x.User)}");
+        Console.WriteLine($"Nice:   {stat.CpuCores.Sum(static x => x.Nice)}");
+        Console.WriteLine($"System: {stat.CpuCores.Sum(static x => x.System)}");
+        Console.WriteLine($"Idle:   {stat.CpuCores.Sum(static x => x.Idle)}");
         Console.WriteLine();
 
         for (var i = 0; i < 10; i++)
@@ -400,9 +399,9 @@ public sealed class CpuCommand : ICommandHandler
 
             stat.Update();
 
-            Console.WriteLine($"Total Usage:  {CalcUsageFromCores(stat.CpuCores, previousTotal)}%");
-            Console.WriteLine($"E-Core Usage: {CalcUsageFromCores(stat.EfficiencyCores, previousEfficiencyTotal)}%");
-            Console.WriteLine($"P-Core Usage: {CalcUsageFromCores(stat.PerformanceCores, previousPerformanceTotal)}%");
+            Console.WriteLine($"Total Usage:  {CalcUsageOfCores(stat.CpuCores, previousTotal)}%");
+            Console.WriteLine($"E-Core Usage: {CalcUsageOfCores(stat.EfficiencyCores, previousEfficiencyTotal)}%");
+            Console.WriteLine($"P-Core Usage: {CalcUsageOfCores(stat.PerformanceCores, previousPerformanceTotal)}%");
 
             for (var j = 0; j < stat.CpuCores.Count; j++)
             {
@@ -418,35 +417,23 @@ public sealed class CpuCommand : ICommandHandler
 
         return;
 
-        static (long Idle, long Total) CreateSnapshot(CpuCoreStat cpu)
-        {
-            return (CalcCpuIdle(cpu), CalcCpuTotal(cpu));
-        }
+        static long CalcCpuIdleOfCores(IEnumerable<CpuCoreStat> cores) =>
+            cores.Sum(static cpu => cpu.Idle);
 
-        static (long Idle, long Total) CreateSnapshotFromCores(IReadOnlyList<CpuCoreStat> cores)
-        {
-            return (CalcCpuIdleFromCores(cores), CalcCpuTotalFromCores(cores));
-        }
+        static long CalcCpuTotal(CpuCoreStat cpu) =>
+            cpu.User + cpu.Nice + cpu.System + cpu.Idle;
 
-        static long CalcCpuIdle(CpuCoreStat cpu)
-        {
-            return cpu.Idle;
-        }
+        static long CalcCpuTotalOfCores(IEnumerable<CpuCoreStat> cores) =>
+            cores.Sum(static cpu => (long)cpu.User + cpu.Nice + cpu.System + cpu.Idle);
 
-        static long CalcCpuIdleFromCores(IReadOnlyList<CpuCoreStat> cores)
-        {
-            return cores.Sum(static cpu => (long)cpu.Idle);
-        }
+        static (long Idle, long Total) CreateSnapshot(CpuCoreStat cpu) =>
+            (CalcCpuIdle(cpu), CalcCpuTotal(cpu));
 
-        static long CalcCpuTotal(CpuCoreStat cpu)
-        {
-            return cpu.User + cpu.Nice + cpu.System + cpu.Idle;
-        }
+        static (long Idle, long Total) CreateSnapshotFromCores(IReadOnlyList<CpuCoreStat> cores) =>
+            (CalcCpuIdleOfCores(cores), CalcCpuTotalOfCores(cores));
 
-        static long CalcCpuTotalFromCores(IReadOnlyList<CpuCoreStat> cores)
-        {
-            return cores.Sum(static cpu => (long)cpu.User + cpu.Nice + cpu.System + cpu.Idle);
-        }
+        static long CalcCpuIdle(CpuCoreStat cpu) =>
+             cpu.Idle;
 
         static int CalcUsage(CpuCoreStat cpu, (long Idle, long Total) previous)
         {
@@ -457,26 +444,15 @@ public sealed class CpuCommand : ICommandHandler
             return totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
         }
 
-        static int CalcUsageFromCores(IReadOnlyList<CpuCoreStat> cores, (long Idle, long Total) previous)
+        static int CalcUsageOfCores(IReadOnlyList<CpuCoreStat> cores, (long Idle, long Total) previous)
         {
-            var idle = CalcCpuIdleFromCores(cores);
-            var total = CalcCpuTotalFromCores(cores);
+            var idle = CalcCpuIdleOfCores(cores);
+            var total = CalcCpuTotalOfCores(cores);
             var idleDiff = idle - previous.Idle;
             var totalDiff = total - previous.Total;
             return totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
         }
-
-        static CpuSummary Aggregate(IReadOnlyList<CpuCoreStat> cores)
-        {
-            return new CpuSummary(
-                User: (uint)cores.Sum(static cpu => (long)cpu.User),
-                Nice: (uint)cores.Sum(static cpu => (long)cpu.Nice),
-                System: (uint)cores.Sum(static cpu => (long)cpu.System),
-                Idle: (uint)cores.Sum(static cpu => (long)cpu.Idle));
-        }
     }
-
-    private readonly record struct CpuSummary(uint User, uint Nice, uint System, uint Idle);
 }
 
 //--------------------------------------------------------------------------------
