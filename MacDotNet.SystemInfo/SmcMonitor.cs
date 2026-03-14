@@ -4,56 +4,23 @@ using System.Buffers.Binary;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-file static class SmcKeyHelper
-{
-    public const uint KeyNum = 0x234B4559u; // "#KEY"
-    public const uint FNum   = 0x464E756Du; // "FNum"
-
-    // Fan key suffixes: F{i}Ac / F{i}Mn / F{i}Mx / F{i}Tg
-    public const uint FanSuffixAc = 0x4163u;
-    public const uint FanSuffixMn = 0x4D6Eu;
-    public const uint FanSuffixMx = 0x4D78u;
-    public const uint FanSuffixTg = 0x5467u;
-
-    public static uint FanKey(int index, uint suffix) =>
-        0x4600_0000u | ((uint)('0' + index) << 16) | suffix;
-
-    public static string ToKey(uint value) => new(
-    [
-        (char)((value >> 24) & 0xFF),
-        (char)((value >> 16) & 0xFF),
-        (char)((value >> 8) & 0xFF),
-        (char)(value & 0xFF)
-    ]);
-}
-
 // Temperature
 
 public sealed class TemperatureSensor
 {
 #pragma warning disable SA1401
-    internal readonly uint RawKey;
-    internal readonly uint DataType;
-    internal readonly uint DataSize;
+    internal uint RawKey;
+    internal uint DataType;
+    internal uint DataSize;
 #pragma warning restore SA1401
 
-    public string Key { get; }
+    public required string Key { get; init; }
 
-    public string Description { get; }
+    public required string Description { get; init; }
 
-    public string DataTypeString { get; }
+    public required string DataTypeString { get; init; }
 
     public double Value { get; internal set; }
-
-    internal TemperatureSensor(uint rawKey, uint dataType, uint dataSize, string description)
-    {
-        RawKey = rawKey;
-        DataType = dataType;
-        DataSize = dataSize;
-        Key = SmcKeyHelper.ToKey(rawKey);
-        Description = description;
-        DataTypeString = SmcKeyHelper.ToKey(dataType);
-    }
 }
 
 // Voltage
@@ -61,28 +28,18 @@ public sealed class TemperatureSensor
 public sealed class VoltageSensor
 {
 #pragma warning disable SA1401
-    internal readonly uint RawKey;
-    internal readonly uint DataType;
-    internal readonly uint DataSize;
+    internal uint RawKey;
+    internal uint DataType;
+    internal uint DataSize;
 #pragma warning restore SA1401
 
-    public string Key { get; }
+    public required string Key { get; init; }
 
-    public string Description { get; }
+    public required string Description { get; init; }
 
-    public string DataTypeString { get; }
+    public required string DataTypeString { get; init; }
 
     public double Value { get; internal set; }
-
-    internal VoltageSensor(uint rawKey, uint dataType, uint dataSize, string description)
-    {
-        RawKey = rawKey;
-        DataType = dataType;
-        DataSize = dataSize;
-        Key = SmcKeyHelper.ToKey(rawKey);
-        Description = description;
-        DataTypeString = SmcKeyHelper.ToKey(dataType);
-    }
 }
 
 // Current
@@ -90,28 +47,18 @@ public sealed class VoltageSensor
 public sealed class CurrentSensor
 {
 #pragma warning disable SA1401
-    internal readonly uint RawKey;
-    internal readonly uint DataType;
-    internal readonly uint DataSize;
+    internal uint RawKey;
+    internal uint DataType;
+    internal uint DataSize;
 #pragma warning restore SA1401
 
-    public string Key { get; }
+    public required string Key { get; init; }
 
-    public string Description { get; }
+    public required string Description { get; init; }
 
-    public string DataTypeString { get; }
+    public required string DataTypeString { get; init; }
 
     public double Value { get; internal set; }
-
-    internal CurrentSensor(uint rawKey, uint dataType, uint dataSize, string description)
-    {
-        RawKey = rawKey;
-        DataType = dataType;
-        DataSize = dataSize;
-        Key = SmcKeyHelper.ToKey(rawKey);
-        Description = description;
-        DataTypeString = SmcKeyHelper.ToKey(dataType);
-    }
 }
 
 // Power
@@ -119,28 +66,18 @@ public sealed class CurrentSensor
 public sealed class PowerSensor
 {
 #pragma warning disable SA1401
-    internal readonly uint RawKey;
-    internal readonly uint DataType;
-    internal readonly uint DataSize;
+    internal uint RawKey;
+    internal uint DataType;
+    internal uint DataSize;
 #pragma warning restore SA1401
 
-    public string Key { get; }
+    public required string Key { get; init; }
 
-    public string Description { get; }
+    public required string Description { get; init; }
 
-    public string DataTypeString { get; }
+    public required string DataTypeString { get; init; }
 
     public double Value { get; internal set; }
-
-    internal PowerSensor(uint rawKey, uint dataType, uint dataSize, string description)
-    {
-        RawKey = rawKey;
-        DataType = dataType;
-        DataSize = dataSize;
-        Key = SmcKeyHelper.ToKey(rawKey);
-        Description = description;
-        DataTypeString = SmcKeyHelper.ToKey(dataType);
-    }
 }
 
 // Fan
@@ -201,6 +138,15 @@ public sealed class FanSensor
 
 public sealed class SmcMonitor
 {
+    public const uint KeyNum = 0x234B4559u; // "#KEY"
+    public const uint FNum = 0x464E756Du; // "FNum"
+
+    // Fan key suffixes: F{i}Ac / F{i}Mn / F{i}Mx / F{i}Tg
+    public const uint FanSuffixAc = 0x4163u;
+    public const uint FanSuffixMn = 0x4D6Eu;
+    public const uint FanSuffixMx = 0x4D78u;
+    public const uint FanSuffixTg = 0x5467u;
+
     private readonly PowerSensor? systemPowerSensor;
 
     public DateTime UpdateAt { get; private set; }
@@ -216,6 +162,14 @@ public sealed class SmcMonitor
     public IReadOnlyList<FanSensor> Fans { get; }
 
     public double TotalSystemPower => systemPowerSensor?.Value ?? 0;
+
+    //--------------------------------------------------------------------------------
+    // Helper
+    //--------------------------------------------------------------------------------
+
+    private static uint FanKey(int index, uint suffix) => 0x4600_0000u | ((uint)('0' + index) << 16) | suffix;
+
+    private static string ToKeyString(uint value) => new([(char)((value >> 24) & 0xFF), (char)((value >> 16) & 0xFF), (char)((value >> 8) & 0xFF), (char)(value & 0xFF)]);
 
     //--------------------------------------------------------------------------------
     // Constructor
@@ -254,47 +208,84 @@ public sealed class SmcMonitor
                     continue;
                 }
 
+                var keyStr = ToKeyString(key);
+                var dataTypeStr = ToKeyString(dataType);
                 var value = ReadSensorValue(conn, key, dataType, dataSize);
                 switch (firstChar)
                 {
                     case 'T':
-                        temperatures.Add(new TemperatureSensor(key, dataType, dataSize, GetTemperatureDescription(SmcKeyHelper.ToKey(key))) { Value = value });
+                        temperatures.Add(new TemperatureSensor
+                        {
+                            RawKey = key,
+                            DataType = dataType,
+                            DataSize = dataSize,
+                            Key = keyStr,
+                            Description = GetTemperatureDescription(keyStr),
+                            DataTypeString = dataTypeStr,
+                            Value = value
+                        });
                         break;
                     case 'V':
-                        voltages.Add(new VoltageSensor(key, dataType, dataSize, GetVoltageDescription(SmcKeyHelper.ToKey(key))) { Value = value });
+                        voltages.Add(new VoltageSensor
+                        {
+                            RawKey = key,
+                            DataType = dataType,
+                            DataSize = dataSize,
+                            Key = keyStr,
+                            Description = GetVoltageDescription(keyStr),
+                            DataTypeString = dataTypeStr,
+                            Value = value
+                        });
                         break;
                     case 'P':
-                        powers.Add(new PowerSensor(key, dataType, dataSize, GetPowerDescription(SmcKeyHelper.ToKey(key))) { Value = value });
+                        powers.Add(new PowerSensor
+                        {
+                            RawKey = key,
+                            DataType = dataType,
+                            DataSize = dataSize,
+                            Key = keyStr,
+                            Description = GetPowerDescription(keyStr),
+                            DataTypeString = dataTypeStr,
+                            Value = value
+                        });
                         break;
                     case 'I':
-                        currents.Add(new CurrentSensor(key, dataType, dataSize, GetCurrentDescription(SmcKeyHelper.ToKey(key))) { Value = value });
+                        currents.Add(new CurrentSensor
+                        {
+                            RawKey = key,
+                            DataType = dataType,
+                            DataSize = dataSize,
+                            Key = keyStr,
+                            Description = GetCurrentDescription(keyStr),
+                            DataTypeString = dataTypeStr,
+                            Value = value
+                        });
                         break;
                 }
             }
 
             // TODO float ?
-            var fanCountVal = ReadSmcFloat(conn, SmcKeyHelper.FNum);
+            var fanCountVal = ReadSmcFloat(conn, FNum);
             if (fanCountVal is not null)
             {
                 for (var i = 0; i < (int)fanCountVal.Value; i++)
                 {
-                    var ac = SmcKeyHelper.FanKey(i, SmcKeyHelper.FanSuffixAc);
-                    var mn = SmcKeyHelper.FanKey(i, SmcKeyHelper.FanSuffixMn);
-                    var mx = SmcKeyHelper.FanKey(i, SmcKeyHelper.FanSuffixMx);
-                    var tg = SmcKeyHelper.FanKey(i, SmcKeyHelper.FanSuffixTg);
-
+                    var ac = FanKey(i, FanSuffixAc);
                     if (!SmcReadKeyInfo(conn, ac, out var acSize, out var acType) || (acSize == 0))
                     {
                         continue;
                     }
+                    var mn = FanKey(i, FanSuffixMn);
                     if (!SmcReadKeyInfo(conn, mn, out var mnSize, out var mnType) || (mnSize == 0))
                     {
                         continue;
                     }
+                    var mx = FanKey(i, FanSuffixMx);
                     if (!SmcReadKeyInfo(conn, mx, out var mxSize, out var mxType) || (mxSize == 0))
                     {
                         continue;
                     }
+                    var tg = FanKey(i, FanSuffixTg);
                     if (!SmcReadKeyInfo(conn, tg, out var tgSize, out var tgType) || (tgSize == 0))
                     {
                         continue;
@@ -373,35 +364,18 @@ public sealed class SmcMonitor
 
     private static unsafe int GetKeyCount(uint conn)
     {
-        if (!SmcReadKeyInfo(conn, SmcKeyHelper.KeyNum, out var dataSize, out _))
+        if (!SmcReadKeyInfo(conn, KeyNum, out var dataSize, out _))
         {
             return 0;
         }
 
         var input = default(SMCKeyData_t);
         var output = default(SMCKeyData_t);
-        input.key = SmcKeyHelper.KeyNum;
+        input.key = KeyNum;
         input.keyInfo.dataSize = dataSize;
         input.data8 = SMC_CMD_READ_BYTES;
 
-        // TODO reverse
-        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
-        {
-            return 0;
-        }
-
-        return BinaryPrimitives.ReadInt32BigEndian(new ReadOnlySpan<byte>(output.bytes, 4));
-    }
-
-    private static unsafe double ReadSensorValue(uint conn, uint rawKey, uint dataType, uint dataSize)
-    {
-        var input = default(SMCKeyData_t);
-        var output = default(SMCKeyData_t);
-        input.key = rawKey;
-        input.keyInfo.dataSize = dataSize;
-        input.data8 = SMC_CMD_READ_BYTES;
-
-        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? DecodeValue(output.bytes, dataType, dataSize) : 0;
+        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? BinaryPrimitives.ReadInt32BigEndian(new ReadOnlySpan<byte>(output.bytes, 4)) : 0;
     }
 
     private static unsafe uint SmcReadIndex(uint conn, uint index)
@@ -414,27 +388,7 @@ public sealed class SmcMonitor
         return SmcCall(conn, &input, &output) == KERN_SUCCESS ? output.key : 0;
     }
 
-    private static unsafe bool SmcReadKeyInfo(uint conn, uint key, out uint dataSize, out uint dataType)
-    {
-        var input = default(SMCKeyData_t);
-        var output = default(SMCKeyData_t);
-        input.key = key;
-        input.data8 = SMC_CMD_READ_KEYINFO;
-
-        // TODO reverse
-        if (SmcCall(conn, &input, &output) == KERN_SUCCESS)
-        {
-            dataSize = output.keyInfo.dataSize;
-            dataType = output.keyInfo.dataType;
-            return true;
-        }
-
-        dataSize = 0;
-        dataType = 0;
-        return false;
-    }
-
-    // TODO 用途
+    // TODO 用途 AI
     private static unsafe double? ReadSmcFloat(uint conn, uint key)
     {
         if (!SmcReadKeyInfo(conn, key, out var dataSize, out var dataType) || dataSize == 0)
@@ -454,6 +408,36 @@ public sealed class SmcMonitor
         }
 
         return DecodeValue(output.bytes, dataType, dataSize);
+    }
+
+    private static unsafe bool SmcReadKeyInfo(uint conn, uint key, out uint dataSize, out uint dataType)
+    {
+        var input = default(SMCKeyData_t);
+        var output = default(SMCKeyData_t);
+        input.key = key;
+        input.data8 = SMC_CMD_READ_KEYINFO;
+
+        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
+        {
+            dataSize = output.keyInfo.dataSize;
+            dataType = output.keyInfo.dataType;
+            return true;
+        }
+
+        dataSize = 0;
+        dataType = 0;
+        return false;
+    }
+
+    private static unsafe double ReadSensorValue(uint conn, uint rawKey, uint dataType, uint dataSize)
+    {
+        var input = default(SMCKeyData_t);
+        var output = default(SMCKeyData_t);
+        input.key = rawKey;
+        input.keyInfo.dataSize = dataSize;
+        input.data8 = SMC_CMD_READ_BYTES;
+
+        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? DecodeValue(output.bytes, dataType, dataSize) : 0;
     }
 
     private static unsafe int SmcCall(uint conn, SMCKeyData_t* input, SMCKeyData_t* output)
