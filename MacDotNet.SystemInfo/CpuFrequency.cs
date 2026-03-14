@@ -98,12 +98,6 @@ public sealed class CpuFrequency
             return false;
         }
 
-        // Reset frequencies
-        for (var i = 0; i < cores.Count; i++)
-        {
-            cores[i].Frequency = 0;
-        }
-
         var coreAdded = false;
         var count = CFArrayGetCount(items);
         for (var i = 0L; i < count; i++)
@@ -160,7 +154,11 @@ public sealed class CpuFrequency
                     core.CurrentResidencies[j] = IOReportStateGetResidency(item, j);
                 }
 
-                core.Frequency = CalculateFrequencies(core.CurrentResidencies, core.PreviousResidencies, core.FrequencyTable, core.ResidencyOffset);
+                var freq = CalculateFrequencies(core.CurrentResidencies, core.PreviousResidencies, core.FrequencyTable, core.ResidencyOffset);
+                if (freq.HasValue)
+                {
+                    core.Frequency = freq.Value;
+                }
 
                 // Swap current to previous for the next round
                 (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
@@ -293,17 +291,22 @@ public sealed class CpuFrequency
         return null;
     }
 
-    private static double CalculateFrequencies(long[] currentValues, long[] previousValues, int[] table, int offset)
+    private static double? CalculateFrequencies(long[] currentValues, long[] previousValues, int[] table, int offset)
     {
         if (offset < 0)
         {
-            return 0;
+            return null;
         }
 
         var activeDelta = 0L;
         for (var i = offset; i < currentValues.Length; i++)
         {
             activeDelta += currentValues[i] - previousValues[i];
+        }
+
+        if (activeDelta == 0)
+        {
+            return null;
         }
 
         var avgFreq = 0d;
@@ -316,8 +319,7 @@ public sealed class CpuFrequency
             }
 
             var delta = currentValues[key] - previousValues[key];
-            var percent = activeDelta == 0 ? 0 : (double)delta / activeDelta;
-            avgFreq += percent * table[i];
+            avgFreq += (double)delta / activeDelta * table[i];
         }
 
         return avgFreq;
