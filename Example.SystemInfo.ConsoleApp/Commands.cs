@@ -14,7 +14,7 @@ public static class CommandBuilderExtensions
 {
     public static void AddCommands(this ICommandBuilder commands)
     {
-        //commands.AddCommand<HardwareCommand>();
+        commands.AddCommand<HardwareCommand>();
         commands.AddCommand<KernelCommand>();
         commands.AddCommand<UptimeCommand>();
         commands.AddCommand<LoadCommand>();
@@ -47,56 +47,87 @@ public static class DisplayFormatter
     };
 }
 
-// TODO
-//// Hardware
-//[Command("hardware", "Hardware Info")]
-//public sealed class HardwareCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var hw = PlatformProvider.GetHardware();
+//--------------------------------------------------------------------------------
+// Hardware
+//--------------------------------------------------------------------------------
+[Command("hardware", "Get hardware information")]
+public sealed class HardwareCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var hw = PlatformProvider.GetHardware();
 
-//        Console.WriteLine("=== Hardware ===");
-//        Console.WriteLine($"Model:            {hw.Model}");
-//        Console.WriteLine($"Machine:          {hw.Machine}");
-//        Console.WriteLine($"Serial Number:    {hw.SerialNumber ?? "(unavailable)"}");
-//        Console.WriteLine($"CPU Brand:        {hw.CpuBrandString ?? "(unavailable)"}");
-//        Console.WriteLine();
+        Console.WriteLine($"Model:            {hw.Model}");
+        Console.WriteLine($"Machine:          {hw.Machine}");
+        Console.WriteLine($"TargetType:       {hw.TargetType}");
+        Console.WriteLine($"SerialNumber:     {hw.SerialNumber}");
+        Console.WriteLine($"CpuBrand:         {hw.CpuBrandString}");
 
-//        Console.WriteLine("=== CPU ===");
-//        Console.WriteLine($"Physical CPU:     {hw.PhysicalCpu}");
-//        Console.WriteLine($"Logical CPU:      {hw.LogicalCpu}");
-//        Console.WriteLine($"Active CPU:       {hw.ActiveCpu}");
-//        Console.WriteLine();
+        Console.WriteLine($"PhysicalCpu:      {hw.PhysicalCpu} (max: {hw.PhysicalCpuMax})");
+        Console.WriteLine($"LogicalCpu:       {hw.LogicalCpu} (max: {hw.LogicalCpuMax})");
+        Console.WriteLine($"ActiveCpu:        {hw.ActiveCpu}");
+        Console.WriteLine($"CoreCount:        {hw.CpuCoreCount}");
+        Console.WriteLine($"ThreadCount:      {hw.CpuThreadCount}");
+        Console.WriteLine($"Packages:         {hw.Packages}");
 
-//        Console.WriteLine("=== Memory ===");
-//        Console.WriteLine($"Physical Memory:  {FormatBytes((ulong)hw.MemSize)}");
-//        Console.WriteLine($"Page Size:        {hw.PageSize} bytes");
-//        Console.WriteLine();
+        Console.WriteLine($"CpuFrequency:     {hw.CpuFrequency} Hz");
+        Console.WriteLine($"CpuFrequencyMax:  {hw.CpuFrequencyMax} Hz");
+        Console.WriteLine($"BusFrequency:     {hw.BusFrequency} Hz");
+        Console.WriteLine($"TimebaseFrequency:{hw.TimebaseFrequency} Hz");
 
-//        var perfLevels = PlatformProvider.GetPerformanceLevels();
-//        if (perfLevels.Count > 0)
-//        {
-//            Console.WriteLine("=== Performance Levels (Apple Silicon) ===");
-//            foreach (var level in perfLevels)
-//            {
-//                var freqStr = level.CpuFrequencyMax > 0 ? $", {level.CpuFrequencyMax / 1_000_000}MHz" : "";
-//                Console.WriteLine($"  [{level.Index}] {level.Name}: {level.PhysicalCpu} physical, {level.LogicalCpu} logical{freqStr}");
-//            }
-//        }
+        Console.WriteLine($"MemorySize:       {DisplayFormatter.FormatBytes((ulong)hw.MemorySize)}");
+        Console.WriteLine($"PageSize:         {hw.PageSize} bytes");
 
-//        return ValueTask.CompletedTask;
-//    }
+        Console.WriteLine($"CacheLineSize:    {hw.CacheLineSize} bytes");
+        Console.WriteLine($"L1I:              {DisplayFormatter.FormatBytes((ulong)hw.L1ICacheSize)}");
+        Console.WriteLine($"L1D:              {DisplayFormatter.FormatBytes((ulong)hw.L1DCacheSize)}");
+        Console.WriteLine($"L2:               {DisplayFormatter.FormatBytes((ulong)hw.L2CacheSize)}");
+        Console.WriteLine($"L3:               {DisplayFormatter.FormatBytes((ulong)hw.L3CacheSize)}");
+        Console.WriteLine();
 
-//    private static string FormatBytes(ulong bytes) => bytes switch
-//    {
-//        >= 1UL << 40 => $"{bytes / (double)(1UL << 40):F2} TiB",
-//        >= 1UL << 30 => $"{bytes / (double)(1UL << 30):F2} GiB",
-//        >= 1UL << 20 => $"{bytes / (double)(1UL << 20):F2} MiB",
-//        >= 1UL << 10 => $"{bytes / (double)(1UL << 10):F2} KiB",
-//        _ => $"{bytes} B"
-//    };
-//}
+        if (hw.PerformanceCoreCount > 0)
+        {
+            Console.WriteLine("CPU Core:");
+            var pCore = hw.PerformanceCoreLevel;
+            var freqStr = pCore.CpuFrequencyMax > 0 ? $", {pCore.CpuFrequencyMax / 1_000_000}MHz" : string.Empty;
+            Console.WriteLine($"  P-Core ({pCore.Name}): {pCore.PhysicalCpu} physical, {pCore.LogicalCpu} logical, L2={DisplayFormatter.FormatBytes((ulong)pCore.L2CacheSize)}{freqStr}");
+            if (hw.EfficiencyCoreCount > 0)
+            {
+                var eCore = hw.EfficiencyCoreLevel;
+                freqStr = eCore.CpuFrequencyMax > 0 ? $", {eCore.CpuFrequencyMax / 1_000_000}MHz" : string.Empty;
+                Console.WriteLine($"  E-Core ({eCore.Name}): {eCore.PhysicalCpu} physical, {eCore.LogicalCpu} logical, L2={DisplayFormatter.FormatBytes((ulong)eCore.L2CacheSize)}{freqStr}");
+            }
+
+            Console.WriteLine();
+        }
+
+        if (hw.Gpus.Count > 0)
+        {
+            Console.WriteLine("GPU:");
+            foreach (var gpu in hw.Gpus)
+            {
+                Console.WriteLine($"  Model:          {gpu.Model}");
+                Console.WriteLine($"  Name:           {gpu.Name}");
+                Console.WriteLine($"  CoreCount:      {gpu.CoreCount}");
+                Console.WriteLine($"  VendorId:       0x{gpu.VendorId:X}");
+                if (gpu.MetalPluginName.Length > 0)
+                {
+                    Console.WriteLine($"  MetalPlugin:    {gpu.MetalPluginName}");
+                }
+                if (gpu.GpuGeneration > 0)
+                {
+                    Console.WriteLine($"  GpuGeneration:  {gpu.GpuGeneration}");
+                    Console.WriteLine($"  NumCores:       {gpu.NumCores}");
+                    Console.WriteLine($"  NumGPs:         {gpu.NumGPs}");
+                    Console.WriteLine($"  NumFragments:   {gpu.NumFragments}");
+                }
+                Console.WriteLine();
+            }
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
 
 //--------------------------------------------------------------------------------
 // Kernel
@@ -459,6 +490,7 @@ public sealed class CpuCommand : ICommandHandler
 //--------------------------------------------------------------------------------
 // CPU Frequency
 //--------------------------------------------------------------------------------
+// ReSharper disable once StringLiteralTypo
 [Command("cpufreq", "Get cpu frequency")]
 public sealed class CpuFrequencyCommand : ICommandHandler
 {

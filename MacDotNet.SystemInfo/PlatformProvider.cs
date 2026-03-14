@@ -7,8 +7,7 @@ public static class PlatformProvider
     // System
     //--------------------------------------------------------------------------------
 
-    // TODO
-    //public static HardwareInfo GetHardware() => HardwareInfo.Create();
+    public static HardwareInfo GetHardware() => new();
 
     public static KernelInfo GetKernel() => new();
 
@@ -66,7 +65,6 @@ public static class PlatformProvider
     // GPU
     //--------------------------------------------------------------------------------
 
-    // TODO static information ?
     public static IReadOnlyList<GpuDevice> GetGpuDevices() => GpuDevice.GetDevices();
 
     //--------------------------------------------------------------------------------

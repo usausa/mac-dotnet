@@ -12,7 +12,7 @@ public sealed class KernelInfo
 
     public string OsVersion { get; }
 
-    public string? OsProductVersion { get; }
+    public string OsProductVersion { get; }
 
     public int OsRevision { get; }
 
@@ -44,7 +44,7 @@ public sealed class KernelInfo
         OsType = GetSystemControlString("kern.ostype") ?? string.Empty;
         OsRelease = GetSystemControlString("kern.osrelease") ?? string.Empty;
         OsVersion = GetSystemControlString("kern.osversion") ?? string.Empty;
-        OsProductVersion = GetSystemControlString("kern.osproductversion");
+        OsProductVersion = GetSystemControlString("kern.osproductversion") ?? string.Empty;
         OsRevision = GetSystemControlInt32("kern.osrevision");
         KernelVersion = GetSystemControlString("kern.version") ?? string.Empty;
         Uuid = GetSystemControlString("kern.uuid") ?? string.Empty;
