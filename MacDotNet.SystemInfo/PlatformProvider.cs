@@ -77,12 +77,5 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
-    // TODO
-    //public static IReadOnlyList<SmcSensorReading> GetTemperatureSensors() => SmcInfo.GetTemperatureSensors();
-
-    //public static IReadOnlyList<SmcSensorReading> GetPowerReadings() => SmcInfo.GetPowerReadings();
-
-    //public static IReadOnlyList<SmcSensorReading> GetVoltageReadings() => SmcInfo.GetVoltageReadings();
-
-    //public static IReadOnlyList<SmcFanEntry> GetFans() => SmcInfo.GetFanInfo();
+    public static SmcMonitor GetSmcMonitor() => new();
 }
