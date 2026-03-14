@@ -57,32 +57,32 @@ public sealed class HardwareCommand : ICommandHandler
     {
         var hw = PlatformProvider.GetHardware();
 
-        Console.WriteLine($"Model:            {hw.Model}");
-        Console.WriteLine($"Machine:          {hw.Machine}");
-        Console.WriteLine($"TargetType:       {hw.TargetType}");
-        Console.WriteLine($"SerialNumber:     {hw.SerialNumber}");
-        Console.WriteLine($"CpuBrand:         {hw.CpuBrandString}");
+        Console.WriteLine($"Model:             {hw.Model}");
+        Console.WriteLine($"Machine:           {hw.Machine}");
+        Console.WriteLine($"TargetType:        {hw.TargetType}");
+        Console.WriteLine($"SerialNumber:      {hw.SerialNumber}");
+        Console.WriteLine($"CpuBrand:          {hw.CpuBrandString}");
 
-        Console.WriteLine($"PhysicalCpu:      {hw.PhysicalCpu} (max: {hw.PhysicalCpuMax})");
-        Console.WriteLine($"LogicalCpu:       {hw.LogicalCpu} (max: {hw.LogicalCpuMax})");
-        Console.WriteLine($"ActiveCpu:        {hw.ActiveCpu}");
-        Console.WriteLine($"CoreCount:        {hw.CpuCoreCount}");
-        Console.WriteLine($"ThreadCount:      {hw.CpuThreadCount}");
-        Console.WriteLine($"Packages:         {hw.Packages}");
+        Console.WriteLine($"PhysicalCpu:       {hw.PhysicalCpu} (max: {hw.PhysicalCpuMax})");
+        Console.WriteLine($"LogicalCpu:        {hw.LogicalCpu} (max: {hw.LogicalCpuMax})");
+        Console.WriteLine($"ActiveCpu:         {hw.ActiveCpu}");
+        Console.WriteLine($"CoreCount:         {hw.CpuCoreCount}");
+        Console.WriteLine($"ThreadCount:       {hw.CpuThreadCount}");
+        Console.WriteLine($"Packages:          {hw.Packages}");
 
-        Console.WriteLine($"CpuFrequency:     {hw.CpuFrequency} Hz");
-        Console.WriteLine($"CpuFrequencyMax:  {hw.CpuFrequencyMax} Hz");
-        Console.WriteLine($"BusFrequency:     {hw.BusFrequency} Hz");
-        Console.WriteLine($"TimebaseFrequency:{hw.TimebaseFrequency} Hz");
+        Console.WriteLine($"CpuFrequency:      {hw.CpuFrequency} Hz");
+        Console.WriteLine($"CpuFrequencyMax:   {hw.CpuFrequencyMax} Hz");
+        Console.WriteLine($"BusFrequency:      {hw.BusFrequency} Hz");
+        Console.WriteLine($"TimebaseFrequency: {hw.TimebaseFrequency} Hz");
 
-        Console.WriteLine($"MemorySize:       {DisplayFormatter.FormatBytes((ulong)hw.MemorySize)}");
-        Console.WriteLine($"PageSize:         {hw.PageSize} bytes");
+        Console.WriteLine($"MemorySize:        {DisplayFormatter.FormatBytes((ulong)hw.MemorySize)}");
+        Console.WriteLine($"PageSize:          {hw.PageSize} bytes");
 
-        Console.WriteLine($"CacheLineSize:    {hw.CacheLineSize} bytes");
-        Console.WriteLine($"L1I:              {DisplayFormatter.FormatBytes((ulong)hw.L1ICacheSize)}");
-        Console.WriteLine($"L1D:              {DisplayFormatter.FormatBytes((ulong)hw.L1DCacheSize)}");
-        Console.WriteLine($"L2:               {DisplayFormatter.FormatBytes((ulong)hw.L2CacheSize)}");
-        Console.WriteLine($"L3:               {DisplayFormatter.FormatBytes((ulong)hw.L3CacheSize)}");
+        Console.WriteLine($"CacheLineSize:     {hw.CacheLineSize} bytes");
+        Console.WriteLine($"L1I:               {DisplayFormatter.FormatBytes((ulong)hw.L1ICacheSize)}");
+        Console.WriteLine($"L1D:               {DisplayFormatter.FormatBytes((ulong)hw.L1DCacheSize)}");
+        Console.WriteLine($"L2:                {DisplayFormatter.FormatBytes((ulong)hw.L2CacheSize)}");
+        Console.WriteLine($"L3:                {DisplayFormatter.FormatBytes((ulong)hw.L3CacheSize)}");
         Console.WriteLine();
 
         if (hw.PerformanceCoreCount > 0)
@@ -106,20 +106,20 @@ public sealed class HardwareCommand : ICommandHandler
             Console.WriteLine("GPU:");
             foreach (var gpu in hw.Gpus)
             {
-                Console.WriteLine($"  Model:          {gpu.Model}");
-                Console.WriteLine($"  Name:           {gpu.Name}");
-                Console.WriteLine($"  CoreCount:      {gpu.CoreCount}");
-                Console.WriteLine($"  VendorId:       0x{gpu.VendorId:X}");
+                Console.WriteLine($"  Model:           {gpu.Model}");
+                Console.WriteLine($"  Name:            {gpu.Name}");
+                Console.WriteLine($"  CoreCount:       {gpu.CoreCount}");
+                Console.WriteLine($"  VendorId:        0x{gpu.VendorId:X}");
                 if (gpu.MetalPluginName.Length > 0)
                 {
-                    Console.WriteLine($"  MetalPlugin:    {gpu.MetalPluginName}");
+                    Console.WriteLine($"  MetalPlugin:     {gpu.MetalPluginName}");
                 }
                 if (gpu.GpuGeneration > 0)
                 {
-                    Console.WriteLine($"  GpuGeneration:  {gpu.GpuGeneration}");
-                    Console.WriteLine($"  NumCores:       {gpu.NumCores}");
-                    Console.WriteLine($"  NumGPs:         {gpu.NumGPs}");
-                    Console.WriteLine($"  NumFragments:   {gpu.NumFragments}");
+                    Console.WriteLine($"  GpuGeneration:   {gpu.GpuGeneration}");
+                    Console.WriteLine($"  NumCores:        {gpu.NumCores}");
+                    Console.WriteLine($"  NumGPs:          {gpu.NumGPs}");
+                    Console.WriteLine($"  NumFragments:    {gpu.NumFragments}");
                 }
                 Console.WriteLine();
             }
