@@ -73,12 +73,6 @@ public sealed class HardwareInfo
 
     public int CpuThreadCount { get; }
 
-    public long CpuFrequency { get; }
-
-    public long CpuFrequencyMax { get; }
-
-    public long BusFrequency { get; }
-
     public long TimebaseFrequency { get; }
 
     public long MemorySize { get; }
@@ -125,9 +119,6 @@ public sealed class HardwareInfo
         ActiveCpu = GetSystemControlInt32("hw.activecpu");
         CpuCoreCount = GetSystemControlInt32("machdep.cpu.core_count");
         CpuThreadCount = GetSystemControlInt32("machdep.cpu.thread_count");
-        CpuFrequency = GetSystemControlInt64("hw.cpufrequency");
-        CpuFrequencyMax = GetSystemControlInt64("hw.cpufrequency_max");
-        BusFrequency = GetSystemControlInt64("hw.busfrequency");
         TimebaseFrequency = GetSystemControlInt64("hw.tbfrequency");
         MemorySize = GetSystemControlInt64("hw.memsize");
         PageSize = GetSystemControlInt64("hw.pagesize");

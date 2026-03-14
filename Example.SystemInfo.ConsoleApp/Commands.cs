@@ -70,9 +70,6 @@ public sealed class HardwareCommand : ICommandHandler
         Console.WriteLine($"ThreadCount:       {hw.CpuThreadCount}");
         Console.WriteLine($"Packages:          {hw.Packages}");
 
-        Console.WriteLine($"CpuFrequency:      {hw.CpuFrequency} Hz");
-        Console.WriteLine($"CpuFrequencyMax:   {hw.CpuFrequencyMax} Hz");
-        Console.WriteLine($"BusFrequency:      {hw.BusFrequency} Hz");
         Console.WriteLine($"TimebaseFrequency: {hw.TimebaseFrequency} Hz");
 
         Console.WriteLine($"MemorySize:        {DisplayFormatter.FormatBytes((ulong)hw.MemorySize)}");
