@@ -46,10 +46,38 @@ public static class DisplayFormatter
 
     public static string MakeBar(double value, double max, int width = 20)
     {
-        var filled = max > 0 ? (int)(value / max * width) : 0;
-        filled = Math.Clamp(filled, 0, width);
-        return "[" + new string('\u2588', filled) + new string('\u2591', width - filled) + "]";
+        ReadOnlySpan<char> partials = ['\u258f', '\u258e', '\u258d', '\u258c', '\u258b', '\u258a', '\u2589'];
+
+        var ratio         = max > 0 ? Math.Clamp(value / max, 0.0, 1.0) : 0.0;
+        var totalEighths  = (int)Math.Round(ratio * width * 8);
+        var fullCells     = totalEighths / 8;
+        var remainder     = totalEighths % 8;
+
+        var buf = new char[width + 2];
+        buf[0]         = '[';
+        buf[width + 1] = ']';
+
+        var pos = 1;
+        for (var i = 0; i < fullCells; i++)
+        {
+            buf[pos++] = '\u2588'; // █
+        }
+
+        if (remainder > 0 && fullCells < width)
+        {
+            buf[pos++] = partials[remainder - 1];
+        }
+
+        while (pos <= width)
+        {
+            buf[pos++] = ' ';
+        }
+
+        return new string(buf);
     }
+
+    public static string FormatUptime(TimeSpan elapsed) =>
+        $"{(int)elapsed.TotalDays}d {elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
 }
 
 //--------------------------------------------------------------------------------
@@ -153,6 +181,7 @@ public sealed class KernelCommand : ICommandHandler
         Console.WriteLine($"MaxArguments:        {kernel.MaxArguments}");
         Console.WriteLine($"SecureLevel:         {kernel.SecureLevel}");
         Console.WriteLine($"BootTime:            {kernel.BootTime:yyyy-MM-dd HH:mm:ss zzz}");
+        Console.WriteLine($"Uptime:              {DisplayFormatter.FormatUptime(DateTimeOffset.UtcNow - kernel.BootTime)}");
 
         return ValueTask.CompletedTask;
     }
@@ -167,8 +196,7 @@ public sealed class UptimeCommand : ICommandHandler
     public ValueTask ExecuteAsync(CommandContext context)
     {
         var uptime = PlatformProvider.GetUptime();
-        var elapsed = uptime.Elapsed;
-        Console.WriteLine($"Uptime: {(int)elapsed.TotalDays}d {elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}");
+        Console.WriteLine($"Uptime: {DisplayFormatter.FormatUptime(uptime.Elapsed)}");
 
         return ValueTask.CompletedTask;
     }
@@ -228,18 +256,27 @@ public sealed class ProcessesCommand : ICommandHandler
 [Command("load", "Get load average")]
 public sealed class LoadCommand : ICommandHandler
 {
-    public ValueTask ExecuteAsync(CommandContext context)
+    public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var load = PlatformProvider.GetLoadAverage();
         var cpuCount = Environment.ProcessorCount;
 
-        Console.WriteLine($"Load Average  (logical CPUs: {cpuCount})");
-        Console.WriteLine();
-        Console.WriteLine($"   1 min: {DisplayFormatter.MakeBar(load.Average1, cpuCount)} {load.Average1:F2}");
-        Console.WriteLine($"   5 min: {DisplayFormatter.MakeBar(load.Average5, cpuCount)} {load.Average5:F2}");
-        Console.WriteLine($"  15 min: {DisplayFormatter.MakeBar(load.Average15, cpuCount)} {load.Average15:F2}");
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        return ValueTask.CompletedTask;
+        while (!cts.Token.IsCancellationRequested)
+        {
+            var load = PlatformProvider.GetLoadAverage();
+
+            Console.Clear();
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]  Load Average  (logical CPUs: {cpuCount})");
+            Console.WriteLine();
+            Console.WriteLine($"   1 min: {DisplayFormatter.MakeBar(load.Average1, cpuCount)} {load.Average1:F2}");
+            Console.WriteLine($"   5 min: {DisplayFormatter.MakeBar(load.Average5, cpuCount)} {load.Average5:F2}");
+            Console.WriteLine($"  15 min: {DisplayFormatter.MakeBar(load.Average15, cpuCount)} {load.Average15:F2}");
+
+            try { await Task.Delay(2000, cts.Token); }
+            catch (OperationCanceledException) { break; }
+        }
     }
 }
 
@@ -399,28 +436,52 @@ public sealed class NetworkCommand : ICommandHandler
     [Option<bool>("--all", "-a", Description = "All")]
     public bool All { get; set; }
 
-    public ValueTask ExecuteAsync(CommandContext context)
+    public async ValueTask ExecuteAsync(CommandContext context)
     {
         var network = PlatformProvider.GetNetworkStat(All);
-        foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
+
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+
+        while (!cts.Token.IsCancellationRequested)
         {
-            var name = nif.DisplayName is not null ? $"{nif.Name} {nif.DisplayName}" : nif.Name;
-            Console.WriteLine($"Interface:    {name} ({nif.InterfaceType})");
-            Console.WriteLine($"RxBytes:      {DisplayFormatter.FormatBytes(nif.RxBytes)}");
-            Console.WriteLine($"RxPackets:    {nif.RxPackets:N0}");
-            Console.WriteLine($"RxErrors:     {nif.RxErrors:N0}");
-            Console.WriteLine($"RxDrops:      {nif.RxDrops:N0}");
-            Console.WriteLine($"RxMulticast:  {nif.RxMulticast:N0}");
-            Console.WriteLine($"TxBytes:      {DisplayFormatter.FormatBytes(nif.TxBytes)}");
-            Console.WriteLine($"TxPackets:    {nif.TxPackets:N0}");
-            Console.WriteLine($"TxErrors:     {nif.TxErrors:N0}");
-            Console.WriteLine($"TxMulticast:  {nif.TxMulticast:N0}");
-            Console.WriteLine($"Collisions:   {nif.Collisions:N0}");
-            Console.WriteLine($"NoProto:      {nif.NoProto:N0}");
+            var snapshot = network.Interfaces
+                .Where(static x => x.IsEnabled)
+                .ToDictionary(x => x.Name, x => (x.RxBytes, x.RxPackets, x.RxErrors, x.TxBytes, x.TxPackets, x.TxErrors));
+            var t0 = DateTime.UtcNow;
+
+            try { await Task.Delay(1000, cts.Token); }
+            catch (OperationCanceledException) { break; }
+
+            network.Update();
+            var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
+
+            Console.Clear();
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]");
+            Console.WriteLine();
+
+            foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
+            {
+                var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
+                Console.WriteLine($"  [{nif.Name}]{label} ({nif.InterfaceType})");
+
+                snapshot.TryGetValue(nif.Name, out var prev);
+                var deltaRxBytes   = unchecked(nif.RxBytes   - prev.RxBytes);
+                var deltaRxPackets = unchecked(nif.RxPackets - prev.RxPackets);
+                var deltaRxErrors  = unchecked(nif.RxErrors  - prev.RxErrors);
+                var deltaTxBytes   = unchecked(nif.TxBytes   - prev.TxBytes);
+                var deltaTxPackets = unchecked(nif.TxPackets - prev.TxPackets);
+                var deltaTxErrors  = unchecked(nif.TxErrors  - prev.TxErrors);
+
+                var rxKbps = elapsed > 0 ? deltaRxBytes / 1024.0 / elapsed : 0;
+                var txKbps = elapsed > 0 ? deltaTxBytes / 1024.0 / elapsed : 0;
+
+                Console.WriteLine($"    RX: {DisplayFormatter.FormatBytes(nif.RxBytes),10} total  {rxKbps,8:F2} KB/s  ({deltaRxPackets} pkts, {deltaRxErrors} err)");
+                Console.WriteLine($"    TX: {DisplayFormatter.FormatBytes(nif.TxBytes),10} total  {txKbps,8:F2} KB/s  ({deltaTxPackets} pkts, {deltaTxErrors} err)");
+            }
+
             Console.WriteLine();
         }
-
-        return ValueTask.CompletedTask;
     }
 }
 
@@ -430,81 +491,52 @@ public sealed class NetworkCommand : ICommandHandler
 [Command("cpu", "Get cpu stat")]
 public sealed class CpuCommand : ICommandHandler
 {
-    [Option<int>("--count", "-n", Description = "Number of samples", DefaultValue = 10)]
-    public int Count { get; set; }
-
-    [Option<bool>("--watch", "-w", Description = "Continuous watch mode (Ctrl+C to stop)")]
-    public bool Watch { get; set; }
-
     public async ValueTask ExecuteAsync(CommandContext context)
     {
         var stat = PlatformProvider.GetCpuStat();
-        var hasAppleSilicon = stat.EfficiencyCores.Count > 0 && stat.PerformanceCores.Count > 0;
-
-        var header = $"Cores: {stat.CpuCores.Count} total" +
-            (hasAppleSilicon ? $" (P-Core: {stat.PerformanceCores.Count}, E-Core: {stat.EfficiencyCores.Count})" : string.Empty);
-        Console.WriteLine(header);
-        Console.WriteLine();
+        var header = $"Cores: {stat.CpuCores.Count} total  P-Core: {stat.PerformanceCores.Count}  E-Core: {stat.EfficiencyCores.Count}";
 
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        var limit = Watch ? int.MaxValue : Count;
-        for (var i = 0; i < limit && !cts.Token.IsCancellationRequested; i++)
+        while (!cts.Token.IsCancellationRequested)
         {
-            var prevTotal = CreateSnapshotFromCores(stat.CpuCores);
-            var prevETotal = CreateSnapshotFromCores(stat.EfficiencyCores);
-            var prevPTotal = CreateSnapshotFromCores(stat.PerformanceCores);
-            var prevCoreValues = stat.CpuCores.Select(CreateSnapshot).ToList();
+            var prevTotal              = CreateSnapshotFromCores(stat.CpuCores);
+            var prevEfficiencyTotal    = CreateSnapshotFromCores(stat.EfficiencyCores);
+            var prevPerformanceTotal   = CreateSnapshotFromCores(stat.PerformanceCores);
+            var prevCoreValues         = stat.CpuCores.Select(CreateSnapshot).ToList();
 
             try { await Task.Delay(1000, cts.Token); }
             catch (OperationCanceledException) { break; }
 
             stat.Update();
 
-            if (Watch)
-            {
-                Console.Clear();
-                Console.WriteLine(header);
-                Console.WriteLine();
-            }
+            var totalUsage       = CalcUsageOfCores(stat.CpuCores, prevTotal);
+            var efficiencyUsage  = CalcUsageOfCores(stat.EfficiencyCores, prevEfficiencyTotal);
+            var performanceUsage = CalcUsageOfCores(stat.PerformanceCores, prevPerformanceTotal);
 
-            var totalUsage = CalcUsageOfCores(stat.CpuCores, prevTotal);
-            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]");
+            Console.Clear();
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]  {header}");
+            Console.WriteLine();
             Console.WriteLine($"  Total  {DisplayFormatter.MakeBar(totalUsage, 100)} {totalUsage,3}%");
+            Console.WriteLine($"  E-Core {DisplayFormatter.MakeBar(efficiencyUsage, 100)} {efficiencyUsage,3}%");
+            Console.WriteLine($"  P-Core {DisplayFormatter.MakeBar(performanceUsage, 100)} {performanceUsage,3}%");
+            Console.WriteLine();
 
-            if (hasAppleSilicon)
+            Console.WriteLine("  [P-Core]");
+            for (var j = 0; j < stat.CpuCores.Count; j++)
             {
-                var eUsage = CalcUsageOfCores(stat.EfficiencyCores, prevETotal);
-                var pUsage = CalcUsageOfCores(stat.PerformanceCores, prevPTotal);
-                Console.WriteLine($"  E-Core {DisplayFormatter.MakeBar(eUsage, 100)} {eUsage,3}%");
-                Console.WriteLine($"  P-Core {DisplayFormatter.MakeBar(pUsage, 100)} {pUsage,3}%");
-                Console.WriteLine();
-
-                Console.WriteLine("  [P-Core]");
-                for (var j = 0; j < stat.CpuCores.Count; j++)
-                {
-                    if (stat.CpuCores[j].CoreType != CpuCoreType.Performance) continue;
-                    var usage = CalcUsage(stat.CpuCores[j], prevCoreValues[j]);
-                    Console.WriteLine($"    cpu{stat.CpuCores[j].Number,2}: {DisplayFormatter.MakeBar(usage, 100, 16)} {usage,3}%");
-                }
-
-                Console.WriteLine("  [E-Core]");
-                for (var j = 0; j < stat.CpuCores.Count; j++)
-                {
-                    if (stat.CpuCores[j].CoreType != CpuCoreType.Efficiency) continue;
-                    var usage = CalcUsage(stat.CpuCores[j], prevCoreValues[j]);
-                    Console.WriteLine($"    cpu{stat.CpuCores[j].Number,2}: {DisplayFormatter.MakeBar(usage, 100, 16)} {usage,3}%");
-                }
+                if (stat.CpuCores[j].CoreType != CpuCoreType.Performance) continue;
+                var usage = CalcUsage(stat.CpuCores[j], prevCoreValues[j]);
+                Console.WriteLine($"    cpu{stat.CpuCores[j].Number,2}: {DisplayFormatter.MakeBar(usage, 100, 16)} {usage,3}%");
             }
-            else
+
+            Console.WriteLine("  [E-Core]");
+            for (var j = 0; j < stat.CpuCores.Count; j++)
             {
-                Console.WriteLine();
-                for (var j = 0; j < stat.CpuCores.Count; j++)
-                {
-                    var usage = CalcUsage(stat.CpuCores[j], prevCoreValues[j]);
-                    Console.WriteLine($"  cpu{stat.CpuCores[j].Number,2}: {DisplayFormatter.MakeBar(usage, 100, 16)} {usage,3}%");
-                }
+                if (stat.CpuCores[j].CoreType != CpuCoreType.Efficiency) continue;
+                var usage = CalcUsage(stat.CpuCores[j], prevCoreValues[j]);
+                Console.WriteLine($"    cpu{stat.CpuCores[j].Number,2}: {DisplayFormatter.MakeBar(usage, 100, 16)} {usage,3}%");
             }
 
             Console.WriteLine();
@@ -531,18 +563,18 @@ public sealed class CpuCommand : ICommandHandler
 
         static int CalcUsage(CpuCoreStat cpu, (long Idle, long Total) previous)
         {
-            var idle = CalcCpuIdle(cpu);
-            var total = CalcCpuTotal(cpu);
-            var idleDiff = idle - previous.Idle;
+            var idle      = CalcCpuIdle(cpu);
+            var total     = CalcCpuTotal(cpu);
+            var idleDiff  = idle  - previous.Idle;
             var totalDiff = total - previous.Total;
             return totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
         }
 
         static int CalcUsageOfCores(IReadOnlyList<CpuCoreStat> cores, (long Idle, long Total) previous)
         {
-            var idle = CalcCpuIdleOfCores(cores);
-            var total = CalcCpuTotalOfCores(cores);
-            var idleDiff = idle - previous.Idle;
+            var idle      = CalcCpuIdleOfCores(cores);
+            var total     = CalcCpuTotalOfCores(cores);
+            var idleDiff  = idle  - previous.Idle;
             var totalDiff = total - previous.Total;
             return totalDiff > 0 ? (int)Math.Ceiling((double)(totalDiff - idleDiff) / totalDiff * 100d) : 0;
         }
@@ -556,67 +588,46 @@ public sealed class CpuCommand : ICommandHandler
 [Command("cpufreq", "Get cpu frequency")]
 public sealed class CpuFrequencyCommand : ICommandHandler
 {
-    [Option<int>("--count", "-c", Description = "Number of samples", DefaultValue = 5)]
-    public int Count { get; set; }
-
-    [Option<bool>("--watch", "-w", Description = "Continuous watch mode (Ctrl+C to stop)")]
-    public bool Watch { get; set; }
-
     public async ValueTask ExecuteAsync(CommandContext context)
     {
         var cpuFreq = PlatformProvider.GetCpuFrequency();
-
         var header1 = $"Max E-Core: {cpuFreq.MaxEfficiencyCoreFrequency} MHz  |  Max P-Core: {cpuFreq.MaxPerformanceCoreFrequency} MHz";
-        var header2 = $"Cores: {cpuFreq.Cores.Count} (E-Core: {cpuFreq.EfficiencyCores.Count}, P-Core: {cpuFreq.PerformanceCores.Count})";
-        Console.WriteLine(header1);
-        Console.WriteLine(header2);
-        Console.WriteLine();
+        var header2 = $"Cores: {cpuFreq.Cores.Count}  (E-Core: {cpuFreq.EfficiencyCores.Count}, P-Core: {cpuFreq.PerformanceCores.Count})";
 
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        var limit = Watch ? int.MaxValue : Count;
-        for (var i = 0; i < limit && !cts.Token.IsCancellationRequested; i++)
+        while (!cts.Token.IsCancellationRequested)
         {
             try { await Task.Delay(1000, cts.Token); }
             catch (OperationCanceledException) { break; }
 
             cpuFreq.Update();
 
-            if (Watch)
+            Console.Clear();
+            Console.WriteLine($"[{cpuFreq.UpdateAt:HH:mm:ss.fff}]");
+            Console.WriteLine(header1);
+            Console.WriteLine(header2);
+            Console.WriteLine();
+
+            Console.WriteLine("  [E-Core]");
+            foreach (var core in cpuFreq.EfficiencyCores)
             {
-                Console.Clear();
-                Console.WriteLine(header1);
-                Console.WriteLine(header2);
-                Console.WriteLine();
+                Console.WriteLine($"    E{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxEfficiencyCoreFrequency, 16)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
             }
 
-            Console.WriteLine($"[Sample {i + 1}] {cpuFreq.UpdateAt:HH:mm:ss.fff}");
+            var efficiencyAvg = cpuFreq.EfficiencyCores.Average(static c => c.Frequency);
+            Console.WriteLine($"    Avg: {DisplayFormatter.MakeBar(efficiencyAvg, cpuFreq.MaxEfficiencyCoreFrequency, 16)} {efficiencyAvg,7:F1} MHz");
+            Console.WriteLine();
 
-            if (cpuFreq.EfficiencyCores.Count > 0)
+            Console.WriteLine("  [P-Core]");
+            foreach (var core in cpuFreq.PerformanceCores)
             {
-                Console.WriteLine("  [E-Core]");
-                foreach (var core in cpuFreq.EfficiencyCores)
-                {
-                    Console.WriteLine($"    E{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxEfficiencyCoreFrequency, 16)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
-                }
-
-                var eAvg = cpuFreq.EfficiencyCores.Average(static c => c.Frequency);
-                Console.WriteLine($"    Avg: {DisplayFormatter.MakeBar(eAvg, cpuFreq.MaxEfficiencyCoreFrequency, 16)} {eAvg,7:F1} MHz");
+                Console.WriteLine($"    P{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxPerformanceCoreFrequency, 16)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
             }
 
-            if (cpuFreq.PerformanceCores.Count > 0)
-            {
-                Console.WriteLine("  [P-Core]");
-                foreach (var core in cpuFreq.PerformanceCores)
-                {
-                    Console.WriteLine($"    P{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxPerformanceCoreFrequency, 16)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
-                }
-
-                var pAvg = cpuFreq.PerformanceCores.Average(static c => c.Frequency);
-                Console.WriteLine($"    Avg: {DisplayFormatter.MakeBar(pAvg, cpuFreq.MaxPerformanceCoreFrequency, 16)} {pAvg,7:F1} MHz");
-            }
-
+            var performanceAvg = cpuFreq.PerformanceCores.Average(static c => c.Frequency);
+            Console.WriteLine($"    Avg: {DisplayFormatter.MakeBar(performanceAvg, cpuFreq.MaxPerformanceCoreFrequency, 16)} {performanceAvg,7:F1} MHz");
             Console.WriteLine();
         }
     }
@@ -628,33 +639,45 @@ public sealed class CpuFrequencyCommand : ICommandHandler
 [Command("gpu", "Get gpu stat")]
 public sealed class GpuCommand : ICommandHandler
 {
-    public ValueTask ExecuteAsync(CommandContext context)
+    public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var devices = PlatformProvider.GetGpuDevices();
-        if (devices.Count == 0)
-        {
-            Console.WriteLine("No GPU found.");
-            return ValueTask.CompletedTask;
-        }
+        var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        for (var i = 0; i < devices.Count; i++)
+        while (!cts.Token.IsCancellationRequested)
         {
-            var device = devices[i];
-            Console.WriteLine($"Name:                {device.Name}");
-            Console.WriteLine($"DeviceUtilization:   {DisplayFormatter.MakeBar(device.DeviceUtilization, 100)} {device.DeviceUtilization}%");
-            Console.WriteLine($"RendererUtilization: {DisplayFormatter.MakeBar(device.RendererUtilization, 100)} {device.RendererUtilization}%");
-            Console.WriteLine($"TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization}%");
-            Console.WriteLine($"AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
-            Console.WriteLine($"InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
-            Console.WriteLine($"Temperature:         {device.Temperature} C");
-            Console.WriteLine($"FanSpeed:            {device.FanSpeed}%");
-            Console.WriteLine($"CoreClock:           {device.CoreClock} MHz");
-            Console.WriteLine($"MemoryClock:         {device.MemoryClock} MHz");
-            Console.WriteLine($"PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
+            var devices = PlatformProvider.GetGpuDevices();
+
+            Console.Clear();
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]");
             Console.WriteLine();
-        }
 
-        return ValueTask.CompletedTask;
+            if (devices.Count == 0)
+            {
+                Console.WriteLine("No GPU found.");
+            }
+            else
+            {
+                foreach (var device in devices)
+                {
+                    Console.WriteLine($"Name:                {device.Name}");
+                    Console.WriteLine($"DeviceUtilization:   {DisplayFormatter.MakeBar(device.DeviceUtilization, 100)} {device.DeviceUtilization,3}%");
+                    Console.WriteLine($"RendererUtilization: {DisplayFormatter.MakeBar(device.RendererUtilization, 100)} {device.RendererUtilization,3}%");
+                    Console.WriteLine($"TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization,3}%");
+                    Console.WriteLine($"AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
+                    Console.WriteLine($"InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
+                    Console.WriteLine($"Temperature:         {device.Temperature} C");
+                    Console.WriteLine($"FanSpeed:            {device.FanSpeed}%");
+                    Console.WriteLine($"CoreClock:           {device.CoreClock} MHz");
+                    Console.WriteLine($"MemoryClock:         {device.MemoryClock} MHz");
+                    Console.WriteLine($"PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
+                    Console.WriteLine();
+                }
+            }
+
+            try { await Task.Delay(1000, cts.Token); }
+            catch (OperationCanceledException) { break; }
+        }
     }
 }
 
@@ -664,12 +687,6 @@ public sealed class GpuCommand : ICommandHandler
 [Command("power", "Get power info")]
 public sealed class PowerCommand : ICommandHandler
 {
-    [Option<int>("--count", "-n", Description = "Number of samples", DefaultValue = 1)]
-    public int Count { get; set; }
-
-    [Option<bool>("--watch", "-w", Description = "Continuous watch mode (Ctrl+C to stop)")]
-    public bool Watch { get; set; }
-
     public async ValueTask ExecuteAsync(CommandContext context)
     {
         var power = PlatformProvider.GetPowerStat();
@@ -682,19 +699,17 @@ public sealed class PowerCommand : ICommandHandler
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
-        // initial baseline snapshot
         power.Update();
 
-        var limit = Watch ? int.MaxValue : Count;
-        for (var i = 0; i < limit && !cts.Token.IsCancellationRequested; i++)
+        while (!cts.Token.IsCancellationRequested)
         {
-            var prevCpu = power.Cpu;
-            var prevGpu = power.Gpu;
-            var prevAne = power.Ane;
-            var prevRam = power.Ram;
-            var prevPci = power.Pci;
+            var prevCpu   = power.Cpu;
+            var prevGpu   = power.Gpu;
+            var prevAne   = power.Ane;
+            var prevRam   = power.Ram;
+            var prevPci   = power.Pci;
             var prevTotal = power.Total;
-            var prevTime = DateTime.UtcNow;
+            var prevTime  = DateTime.UtcNow;
 
             try { await Task.Delay(1000, cts.Token); }
             catch (OperationCanceledException) { break; }
@@ -702,24 +717,21 @@ public sealed class PowerCommand : ICommandHandler
             power.Update();
             var elapsed = (DateTime.UtcNow - prevTime).TotalSeconds;
 
-            var cpuW = (power.Cpu - prevCpu) / elapsed;
-            var gpuW = (power.Gpu - prevGpu) / elapsed;
-            var aneW = (power.Ane - prevAne) / elapsed;
-            var ramW = (power.Ram - prevRam) / elapsed;
-            var pciW = (power.Pci - prevPci) / elapsed;
+            var cpuW   = (power.Cpu   - prevCpu)   / elapsed;
+            var gpuW   = (power.Gpu   - prevGpu)   / elapsed;
+            var aneW   = (power.Ane   - prevAne)   / elapsed;
+            var ramW   = (power.Ram   - prevRam)   / elapsed;
+            var pciW   = (power.Pci   - prevPci)   / elapsed;
             var totalW = (power.Total - prevTotal) / elapsed;
 
-            if (Watch)
-            {
-                Console.Clear();
-            }
-
+            Console.Clear();
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]  elapsed: {elapsed:F2}s");
-            Console.WriteLine($"  CPU:  {DisplayFormatter.MakeBar(cpuW, totalW)} {cpuW,6:F2} W");
-            Console.WriteLine($"  GPU:  {DisplayFormatter.MakeBar(gpuW, totalW)} {gpuW,6:F2} W");
-            Console.WriteLine($"  ANE:  {DisplayFormatter.MakeBar(aneW, totalW)} {aneW,6:F2} W");
-            Console.WriteLine($"  RAM:  {DisplayFormatter.MakeBar(ramW, totalW)} {ramW,6:F2} W");
-            Console.WriteLine($"  PCI:  {DisplayFormatter.MakeBar(pciW, totalW)} {pciW,6:F2} W");
+            Console.WriteLine();
+            Console.WriteLine($"  CPU   {DisplayFormatter.MakeBar(cpuW, totalW)} {cpuW,6:F2} W");
+            Console.WriteLine($"  GPU   {DisplayFormatter.MakeBar(gpuW, totalW)} {gpuW,6:F2} W");
+            Console.WriteLine($"  ANE   {DisplayFormatter.MakeBar(aneW, totalW)} {aneW,6:F2} W");
+            Console.WriteLine($"  RAM   {DisplayFormatter.MakeBar(ramW, totalW)} {ramW,6:F2} W");
+            Console.WriteLine($"  PCI   {DisplayFormatter.MakeBar(pciW, totalW)} {pciW,6:F2} W");
             Console.WriteLine($"  {"Total:",-28} {totalW,6:F2} W");
             Console.WriteLine();
         }
@@ -788,11 +800,11 @@ public sealed class SensorCommand : ICommandHandler
         else
         {
             const double maxTemp = 120.0;
-            Console.WriteLine($"  {"Key",-6} {"Type",-5} {"Description",-21} {"Value",8}");
-            Console.WriteLine($"  {new string('-', 62)}");
+            Console.WriteLine($"  {"Key",-6} {"Type",-5} {"Description",-45} {"Value",8}");
+            Console.WriteLine($"  {new string('-', 67)}");
             foreach (var s in monitor.Temperatures)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.DataTypeString,-5} {s.Description,-25} {DisplayFormatter.MakeBar(s.Value, maxTemp, 12)} {s.Value,5:F1} C");
+                Console.WriteLine($"  {s.Key,-6} {s.DataTypeString,-5} {s.Description,-45} {s.Value,5:F1} \u00b0C {DisplayFormatter.MakeBar(s.Value, maxTemp, 12)}");
             }
             Console.WriteLine($"  Total: {monitor.Temperatures.Count} sensors");
         }
@@ -809,10 +821,10 @@ public sealed class SensorCommand : ICommandHandler
         else
         {
             Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
-            Console.WriteLine($"  {new string('-', 43)}");
+            Console.WriteLine($"  {new string('-', 41)}");
             foreach (var s in monitor.Voltages)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F3} V");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,6:F3} V");
             }
             Console.WriteLine($"  Total: {monitor.Voltages.Count} sensors");
         }
@@ -829,18 +841,18 @@ public sealed class SensorCommand : ICommandHandler
         else
         {
             Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
-            Console.WriteLine($"  {new string('-', 43)}");
+            Console.WriteLine($"  {new string('-', 41)}");
             foreach (var s in monitor.Powers)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F2} W");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,6:F2} W");
             }
 
             // ReSharper disable StringLiteralTypo
             var inputPower = monitor.Powers.FirstOrDefault(static x => x.Key == "PDTR")?.Value ?? 0;
             var systemPower = monitor.Powers.FirstOrDefault(static x => x.Key == "PSTR")?.Value ?? 0;
             // ReSharper restore StringLiteralTypo
-            Console.WriteLine($"  Total Input Power : {inputPower:F2} W");
-            Console.WriteLine($"  Total System Power: {systemPower:F2} W");
+            Console.WriteLine($"  Total Input Power : {inputPower,6:F2} W");
+            Console.WriteLine($"  Total System Power: {systemPower,6:F2} W");
             Console.WriteLine($"  Total: {monitor.Powers.Count} sensors");
         }
         Console.WriteLine();
@@ -856,10 +868,10 @@ public sealed class SensorCommand : ICommandHandler
         else
         {
             Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
-            Console.WriteLine($"  {new string('-', 43)}");
+            Console.WriteLine($"  {new string('-', 41)}");
             foreach (var s in monitor.Currents)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F3} A");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,6:F3} A");
             }
             Console.WriteLine($"  Total: {monitor.Currents.Count} sensors");
         }
