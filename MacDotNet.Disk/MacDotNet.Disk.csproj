@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFrameworks>net10.0;net8.0</TargetFrameworks>
@@ -11,6 +11,10 @@
     <Title>MacDotNet.Disk</Title>
     <Description>MacDotNet.Disk.</Description>
     <PackageTags>macos system disk smart</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.0.2</Version>
   </PropertyGroup>
 
 </Project>
