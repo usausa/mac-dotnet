@@ -715,12 +715,12 @@ public sealed class PowerCommand : ICommandHandler
             }
 
             Console.WriteLine($"[{DateTime.Now:HH:mm:ss}]  elapsed: {elapsed:F2}s");
-            Console.WriteLine($"  CPU   {DisplayFormatter.MakeBar(cpuW, totalW)} {cpuW,6:F2} W");
-            Console.WriteLine($"  GPU   {DisplayFormatter.MakeBar(gpuW, totalW)} {gpuW,6:F2} W");
-            Console.WriteLine($"  ANE   {DisplayFormatter.MakeBar(aneW, totalW)} {aneW,6:F2} W");
-            Console.WriteLine($"  RAM   {DisplayFormatter.MakeBar(ramW, totalW)} {ramW,6:F2} W");
-            Console.WriteLine($"  PCI   {DisplayFormatter.MakeBar(pciW, totalW)} {pciW,6:F2} W");
-            Console.WriteLine($"  {"Total",-26} {totalW,6:F2} W");
+            Console.WriteLine($"  CPU:  {DisplayFormatter.MakeBar(cpuW, totalW)} {cpuW,6:F2} W");
+            Console.WriteLine($"  GPU:  {DisplayFormatter.MakeBar(gpuW, totalW)} {gpuW,6:F2} W");
+            Console.WriteLine($"  ANE:  {DisplayFormatter.MakeBar(aneW, totalW)} {aneW,6:F2} W");
+            Console.WriteLine($"  RAM:  {DisplayFormatter.MakeBar(ramW, totalW)} {ramW,6:F2} W");
+            Console.WriteLine($"  PCI:  {DisplayFormatter.MakeBar(pciW, totalW)} {pciW,6:F2} W");
+            Console.WriteLine($"  {"Total:",-28} {totalW,6:F2} W");
             Console.WriteLine();
         }
     }
@@ -788,11 +788,11 @@ public sealed class SensorCommand : ICommandHandler
         else
         {
             const double maxTemp = 120.0;
-            Console.WriteLine($"  {"Key",-6} {"Type",-5} {"Description",-45} {"Value",9}");
-            Console.WriteLine($"  {new string('-', 72)}");
+            Console.WriteLine($"  {"Key",-6} {"Type",-5} {"Description",-21} {"Value",8}");
+            Console.WriteLine($"  {new string('-', 62)}");
             foreach (var s in monitor.Temperatures)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.DataTypeString,-5} {s.Description,-45} {DisplayFormatter.MakeBar(s.Value, maxTemp, 12)} {s.Value,6:F1} \u00b0C");
+                Console.WriteLine($"  {s.Key,-6} {s.DataTypeString,-5} {s.Description,-25} {DisplayFormatter.MakeBar(s.Value, maxTemp, 12)} {s.Value,5:F1} C");
             }
             Console.WriteLine($"  Total: {monitor.Temperatures.Count} sensors");
         }
@@ -808,11 +808,11 @@ public sealed class SensorCommand : ICommandHandler
         }
         else
         {
-            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
-            Console.WriteLine($"  {new string('-', 62)}");
+            Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
+            Console.WriteLine($"  {new string('-', 43)}");
             foreach (var s in monitor.Voltages)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F3} V");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F3} V");
             }
             Console.WriteLine($"  Total: {monitor.Voltages.Count} sensors");
         }
@@ -828,11 +828,11 @@ public sealed class SensorCommand : ICommandHandler
         }
         else
         {
-            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
-            Console.WriteLine($"  {new string('-', 62)}");
+            Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
+            Console.WriteLine($"  {new string('-', 43)}");
             foreach (var s in monitor.Powers)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F2} W");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F2} W");
             }
 
             // ReSharper disable StringLiteralTypo
@@ -855,11 +855,11 @@ public sealed class SensorCommand : ICommandHandler
         }
         else
         {
-            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
-            Console.WriteLine($"  {new string('-', 62)}");
+            Console.WriteLine($"  {"Key",-6} {"Description",-25} {"Value",8}");
+            Console.WriteLine($"  {new string('-', 43)}");
             foreach (var s in monitor.Currents)
             {
-                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F3} A");
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-25} {s.Value,8:F3} A");
             }
             Console.WriteLine($"  Total: {monitor.Currents.Count} sensors");
         }
@@ -879,10 +879,10 @@ public sealed class SensorCommand : ICommandHandler
             foreach (var fan in monitor.Fans)
             {
                 Console.WriteLine($"  Fan {fan.Index}:");
-                Console.WriteLine($"    Actual: {fan.ActualRpm,8:F0} RPM");
-                Console.WriteLine($"    Min:    {fan.MinRpm,8:F0} RPM");
-                Console.WriteLine($"    Max:    {fan.MaxRpm,8:F0} RPM");
-                Console.WriteLine($"    Target: {fan.TargetRpm,8:F0} RPM");
+                Console.WriteLine($"    Actual: {fan.ActualRpm,4:F0} RPM");
+                Console.WriteLine($"    Min:    {fan.MinRpm,4:F0} RPM");
+                Console.WriteLine($"    Max:    {fan.MaxRpm,4:F0} RPM");
+                Console.WriteLine($"    Target: {fan.TargetRpm,4:F0} RPM");
             }
         }
         Console.WriteLine();
