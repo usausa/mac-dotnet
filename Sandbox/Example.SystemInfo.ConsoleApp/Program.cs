@@ -544,7 +544,7 @@ else
     {
         Console.WriteLine($"  ... and {monitor.Powers.Count - 32} more readings.");
     }
-    if (monitor.TotalSystemPower is not null)
+    if (monitor.TotalSystemPower > 0)
     {
         Console.WriteLine($"  Total System Power (PSTR): {monitor.TotalSystemPower:F2} W");
     }

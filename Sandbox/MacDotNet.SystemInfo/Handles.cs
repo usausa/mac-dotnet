@@ -130,15 +130,15 @@ internal readonly ref struct IORef(IntPtr pointer)
     }
 }
 
-internal readonly ref struct SmcConn(uint handle)
+internal readonly ref struct IOService(uint handle)
 {
-    public static SmcConn Zero => default;
+    public static IOService Zero => default;
 
     public uint Handle { get; } = handle;
 
     public bool IsValid => Handle != 0;
 
-    public static implicit operator uint(SmcConn c) => c.Handle;
+    public static implicit operator uint(IOService c) => c.Handle;
 
     public void Dispose()
     {
