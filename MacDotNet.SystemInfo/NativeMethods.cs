@@ -2,11 +2,6 @@ namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
 
-// TODO delete
-#pragma warning disable SA1611
-#pragma warning disable SA1615
-#pragma warning disable SA1629
-
 // ReSharper disable CommentTypo
 // ReSharper disable IdentifierTypo
 // ReSharper disable InconsistentNaming
@@ -17,89 +12,47 @@ using System.Runtime.InteropServices;
 internal static class NativeMethods
 {
     //------------------------------------------------------------------------
-    // Constants / 定数
+    // Constants
     //------------------------------------------------------------------------
 
-    // 成功コード (mach/kern_return.h) / Mach kernel success return code
+    // Mach kernel success return code (mach/kern_return.h)
     public const int KERN_SUCCESS = 0;
 
-    // host_statistics64 の flavor 引数 (mach/host_info.h) / Flavor argument for host_statistics64
+    // Flavor argument for host_statistics64 (mach/host_info.h)
     public const int HOST_VM_INFO64 = 4;
 
-    // vm_statistics64 のサイズ (natural_t 単位) / Size of vm_statistics64 in natural_t units
+    // Size of vm_statistics64 in natural_t units
     public const int HOST_VM_INFO64_COUNT = 40;
 
-    // host_processor_info の flavor 引数 (mach/processor_info.h) / Flavor argument for host_processor_info
+    // Flavor argument for host_processor_info (mach/processor_info.h)
     public const int PROCESSOR_CPU_LOAD_INFO = 2;
 
-    // CPU 状態インデックス (mach/machine.h) / CPU state indices (mach/machine.h)
-    public const int CPU_STATE_USER = 0;    // ユーザーモード / User mode
-    public const int CPU_STATE_SYSTEM = 1;  // カーネルモード / Kernel mode
-    public const int CPU_STATE_IDLE = 2;    // アイドル / Idle
-    public const int CPU_STATE_NICE = 3;    // nice 付きユーザーモード / User mode with nice priority
-    public const int CPU_STATE_MAX = 4;     // 状態数 / Number of CPU states
+    // CPU state indices (mach/machine.h)
+    public const int CPU_STATE_USER = 0;    // User mode
+    public const int CPU_STATE_SYSTEM = 1;  // Kernel mode
+    public const int CPU_STATE_IDLE = 2;    // Idle
+    public const int CPU_STATE_NICE = 3;    // User mode with nice priority
+    public const int CPU_STATE_MAX = 4;     // Number of CPU states
 
     // CFStringEncoding: UTF-8 (CFString.h)
     public const uint kCFStringEncodingUTF8 = 0x08000100;
 
-    // CFNumberType (CFNumber.h) / CFNumber type identifiers
+    // CFNumber type identifiers (CFNumber.h)
     public const int kCFNumberSInt32Type = 3;   // 32-bit signed integer
     public const int kCFNumberSInt64Type = 4;   // 64-bit signed integer
 
-    // IOPowerSources ディクショナリキー (IOPSKeys.h) / IOPowerSources dictionary keys
-    public const string kIOPSNameKey = "Name";
-    public const string kIOPSTypeKey = "Type";
-    public const string kIOPSTransportTypeKey = "Transport Type";
-    public const string kIOPSHardwareSerialNumberKey = "Hardware Serial Number";
-    public const string kIOPSIsPresentKey = "Is Present";
-    public const string kIOPSPowerSourceStateKey = "Power Source State";
-    public const string kIOPSIsChargingKey = "Is Charging";
-    public const string kIOPSIsChargedKey = "Is Charged";
-    public const string kIOPSCurrentCapacityKey = "Current Capacity";
-    public const string kIOPSMaxCapacityKey = "Max Capacity";
-    public const string kIOPSTimeToEmptyKey = "Time to Empty";
-    public const string kIOPSTimeToFullChargeKey = "Time to Full Charge";
-    public const string kIOPSBatteryHealthKey = "BatteryHealth";
-    public const string kIOPSBatteryHealthConditionKey = "BatteryHealthCondition";
-    public const string kIOPSDesignCycleCountKey = "DesignCycleCount9C";
-    public const string kIOPSACPowerValue = "AC Power";  // PowerSourceState value when on AC / AC 電源時の値
+    // getfsstat mode flags (sys/mount.h)
+    public const int MNT_NOWAIT = 2;  // Asynchronous: return cached values immediately
 
-    // getfsstat モード (sys/mount.h) / getfsstat mode flags
-    public const int MNT_WAIT = 1;    // 同期: ファイルシステム統計の更新を待つ / Synchronous: wait for filesystem stats update
-    public const int MNT_NOWAIT = 2;  // 非同期: キャッシュ値を即返す / Asynchronous: return cached values immediately
+    // Address family constants (sys/socket.h)
+    public const byte AF_LINK = 18;  // BSD data-link layer
 
-    // アドレスファミリー定数 (sys/socket.h) / Address family constants
-    public const byte AF_INET = 2;   // IPv4
-    public const byte AF_LINK = 18;  // BSD データリンク / BSD data-link layer
-    public const byte AF_INET6 = 30; // IPv6
+    // Type argument for proc_listpids (sys/proc_info.h)
+    public const uint PROC_ALL_PIDS = 1;  // All processes
 
-    // インターフェースフラグ定数 (net/if.h) / Interface flag constants (IFF_*)
-    public const uint IFF_UP = 0x1;           // インターフェースが有効 / Interface is up
-    public const uint IFF_BROADCAST = 0x2;    // ブロードキャスト対応 / Supports broadcast
-    public const uint IFF_LOOPBACK = 0x8;     // ループバック / Loopback interface
-    public const uint IFF_POINTOPOINT = 0x10; // P2P リンク / Point-to-point link
-    public const uint IFF_RUNNING = 0x40;     // リソース割り当て済み / Resources allocated
-    public const uint IFF_MULTICAST = 0x8000; // マルチキャスト対応 / Supports multicast
-
-    // インターフェース種別定数 (net/if_types.h) / Interface type constants
-    public const byte IFT_ETHER = 0x06;      // 有線 Ethernet / Wired Ethernet
-    public const byte IFT_LOOP = 0x18;       // ループバック / Loopback
-    public const byte IFT_GIF = 0x37;        // 汎用トンネル / Generic tunnel
-    public const byte IFT_STF = 0x39;        // 6to4 トンネル / 6-to-4 tunnel
-    public const byte IFT_IEEE80211 = 0x47;  // Wi-Fi (IEEE 802.11)
-    public const byte IFT_BRIDGE = 0xD1;     // ブリッジ / Bridge
-    public const byte IFT_CELLULAR = 0xFF;   // セルラー / Cellular
-
-    // inet_ntop 用バッファサイズ定数 (netinet/in.h) / Buffer size constants for inet_ntop
-    public const uint INET_ADDRSTRLEN = 16;   // IPv4 アドレス文字列の最大長 / Max length of an IPv4 address string
-    public const uint INET6_ADDRSTRLEN = 46;  // IPv6 アドレス文字列の最大長 / Max length of an IPv6 address string
-
-    // proc_listpids type (sys/proc_info.h) / Type argument for proc_listpids
-    public const uint PROC_ALL_PIDS = 1;  // すべてのプロセス / All processes
-
-    // proc_pidinfo flavor (sys/proc_info.h) / Flavor arguments for proc_pidinfo
-    public const int PROC_PIDTBSDINFO = 3;  // BSD プロセス情報 (proc_bsdinfo) / BSD process info
-    public const int PROC_PIDTASKINFO = 4;  // タスク情報 (proc_taskinfo) / Task info
+    // Flavor arguments for proc_pidinfo (sys/proc_info.h)
+    public const int PROC_PIDTBSDINFO = 3;  // BSD process info (proc_bsdinfo)
+    public const int PROC_PIDTASKINFO = 4;  // Task info (proc_taskinfo)
     public const int RUSAGE_INFO_V2 = 2;
 
     // BSD process status values (sys/proc.h)
@@ -109,21 +62,21 @@ internal static class NativeMethods
     public const uint SSTOP = 4;
     public const uint SZOMB = 5;
 
-    // proc_pidpath バッファサイズ (sys/proc_info.h) / Buffer size for proc_pidpath
+    // Buffer size for proc_pidpath (sys/proc_info.h)
     public const uint PROC_PIDPATHINFO_MAXSIZE = 4096;
 
-    // SMC selector: IOConnectCallStructMethod の selector 引数 / Selector for IOConnectCallStructMethod
+    // Selector for IOConnectCallStructMethod
     public const uint KERNEL_INDEX_SMC = 2;
 
-    // SMC コマンド / SMC command codes
-    public const byte SMC_CMD_READ_BYTES = 5;    // キー値をバイト列として読み取る / Read key value as bytes
-    public const byte SMC_CMD_READ_KEYINFO = 9;  // キーのメタ情報を読み取る / Read key metadata
-    public const byte SMC_CMD_READ_INDEX = 8;    // インデックスでキーを読み取る / Read key by index
+    // SMC command codes
+    public const byte SMC_CMD_READ_BYTES = 5;    // Read key value as bytes
+    public const byte SMC_CMD_READ_KEYINFO = 9;  // Read key metadata
+    public const byte SMC_CMD_READ_INDEX = 8;    // Read key by index
 
-    // SMC データ型定数: 4 文字をビッグエンディアン uint32 にエンコード / SMC data type codes (4-char big-endian uint32)
+    // SMC data type codes (4-char big-endian uint32)
     public const uint DATA_TYPE_FLT = 0x666C7420;   // "flt " — 32-bit IEEE 754 float
-    public const uint DATA_TYPE_SP78 = 0x73703738;  // "sp78" — signed fixed-point Q7.8 (温度 / temperature)
-    public const uint DATA_TYPE_FPE2 = 0x66706532;  // "fpe2" — unsigned fixed-point Qn.2 (RPM 等 / e.g. fan RPM)
+    public const uint DATA_TYPE_SP78 = 0x73703738;  // "sp78" — signed fixed-point Q7.8 (temperature)
+    public const uint DATA_TYPE_FPE2 = 0x66706532;  // "fpe2" — unsigned fixed-point Qn.2 (e.g. fan RPM)
     public const uint DATA_TYPE_IOFT = 0x696F6674;  // "ioft" — signed fixed-point Q16.16
     public const uint DATA_TYPE_UI8 = 0x75693820;   // "ui8 " — 8-bit unsigned integer
     public const uint DATA_TYPE_UI16 = 0x75693136;  // "ui16" — 16-bit unsigned integer
@@ -226,31 +179,6 @@ internal static class NativeMethods
     {
         public byte sa_len;
         public byte sa_family;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct sockaddr_dl
-    {
-        public byte sdl_len;
-        public byte sdl_family;
-        public ushort sdl_index;
-        public byte sdl_type;
-        public byte sdl_nlen;
-        public byte sdl_alen;
-        public byte sdl_slen;
-
-        public const int DataOffset = 8;
-    }
-
-    public static class sockaddr_in
-    {
-        public const int AddrOffset = 4;
-    }
-
-    public static class sockaddr_in6
-    {
-        public const int AddrOffset = 8;
-        public const int ScopeIdOffset = 24;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -455,6 +383,7 @@ internal static class NativeMethods
     [DllImport("libc")]
     public static extern unsafe int getfsstat(statfs* buf, int bufsize, int mode);
 
+    // ReSharper disable once StringLiteralTypo
     [DllImport("libc", EntryPoint = "statfs")]
     public static extern unsafe int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
 
@@ -463,9 +392,6 @@ internal static class NativeMethods
 
     [DllImport("libc")]
     public static extern void freeifaddrs(IntPtr ifa);
-
-    [DllImport("libc")]
-    public static extern unsafe IntPtr inet_ntop(int af, void* src, byte* dst, uint size);
 
     //------------------------------------------------------------------------
     // libproc
@@ -555,16 +481,6 @@ internal static class NativeMethods
     //------------------------------------------------------------------------
 
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
-    private const string IOReportLib = "/usr/lib/libIOReport.dylib";
-
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOPSCopyPowerSourcesInfo();
-
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOPSCopyPowerSourcesList(IntPtr blob);
-
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOPSGetPowerSourceDescription(IntPtr blob, IntPtr ps);
 
     [DllImport(IOKitLib)]
     public static extern int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, ref IntPtr existing);
@@ -620,59 +536,11 @@ internal static class NativeMethods
     [DllImport(IOKitLib)]
     public static extern int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOPSCopyExternalPowerAdapterDetails();
-
     //------------------------------------------------------------------------
-    // SystemConfiguration
+    // IOReport
     //------------------------------------------------------------------------
 
-    private const string SystemConfigurationLib = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
-
-    /// <summary>ユーザーが設定可能なハードウェアネットワークインターフェースの一覧を CFArrayRef で返す。呼び出し元が CFRelease する必要がある</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceCopyAll();
-
-    /// <summary>インターフェースの BSD 名 (例: "en0") を CFStringRef で返す。所有権は呼び出し元に移らないため CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
-
-    /// <summary>インターフェースのローカライズされた表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceGetLocalizedDisplayName(IntPtr networkInterface);
-
-    /// <summary>SystemConfiguration の設定ファイルを開く。戻り値は CFRelease が必要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
-
-    /// <summary>System Settings のネットワーク設定に登録されているネットワークサービスの一覧を CFArrayRef で返す。CFRelease が必要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
-
-    /// <summary>ネットワークサービスのユーザー表示名 (例: "Ethernet"、"Wi-Fi") を CFStringRef で返す。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetName(IntPtr service);
-
-    /// <summary>ネットワークサービスに紐付くハードウェアインターフェースを返す。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
-
-    /// <summary>インターフェースの SC レベルの種別を CFStringRef で返す。例: "Ethernet"、"IEEE80211"、"Bridge"。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
-
-    /// <summary>ネットワークサービスが有効かどうかを返す (System Settings で有効/無効切り替え可能)</summary>
-    [DllImport(SystemConfigurationLib)]
-    [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool SCNetworkServiceGetEnabled(IntPtr service);
-
-    /// <summary>ネットワークサービスの UUID 文字列を CFStringRef で返す。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetServiceID(IntPtr service);
-
-    /// <summary>SC preferences の指定パスの値 (CFPropertyListRef) を返す。CFRelease 不要</summary>
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
+    private const string IOReportLib = "/usr/lib/libIOReport.dylib";
 
     [DllImport(IOReportLib)]
     public static extern IntPtr IOReportCopyChannelsInGroup(IntPtr group, IntPtr subgroup, ulong a, ulong b, ulong c);
@@ -720,16 +588,44 @@ internal static class NativeMethods
     [return: MarshalAs(UnmanagedType.U1)]
     public static extern bool CFNumberGetValue(IntPtr number, int theType, ref double valuePtr);
 
-    // Additional IOPowerSources Keys
-    public const string kIOPSPowerAdapterWattsKey = "Watts";
+    //------------------------------------------------------------------------
+    // SystemConfiguration
+    //------------------------------------------------------------------------
 
-    // CFNumberType for double
-    public const int kCFNumberFloat64Type = 6;
+    private const string SystemConfigurationLib = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
 
-    /// <summary>
-    /// sysctlbyname で 32 ビット整数値を取得する。取得失敗時は 0 を返す。
-    /// <para>Reads a 32-bit integer value via sysctlbyname. Returns 0 on failure.</para>
-    /// </summary>
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetName(IntPtr service);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
+
+    [DllImport(SystemConfigurationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static extern bool SCNetworkServiceGetEnabled(IntPtr service);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCNetworkServiceGetServiceID(IntPtr service);
+
+    [DllImport(SystemConfigurationLib)]
+    public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
+
+    //------------------------------------------------------------------------
+    // Helper
+    //------------------------------------------------------------------------
+
     public static unsafe int GetSystemControlInt32(string name)
     {
         int value;
@@ -737,10 +633,6 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
-    /// <summary>
-    /// sysctlbyname で 64 ビット符号付き整数値を取得する。取得失敗時は 0 を返す。
-    /// <para>Reads a 64-bit signed integer value via sysctlbyname. Returns 0 on failure.</para>
-    /// </summary>
     public static unsafe long GetSystemControlInt64(string name)
     {
         long value;
@@ -748,10 +640,6 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
-    /// <summary>
-    /// sysctlbyname で 64 ビット符号なし整数値を取得する。取得失敗時は 0 を返す。
-    /// <para>Reads a 64-bit unsigned integer value via sysctlbyname. Returns 0 on failure.</para>
-    /// </summary>
     public static unsafe ulong GetSystemControlUInt64(string name)
     {
         ulong value;
@@ -759,10 +647,6 @@ internal static class NativeMethods
         return sysctlbyname(name, &value, ref len, IntPtr.Zero, 0) == 0 ? value : 0;
     }
 
-    /// <summary>
-    /// sysctlbyname で文字列値を取得する。1024 バイトを超える場合は null を返す。
-    /// <para>Reads a string value via sysctlbyname. Returns null if the value exceeds 1024 bytes.</para>
-    /// </summary>
     public static unsafe string? GetSystemControlString(string name)
     {
         var len = IntPtr.Zero;
@@ -780,10 +664,6 @@ internal static class NativeMethods
         var buffer = stackalloc byte[(int)allocatedSize];
         return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
-
-    //------------------------------------------------------------------------
-    // CF string conversion
-    //------------------------------------------------------------------------
 
     public static unsafe string? ToManagedString(IntPtr cfString)
     {
