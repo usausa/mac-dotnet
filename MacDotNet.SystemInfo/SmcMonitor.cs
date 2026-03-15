@@ -188,8 +188,8 @@ public sealed class SmcMonitor
         {
             using var conn = new IOService(connHandle);
 
-            var keyCount = GetKeyCount(conn);
-            for (uint i = 0; i < (uint)keyCount; i++)
+            var keyCount = ReadSmcInt(conn, KeyNum);
+            for (var i = 0; i < keyCount; i++)
             {
                 var key = SmcReadIndex(conn, i);
                 if (key == 0)
@@ -264,43 +264,39 @@ public sealed class SmcMonitor
                 }
             }
 
-            // TODO float ?
-            var fanCountVal = ReadSmcFloat(conn, FNum);
-            if (fanCountVal is not null)
+            var fanCount = ReadSmcInt(conn, FNum);
+            for (var i = 0; i < fanCount; i++)
             {
-                for (var i = 0; i < (int)fanCountVal.Value; i++)
+                var ac = FanKey(i, FanSuffixAc);
+                if (!SmcReadKeyInfo(conn, ac, out var acSize, out var acType) || (acSize == 0))
                 {
-                    var ac = FanKey(i, FanSuffixAc);
-                    if (!SmcReadKeyInfo(conn, ac, out var acSize, out var acType) || (acSize == 0))
-                    {
-                        continue;
-                    }
-                    var mn = FanKey(i, FanSuffixMn);
-                    if (!SmcReadKeyInfo(conn, mn, out var mnSize, out var mnType) || (mnSize == 0))
-                    {
-                        continue;
-                    }
-                    var mx = FanKey(i, FanSuffixMx);
-                    if (!SmcReadKeyInfo(conn, mx, out var mxSize, out var mxType) || (mxSize == 0))
-                    {
-                        continue;
-                    }
-                    var tg = FanKey(i, FanSuffixTg);
-                    if (!SmcReadKeyInfo(conn, tg, out var tgSize, out var tgType) || (tgSize == 0))
-                    {
-                        continue;
-                    }
-
-                    var fan = new FanSensor(i, ac, acType, acSize, mn, mnType, mnSize, mx, mxType, mxSize, tg, tgType, tgSize)
-                    {
-                        ActualRpm = ReadSensorValue(conn, ac, acType, acSize),
-                        MinRpm = ReadSensorValue(conn, mn, mnType, mnSize),
-                        MaxRpm = ReadSensorValue(conn, mx, mxType, mxSize),
-                        TargetRpm = ReadSensorValue(conn, tg, tgType, tgSize)
-                    };
-
-                    fans.Add(fan);
+                    continue;
                 }
+                var mn = FanKey(i, FanSuffixMn);
+                if (!SmcReadKeyInfo(conn, mn, out var mnSize, out var mnType) || (mnSize == 0))
+                {
+                    continue;
+                }
+                var mx = FanKey(i, FanSuffixMx);
+                if (!SmcReadKeyInfo(conn, mx, out var mxSize, out var mxType) || (mxSize == 0))
+                {
+                    continue;
+                }
+                var tg = FanKey(i, FanSuffixTg);
+                if (!SmcReadKeyInfo(conn, tg, out var tgSize, out var tgType) || (tgSize == 0))
+                {
+                    continue;
+                }
+
+                var fan = new FanSensor(i, ac, acType, acSize, mn, mnType, mnSize, mx, mxType, mxSize, tg, tgType, tgSize)
+                {
+                    ActualRpm = ReadSensorValue(conn, ac, acType, acSize),
+                    MinRpm = ReadSensorValue(conn, mn, mnType, mnSize),
+                    MaxRpm = ReadSensorValue(conn, mx, mxType, mxSize),
+                    TargetRpm = ReadSensorValue(conn, tg, tgType, tgSize)
+                };
+
+                fans.Add(fan);
             }
         }
 
@@ -362,38 +358,21 @@ public sealed class SmcMonitor
     // Helper
     //--------------------------------------------------------------------------------
 
-    private static unsafe int GetKeyCount(uint conn)
-    {
-        if (!SmcReadKeyInfo(conn, KeyNum, out var dataSize, out _))
-        {
-            return 0;
-        }
-
-        var input = default(SMCKeyData_t);
-        var output = default(SMCKeyData_t);
-        input.key = KeyNum;
-        input.keyInfo.dataSize = dataSize;
-        input.data8 = SMC_CMD_READ_BYTES;
-
-        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? BinaryPrimitives.ReadInt32BigEndian(new ReadOnlySpan<byte>(output.bytes, 4)) : 0;
-    }
-
-    private static unsafe uint SmcReadIndex(uint conn, uint index)
+    private static unsafe uint SmcReadIndex(uint conn, int index)
     {
         var input = default(SMCKeyData_t);
         var output = default(SMCKeyData_t);
         input.data8 = SMC_CMD_READ_INDEX;
-        input.data32 = index;
+        input.data32 = (uint)index;
 
         return SmcCall(conn, &input, &output) == KERN_SUCCESS ? output.key : 0;
     }
 
-    // TODO 用途 AI
-    private static unsafe double? ReadSmcFloat(uint conn, uint key)
+    private static unsafe int ReadSmcInt(uint conn, uint key)
     {
-        if (!SmcReadKeyInfo(conn, key, out var dataSize, out var dataType) || dataSize == 0)
+        if (!SmcReadKeyInfo(conn, key, out var dataSize, out _) || dataSize == 0)
         {
-            return null;
+            return 0;
         }
 
         var input = default(SMCKeyData_t);
@@ -404,10 +383,16 @@ public sealed class SmcMonitor
 
         if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
         {
-            return null;
+            return 0;
         }
 
-        return DecodeValue(output.bytes, dataType, dataSize);
+        return dataSize switch
+        {
+            1 => output.bytes[0],
+            2 => BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(output.bytes, 2)),
+            4 => (int)BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(output.bytes, 4)),
+            _ => 0
+        };
     }
 
     private static unsafe bool SmcReadKeyInfo(uint conn, uint key, out uint dataSize, out uint dataType)
@@ -417,7 +402,7 @@ public sealed class SmcMonitor
         input.key = key;
         input.data8 = SMC_CMD_READ_KEYINFO;
 
-        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
+        if (SmcCall(conn, &input, &output) == KERN_SUCCESS)
         {
             dataSize = output.keyInfo.dataSize;
             dataType = output.keyInfo.dataType;
@@ -437,49 +422,47 @@ public sealed class SmcMonitor
         input.keyInfo.dataSize = dataSize;
         input.data8 = SMC_CMD_READ_BYTES;
 
-        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? DecodeValue(output.bytes, dataType, dataSize) : 0;
+        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
+        {
+            return 0;
+        }
+
+        var bytes = output.bytes;
+        if ((dataType == DATA_TYPE_FLT) && (dataSize == 4))
+        {
+            return *(float*)bytes;
+        }
+        if ((dataType == DATA_TYPE_SP78) && (dataSize == 2))
+        {
+            return BinaryPrimitives.ReadInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2)) / 256.0;
+        }
+        if ((dataType == DATA_TYPE_FPE2) && (dataSize == 2))
+        {
+            return BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2)) / 4.0;
+        }
+        if ((dataType == DATA_TYPE_IOFT) && (dataSize == 8))
+        {
+            return *(int*)bytes / 65536.0;
+        }
+        if ((dataType == DATA_TYPE_UI8) && (dataSize == 1))
+        {
+            return bytes[0];
+        }
+        if ((dataType == DATA_TYPE_UI16) && (dataSize == 2))
+        {
+            return BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2));
+        }
+        if ((dataType == DATA_TYPE_UI32) && (dataSize == 4))
+        {
+            return BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(bytes, 4));
+        }
+        return 0;
     }
 
     private static unsafe int SmcCall(uint conn, SMCKeyData_t* input, SMCKeyData_t* output)
     {
         var outputSize = (nuint)sizeof(SMCKeyData_t);
         return IOConnectCallStructMethod(conn, KERNEL_INDEX_SMC, input, (nuint)sizeof(SMCKeyData_t), output, &outputSize);
-    }
-
-    private static unsafe double DecodeValue(byte* bytes, uint dataType, uint dataSize)
-    {
-        if (dataType == DATA_TYPE_FLT && dataSize == 4)
-        {
-            return *(float*)bytes;
-        }
-        if (dataType == DATA_TYPE_SP78 && dataSize == 2)
-        {
-            var raw = BinaryPrimitives.ReadInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2));
-            return raw / 256.0;
-        }
-        if (dataType == DATA_TYPE_FPE2 && dataSize == 2)
-        {
-            var raw = BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2));
-            return raw / 4.0;
-        }
-        if (dataType == DATA_TYPE_IOFT && dataSize == 8)
-        {
-            var raw = *(int*)bytes;
-            return raw / 65536.0;
-        }
-        if (dataType == DATA_TYPE_UI8 && dataSize == 1)
-        {
-            return bytes[0];
-        }
-        if (dataType == DATA_TYPE_UI16 && dataSize == 2)
-        {
-            return BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(bytes, 2));
-        }
-        if (dataType == DATA_TYPE_UI32 && dataSize == 4)
-        {
-            return BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(bytes, 4));
-        }
-        return 0;
     }
 
     //--------------------------------------------------------------------------------
