@@ -147,8 +147,6 @@ public sealed class SmcMonitor
     public const uint FanSuffixMx = 0x4D78u;
     public const uint FanSuffixTg = 0x5467u;
 
-    private readonly PowerSensor? systemPowerSensor;
-
     public DateTime UpdateAt { get; private set; }
 
     public IReadOnlyList<TemperatureSensor> Temperatures { get; }
@@ -160,8 +158,6 @@ public sealed class SmcMonitor
     public IReadOnlyList<CurrentSensor> Currents { get; }
 
     public IReadOnlyList<FanSensor> Fans { get; }
-
-    public double TotalSystemPower => systemPowerSensor?.Value ?? 0;
 
     //--------------------------------------------------------------------------------
     // Helper
@@ -305,8 +301,6 @@ public sealed class SmcMonitor
         Powers = powers;
         Currents = currents;
         Fans = fans;
-        // ReSharper disable once StringLiteralTypo
-        systemPowerSensor = powers.Find(static p => p.Key == "PSTR");
 
         UpdateAt = DateTime.Now;
     }

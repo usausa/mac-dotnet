@@ -29,9 +29,7 @@ public static class CommandBuilderExtensions
         commands.AddCommand<CpuFrequencyCommand>();
         commands.AddCommand<GpuCommand>();
         commands.AddCommand<PowerCommand>();
-        //commands.AddCommand<TemperatureCommand>();
-        //commands.AddCommand<FanCommand>();
-        //commands.AddCommand<VoltageCommand>();
+        commands.AddCommand<SensorCommand>();
     }
 }
 
@@ -617,115 +615,164 @@ public sealed class PowerCommand : ICommandHandler
     }
 }
 
-// TODO
-//// Temperature
-//[Command("temp", "Temperature Sensors")]
-//public sealed class TemperatureCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var temps = PlatformProvider.GetTemperatureSensors();
-//        Console.WriteLine("=== Temperature Sensors ===");
-//        if (temps.Count > 0)
-//        {
-//            Console.WriteLine($"{"Key",-6} {"Value",8}  Description");
-//            Console.WriteLine(new string('-', 50));
-//            foreach (var s in temps.Take(30))
-//            {
-//                Console.WriteLine($"{s.Key,-6} {s.Value,7:F1} C  {s.Description}");
-//            }
+//--------------------------------------------------------------------------------
+// Sensor
+//--------------------------------------------------------------------------------
+[Command("sensor", "Get SMC sensor readings")]
+public sealed class SensorCommand : ICommandHandler
+{
+    [Option<bool>("--all", "-a", Description = "All sensors")]
+    public bool All { get; set; }
 
-//            if (temps.Count > 30)
-//            {
-//                Console.WriteLine($"... and {temps.Count - 30} more sensors");
-//            }
-//        }
-//        else
-//        {
-//            Console.WriteLine("No temperature sensors found.");
-//        }
+    [Option<bool>("--temp", "-t", Description = "Temperature sensors")]
+    public bool Temp { get; set; }
 
-//        return ValueTask.CompletedTask;
-//    }
-//}
+    [Option<bool>("--voltage", "-v", Description = "Voltage sensors")]
+    public bool Voltage { get; set; }
 
-//// Fan
-//[Command("fan", "Fan Info")]
-//public sealed class FanCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var fans = PlatformProvider.GetFans();
-//        Console.WriteLine("=== Fan Info ===");
-//        if (fans.Count > 0)
-//        {
-//            Console.WriteLine($"Fan count: {fans.Count}");
-//            foreach (var fan in fans)
-//            {
-//                Console.WriteLine($"  Fan {fan.Index}:");
-//                Console.WriteLine($"    Actual:  {fan.ActualRpm:F0} RPM");
-//                Console.WriteLine($"    Min:     {fan.MinRpm:F0} RPM");
-//                Console.WriteLine($"    Max:     {fan.MaxRpm:F0} RPM");
-//                Console.WriteLine($"    Target:  {fan.TargetRpm:F0} RPM");
-//            }
-//        }
-//        else
-//        {
-//            Console.WriteLine("No fans found.");
-//        }
+    [Option<bool>("--power", "-p", Description = "Power sensors")]
+    public bool Power { get; set; }
 
-//        return ValueTask.CompletedTask;
-//    }
-//}
+    [Option<bool>("--current", "-c", Description = "Current sensors")]
+    public bool Current { get; set; }
 
-//// Power
-//[Command("power", "Power Readings")]
-//public sealed class PowerCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var powers = PlatformProvider.GetPowerReadings();
-//        Console.WriteLine("=== Power Readings ===");
-//        if (powers.Count > 0)
-//        {
-//            Console.WriteLine($"{"Key",-6} {"Value",8}  Description");
-//            Console.WriteLine(new string('-', 50));
-//            foreach (var p in powers)
-//            {
-//                Console.WriteLine($"{p.Key,-6} {p.Value,7:F2} W  {p.Description}");
-//            }
-//        }
-//        else
-//        {
-//            Console.WriteLine("No power readings found.");
-//        }
+    [Option<bool>("--fan", "-f", Description = "Fan sensors")]
+    public bool Fan { get; set; }
 
-//        return ValueTask.CompletedTask;
-//    }
-//}
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var monitor = PlatformProvider.GetSmcMonitor();
 
-//// Voltage
-//[Command("voltage", "Voltage Readings")]
-//public sealed class VoltageCommand : ICommandHandler
-//{
-//    public ValueTask ExecuteAsync(CommandContext context)
-//    {
-//        var voltages = PlatformProvider.GetVoltageReadings();
-//        Console.WriteLine("=== Voltage Readings ===");
-//        if (voltages.Count > 0)
-//        {
-//            Console.WriteLine($"{"Key",-6} {"Value",8}  Description");
-//            Console.WriteLine(new string('-', 50));
-//            foreach (var v in voltages)
-//            {
-//                Console.WriteLine($"{v.Key,-6} {v.Value,7:F3} V  {v.Description}");
-//            }
-//        }
-//        else
-//        {
-//            Console.WriteLine("No voltage readings found.");
-//        }
+        if (All || Temp)
+        {
+            ShowTemperatures(monitor);
+        }
+        if (All || Voltage)
+        {
+            ShowVoltages(monitor);
+        }
+        if (All || Power)
+        {
+            ShowPowers(monitor);
+        }
+        if (All || Current)
+        {
+            ShowCurrents(monitor);
+        }
+        if (All || Fan)
+        {
+            ShowFans(monitor);
+        }
 
-//        return ValueTask.CompletedTask;
-//    }
-//}
+        return ValueTask.CompletedTask;
+    }
+
+    private static void ShowTemperatures(SmcMonitor monitor)
+    {
+        Console.WriteLine("[Temperature]");
+        if (monitor.Temperatures.Count == 0)
+        {
+            Console.WriteLine("  No sensors found.");
+        }
+        else
+        {
+            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
+            Console.WriteLine($"  {new string('-', 62)}");
+            foreach (var s in monitor.Temperatures)
+            {
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F1} \u00b0C");
+            }
+            Console.WriteLine($"  Total: {monitor.Temperatures.Count} sensors");
+        }
+        Console.WriteLine();
+    }
+
+    private static void ShowVoltages(SmcMonitor monitor)
+    {
+        Console.WriteLine("[Voltage]");
+        if (monitor.Voltages.Count == 0)
+        {
+            Console.WriteLine("  No sensors found.");
+        }
+        else
+        {
+            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
+            Console.WriteLine($"  {new string('-', 62)}");
+            foreach (var s in monitor.Voltages)
+            {
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F3} V");
+            }
+            Console.WriteLine($"  Total: {monitor.Voltages.Count} sensors");
+        }
+        Console.WriteLine();
+    }
+
+    private static void ShowPowers(SmcMonitor monitor)
+    {
+        Console.WriteLine("[Power]");
+        if (monitor.Powers.Count == 0)
+        {
+            Console.WriteLine("  No sensors found.");
+        }
+        else
+        {
+            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
+            Console.WriteLine($"  {new string('-', 62)}");
+            foreach (var s in monitor.Powers)
+            {
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F2} W");
+            }
+
+            // ReSharper disable StringLiteralTypo
+            var inputPower = monitor.Powers.FirstOrDefault(static x => x.Key == "PDTR")?.Value ?? 0;
+            var systemPower = monitor.Powers.FirstOrDefault(static x => x.Key == "PSTR")?.Value ?? 0;
+            // ReSharper restore StringLiteralTypo
+            Console.WriteLine($"  Total Input Power : {inputPower:F2} W");
+            Console.WriteLine($"  Total System Power: {systemPower:F2} W");
+            Console.WriteLine($"  Total: {monitor.Powers.Count} sensors");
+        }
+        Console.WriteLine();
+    }
+
+    private static void ShowCurrents(SmcMonitor monitor)
+    {
+        Console.WriteLine("[Current]");
+        if (monitor.Currents.Count == 0)
+        {
+            Console.WriteLine("  No sensors found.");
+        }
+        else
+        {
+            Console.WriteLine($"  {"Key",-6} {"Description",-45} {"Value",9}");
+            Console.WriteLine($"  {new string('-', 62)}");
+            foreach (var s in monitor.Currents)
+            {
+                Console.WriteLine($"  {s.Key,-6} {s.Description,-45} {s.Value,8:F3} A");
+            }
+            Console.WriteLine($"  Total: {monitor.Currents.Count} sensors");
+        }
+        Console.WriteLine();
+    }
+
+    private static void ShowFans(SmcMonitor monitor)
+    {
+        Console.WriteLine("[Fan]");
+        if (monitor.Fans.Count == 0)
+        {
+            Console.WriteLine("  No fans found.");
+        }
+        else
+        {
+            Console.WriteLine($"  Fan count: {monitor.Fans.Count}");
+            foreach (var fan in monitor.Fans)
+            {
+                Console.WriteLine($"  Fan {fan.Index}:");
+                Console.WriteLine($"    Actual: {fan.ActualRpm,8:F0} RPM");
+                Console.WriteLine($"    Min:    {fan.MinRpm,8:F0} RPM");
+                Console.WriteLine($"    Max:    {fan.MaxRpm,8:F0} RPM");
+                Console.WriteLine($"    Target: {fan.TargetRpm,8:F0} RPM");
+            }
+        }
+        Console.WriteLine();
+    }
+}
