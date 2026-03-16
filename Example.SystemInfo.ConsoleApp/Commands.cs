@@ -217,7 +217,7 @@ public sealed class LoadCommand : ICommandHandler
             var load = PlatformProvider.GetLoadAverage();
 
             Console.Clear();
-            Console.WriteLine($"Load Average  (logical CPUs: {cpuCount})");
+            Console.WriteLine($"Load Average (CPUs: {cpuCount})");
             Console.WriteLine($"   1 min: {DisplayFormatter.MakeBar(load.Average1, cpuCount)} {load.Average1:F2}");
             Console.WriteLine($"   5 min: {DisplayFormatter.MakeBar(load.Average5, cpuCount)} {load.Average5:F2}");
             Console.WriteLine($"  15 min: {DisplayFormatter.MakeBar(load.Average15, cpuCount)} {load.Average15:F2}");
@@ -236,11 +236,11 @@ public sealed class MemoryCommand : ICommandHandler
     public ValueTask ExecuteAsync(CommandContext context)
     {
         var mem = PlatformProvider.GetMemoryStat();
-        var usagePct = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
+        var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
 
         Console.WriteLine("[Usage]");
         Console.WriteLine($"  Total:         {DisplayFormatter.FormatBytes(mem.PhysicalMemory)}");
-        Console.WriteLine($"  Used:          {DisplayFormatter.FormatBytes(mem.UsedBytes)} ({usagePct:F1}%)");
+        Console.WriteLine($"  Used:          {DisplayFormatter.FormatBytes(mem.UsedBytes)} ({usage:F1}%)");
         Console.WriteLine($"  Free:          {DisplayFormatter.FormatBytes(mem.FreeBytes)}");
 
         Console.WriteLine("[Breakdown]");
