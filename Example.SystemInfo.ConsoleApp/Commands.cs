@@ -335,12 +335,10 @@ public sealed class FileSystemCommand : ICommandHandler
         var fsStat = PlatformProvider.GetFileSystemStat(All);
         foreach (var fs in fsStat.Entries)
         {
-            var isReadOnly = fs.Option.HasFlag(MountOption.ReadOnly);
-            var roMarker = isReadOnly ? " [RO]" : string.Empty;
             var usedSize = fs.TotalSize > fs.AvailableSize ? fs.TotalSize - fs.AvailableSize : 0;
             var usage = fs.TotalSize > 0 ? usedSize * 100.0 / fs.TotalSize : 0;
 
-            Console.WriteLine($"[MountPoint] {fs.MountPoint}{roMarker}");
+            Console.WriteLine($"[MountPoint] {fs.MountPoint}");
             Console.WriteLine($"  DeviceName:    {fs.DeviceName}");
             Console.WriteLine($"  FileSystem:    {fs.FileSystem}");
             Console.WriteLine($"  Option:        {fs.Option}");
