@@ -332,8 +332,8 @@ public sealed class FileSystemCommand : ICommandHandler
 
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var fileSystems = PlatformProvider.GetFileSystems(All);
-        foreach (var fs in fileSystems)
+        var fsStat = PlatformProvider.GetFileSystemStat(All);
+        foreach (var fs in fsStat.Entries)
         {
             var isReadOnly = fs.Option.HasFlag(MountOption.ReadOnly);
             var roMarker = isReadOnly ? " [RO]" : string.Empty;

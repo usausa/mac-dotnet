@@ -166,8 +166,8 @@ foreach (var d in diskStat.Devices.Where(d => d.IsPhysical))
 ### File System
 
 ```csharp
-var fileSystems = PlatformProvider.GetFileSystems();
-foreach (var fs in fileSystems)
+var fsStat = PlatformProvider.GetFileSystemStat();
+foreach (var fs in fsStat.Entries)
 {
     Console.WriteLine($"MountPoint:    {fs.MountPoint}");
     Console.WriteLine($"DeviceName:    {fs.DeviceName}");
@@ -176,11 +176,6 @@ foreach (var fs in fileSystems)
     Console.WriteLine($"AvailableSize: {fs.AvailableSize / 1024 / 1024 / 1024} GB");
     Console.WriteLine($"TotalFiles:    {fs.TotalFiles}");
 }
-
-var usage = PlatformProvider.GetFileSystemUsage("/");
-Console.WriteLine($"TotalSize:     {usage.TotalSize}");
-Console.WriteLine($"FreeSize:      {usage.FreeSize}");
-Console.WriteLine($"AvailableSize: {usage.AvailableSize}");
 ```
 
 ### Network Stat

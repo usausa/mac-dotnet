@@ -35,9 +35,7 @@ public static class PlatformProvider
 
     public static DiskStat GetDiskStat(bool includeAll = false) => new(includeAll);
 
-    public static IReadOnlyList<FileSystemInfo> GetFileSystems(bool includeAll = false) => FileSystemInfo.GetFileSystems(includeAll);
-
-    public static FileSystemUsage GetFileSystemUsage(string path) => new(path);
+    public static FileSystemStat GetFileSystemStat(bool includeAll = false) => new(includeAll);
 
     //--------------------------------------------------------------------------------
     // Network
