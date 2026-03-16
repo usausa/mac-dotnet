@@ -10,7 +10,7 @@
     <PackageId>MacDotNet.SystemInfo</PackageId>
     <Title>MacDotNet.SystemInfo</Title>
     <Description>MacDotNet.SystemInfo.</Description>
-    <PackageTags>linux system</PackageTags>
+    <PackageTags>macos system</PackageTags>
   </PropertyGroup>
 
 </Project>
