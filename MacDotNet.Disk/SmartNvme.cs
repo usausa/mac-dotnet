@@ -3,22 +3,37 @@ namespace MacDotNet.Disk;
 using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
-// NVMe SMARTセッション
-// NVMe SMART session.
 // IOCreatePlugInInterfaceForServiceで取得したプラグインインターフェースを保持し、
 // SMARTReadDataを繰り返し呼び出すことで最新のSMARTデータを取得する。
-// Holds the plug-in interface obtained via IOCreatePlugInInterfaceForService
-// and retrieves the latest SMART data by repeatedly calling SMARTReadData.
 internal sealed class SmartNvme : ISmartNvme, IDisposable
 {
     private const int SmartDataSize = 512;
 
-    // プラグインインターフェースハンドル (COM-like二重ポインタ)
-    // Plug-in interface handle (COM-like double pointer)
+#pragma warning disable SA1117
+    // kIONVMeSMARTUserClientTypeID
+    private static readonly IntPtr PluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
+        IntPtr.Zero,
+        0xAA, 0x0F, 0xA6, 0xF9, 0xC2, 0xD6, 0x45, 0x7F,
+        0xB1, 0x0B, 0x59, 0xA1, 0x32, 0x53, 0x29, 0x2F);
+
+    // IOCFPlugInInterface
+    private static readonly IntPtr CfPluginUuid = CFUUIDGetConstantUUIDWithBytes(
+        IntPtr.Zero,
+        0xC2, 0x44, 0xE8, 0x58, 0x10, 0x9C, 0x11, 0xD4,
+        0x91, 0xD4, 0x00, 0x50, 0xE4, 0xC6, 0x42, 0x6F);
+
+    // kIONVMeSMARTInterfaceID
+    private static readonly CFUUIDBytes SmartUuid = new()
+    {
+        byte0 = 0xCC, byte1 = 0xD1, byte2 = 0xDB, byte3 = 0x19,
+        byte4 = 0xFD, byte5 = 0x9A, byte6 = 0x4D, byte7 = 0xAF,
+        byte8 = 0xBF, byte9 = 0x95, byte10 = 0x12, byte11 = 0x45,
+        byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6
+    };
+#pragma warning restore SA1117
+
     private IntPtr pluginInterface;
 
-    // NVMe SMARTインターフェースハンドル
-    // NVMe SMART interface handle
     private IntPtr smartInterface;
 
     public bool LastUpdate { get; private set; }
@@ -84,31 +99,10 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
     // Opens a SMART session from the device service
     public static unsafe SmartNvme? Open(uint service)
     {
-        // NVMeSMARTLib plugin UUID (kIONVMeSMARTUserClientTypeID)
-#pragma warning disable SA1117
-        var pluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
-            IntPtr.Zero,
-            0xAA, 0x0F, 0xA6, 0xF9, 0xC2, 0xD6, 0x45, 0x7F,
-            0xB1, 0x0B, 0x59, 0xA1, 0x32, 0x53, 0x29, 0x2F);
-#pragma warning restore SA1117
-
-        // IOCFPlugInInterface UUID
-#pragma warning disable SA1117
-        var cfPluginUuid = CFUUIDGetConstantUUIDWithBytes(
-            IntPtr.Zero,
-            0xC2, 0x44, 0xE8, 0x58, 0x10, 0x9C, 0x11, 0xD4,
-            0x91, 0xD4, 0x00, 0x50, 0xE4, 0xC6, 0x42, 0x6F);
-#pragma warning restore SA1117
-
-        if (pluginTypeUuid == IntPtr.Zero || cfPluginUuid == IntPtr.Zero)
-        {
-            return null;
-        }
-
         IntPtr ppPlugin;
         int score;
         var kr = IOCreatePlugInInterfaceForService(
-            service, pluginTypeUuid, cfPluginUuid, &ppPlugin, &score);
+            service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
         if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
         {
             return null;
@@ -119,17 +113,8 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         var vtable = *(IntPtr*)ppPlugin;
         var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
 
-        // NVMe SMART Interface UUID (kIONVMeSMARTInterfaceID)
-        var smartUuid = new CFUUIDBytes
-        {
-            byte0 = 0xCC, byte1 = 0xD1, byte2 = 0xDB, byte3 = 0x19,
-            byte4 = 0xFD, byte5 = 0x9A, byte6 = 0x4D, byte7 = 0xAF,
-            byte8 = 0xBF, byte9 = 0x95, byte10 = 0x12, byte11 = 0x45,
-            byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6
-        };
-
         var pSmartInterface = IntPtr.Zero;
-        var hr = qiFn(ppPlugin, smartUuid, &pSmartInterface);
+        var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
         if (hr != S_OK || pSmartInterface == IntPtr.Zero)
         {
             ReleasePlugInInterface(ppPlugin);
