@@ -39,7 +39,9 @@ public static class DiskInfo
         uint entryHandle;
         while ((entryHandle = IOIteratorNext(iter)) != 0u)
         {
+#pragma warning disable CA2000
             using var entry = new IOObj(entryHandle);
+#pragma warning restore CA2000
             results.Add(ReadDiskEntry(entry, index++));
         }
 

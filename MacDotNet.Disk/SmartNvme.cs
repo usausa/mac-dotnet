@@ -9,8 +9,6 @@ using static MacDotNet.Disk.NativeMethods;
 // SMARTReadDataを繰り返し呼び出すことで最新のSMARTデータを取得する。
 // Holds the plug-in interface obtained via IOCreatePlugInInterfaceForService
 // and retrieves the latest SMART data by repeatedly calling SMARTReadData.
-#pragma warning disable CA1806
-#pragma warning disable SA1309
 internal sealed class SmartNvme : ISmartNvme, IDisposable
 {
     private const int SmartDataSize = 512;
@@ -212,5 +210,3 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         return v;
     }
 }
-#pragma warning restore SA1309
-#pragma warning restore CA1806
