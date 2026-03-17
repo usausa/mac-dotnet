@@ -225,7 +225,6 @@ internal readonly ref struct IOObj(uint handle)
         return result;
     }
 
-    // TODO dataみなおし
     public uint GetDataUInt32(string key)
     {
         using var cfKey = CFRef.CreateString(key);
