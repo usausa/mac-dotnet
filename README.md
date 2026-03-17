@@ -11,6 +11,36 @@
 
 System information api.
 
+## Output sample
+
+```
+CPU Usage:                   Total: 6.0 %  (E: 8.0 %  P: 4.6 %)
+CPU Usage Breakdown:         User: 2.5 %  System: 3.4 %  Idle: 94.0 %
+CPU Frequency All:           1849 MHz  (E: 1494 MHz  P: 2086 MHz)
+Uptime:                      0.15:20:40
+System:                      Processes: 712  Threads: 1400
+Load Average:                1.24  1.37  1.39  (1/5/15 min)
+Memory Usage:                57.5 %  (Active: 38.5 %  Wired: 11.6 %  Compressor: 7.4 %)
+Swap Usage:                  0.0 %
+GPU [AGXAcceleratorG14X]:    Device: 0 %  Renderer: 0 %  Tiler: 0 %
+Disk disk0 (AppleFabric):    Read: 14.6 KB/s  Write: 0.0 KB/s
+Disk disk6 (Usb):            Read: 0.0 KB/s  Write: 0.0 KB/s
+FS / (apfs):                 48.1 %  (460 GB total)
+FS /Volumes/Storage (apfs):  24.6 %  (931 GB total)
+Net en0 (Ethernet):          DL: 1.0 KB/s  UL: 0.0 KB/s  Total RX: 294 MB  TX: 60 MB
+Net en1 (Wi-Fi):             DL: 0.0 KB/s  UL: 0.0 KB/s  Total RX: 14 MB  TX: 7 MB
+Temp CPU:                    41.02 C
+Temp Mainboard:              30.03 C
+Temp NAND:                   27.11 C
+Temp SSD:                    33.05 C
+Voltage DC-in:               12.560 V
+Current DC-in:               0.617 A
+Power DC-in:                 7.78 W
+Power Total System:          7.74 W
+Fan 0:                       1703 rpm  (34.1 %)  [min: 1700  max: 5000]
+Power:                       CPU: 0.61 W  GPU: 0.00 W  ANE: 0.00 W  RAM: 0.09 W  PCI: 0.00 W
+```
+
 ## Usage
 
 ### Hardware
