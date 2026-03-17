@@ -163,7 +163,9 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         // ownership transferred to caller
+#pragma warning disable CA2000
         var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+#pragma warning restore CA2000
         if (!value.IsValid)
         {
             return CFRef.Zero;
@@ -190,8 +192,7 @@ internal readonly ref struct IOObj(uint handle)
             return null;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(
-            Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFStringGetTypeID())
         {
             return null;
@@ -208,8 +209,7 @@ internal readonly ref struct IOObj(uint handle)
             return 0;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(
-            Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFNumberGetTypeID())
         {
             return 0;
@@ -228,8 +228,7 @@ internal readonly ref struct IOObj(uint handle)
             return false;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(
-            Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFBooleanGetTypeID())
         {
             return false;
@@ -247,8 +246,9 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         // ownership transferred to caller
-        var val = new CFRef(IORegistryEntrySearchCFProperty(
-            Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+#pragma warning disable CA2000
+        var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+#pragma warning restore CA2000
         if (!val.IsValid)
         {
             return CFRef.Zero;

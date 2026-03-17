@@ -97,6 +97,7 @@ public static class DiskInfo
         var ejectable = entry.SearchBool("Ejectable");
         var contentType = entry.SearchString("Content");
 
+        // TODO 重複チェック、分離
         // IOBlockStorageDriverのStatistics辞書からI/O統計を取得
         // Retrieve I/O statistics from the IOBlockStorageDriver Statistics dictionary
         DiskIOStatistics? ioStats = null;
