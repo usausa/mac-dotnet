@@ -176,172 +176,120 @@ public static class DiskInfoExtensions
             return;
         }
 
-        try
+        using var iterObj = new IOObj(iter);
+        uint entryHandle;
+        while ((entryHandle = IOIteratorNext(iterObj)) != 0)
         {
-            uint entry;
-            while ((entry = IOIteratorNext(iter)) != 0)
+            using var entry = new IOObj(entryHandle);
+
+            // Whole=true のエントリのみ対象
+            if (!entry.GetBoolean("Whole"))
             {
-                try
-                {
-                    // Whole=true のエントリのみ対象
-                    var wholePropKey = CFStringCreateWithCString(IntPtr.Zero, "Whole", kCFStringEncodingUTF8);
-                    if (wholePropKey == IntPtr.Zero)
-                    {
-                        continue;
-                    }
-
-                    bool isWhole;
-                    try
-                    {
-                        var wholeProp = IORegistryEntryCreateCFProperty(entry, wholePropKey, IntPtr.Zero, 0);
-                        if (wholeProp == IntPtr.Zero)
-                        {
-                            continue;
-                        }
-
-                        isWhole = CFBooleanGetValue(wholeProp);
-                        CFRelease(wholeProp);
-                    }
-                    finally
-                    {
-                        CFRelease(wholePropKey);
-                    }
-
-                    if (!isWhole)
-                    {
-                        continue;
-                    }
-
-                    // BSD 名を取得
-                    var bsdName = GetBsdNameFromEntry(entry);
-                    if (bsdName is null || result.Contains(bsdName))
-                    {
-                        continue;
-                    }
-
-                    // 親が IOBlockStorageDriver なら物理ディスク → スキップ
-                    if (IORegistryEntryGetParentEntry(entry, kIOServicePlane, out var parent) != KERN_SUCCESS || parent == 0)
-                    {
-                        continue;
-                    }
-
-                    bool isPhysical;
-                    try
-                    {
-                        isPhysical = GetIokitClassName(parent) == "IOBlockStorageDriver";
-                    }
-                    finally
-                    {
-                        _ = IOObjectRelease(parent);
-                    }
-
-                    if (isPhysical)
-                    {
-                        continue;
-                    }
-
-                    // 合成ディスク: 親チェーンに物理ディスクの BSD 名があるか確認
-                    if (IsUnderPhysicalDisk(entry, physicalDiskBsdName))
-                    {
-                        result.Add(bsdName);
-                    }
-                }
-                finally
-                {
-                    _ = IOObjectRelease(entry);
-                }
+                continue;
             }
-        }
-        finally
-        {
-            _ = IOObjectRelease(iter);
+
+            // BSD 名を取得
+            var bsdName = entry.GetString("BSD Name");
+            if (bsdName is null || result.Contains(bsdName))
+            {
+                continue;
+            }
+
+            // 親が IOBlockStorageDriver なら物理ディスク → スキップ
+            if (IORegistryEntryGetParentEntry(entry, kIOServicePlane, out var parentHandle) != KERN_SUCCESS || parentHandle == 0)
+            {
+                continue;
+            }
+
+            bool isPhysical;
+            using (var parent = new IOObj(parentHandle))
+            {
+                isPhysical = parent.GetClassName() == "IOBlockStorageDriver";
+            }
+
+            if (isPhysical)
+            {
+                continue;
+            }
+
+            // 合成ディスク: 親チェーンに物理ディスクの BSD 名があるか確認
+            if (IsUnderPhysicalDisk(entry, physicalDiskBsdName))
+            {
+                result.Add(bsdName);
+            }
         }
     }
 
     /// <summary>
     /// IOKit の親チェーンを辿り、physicalDiskBsdName を持つエントリが存在するか確認する。
     /// </summary>
-    private static bool IsUnderPhysicalDisk(uint entry, string physicalDiskBsdName)
+    private static bool IsUnderPhysicalDisk(IOObj entry, string physicalDiskBsdName)
     {
-        var current = entry;
-        var shouldRelease = false;
+        var currentHandle = (uint)entry;
+        var owned = IOObj.Zero;
 
         for (var depth = 0; depth < 20; depth++)
         {
-            if (IORegistryEntryGetParentEntry(current, kIOServicePlane, out var parent) != KERN_SUCCESS || parent == 0)
+            if (IORegistryEntryGetParentEntry(currentHandle, kIOServicePlane, out var parentHandle) != KERN_SUCCESS || parentHandle == 0)
             {
                 break;
             }
 
-            if (shouldRelease)
-            {
-                _ = IOObjectRelease(current);
-            }
+            owned.Dispose();
+            owned = new IOObj(parentHandle);
+            currentHandle = parentHandle;
 
-            current = parent;
-            shouldRelease = true;
-
-            var bsdName = GetBsdNameFromEntry(current);
-            if (bsdName == physicalDiskBsdName)
+            if (owned.GetString("BSD Name") == physicalDiskBsdName)
             {
-                _ = IOObjectRelease(current);
+                owned.Dispose();
                 return true;
             }
 
             // IOBlockStorageDevice まで到達したら打ち切る
-            if (GetIokitClassName(current) == "IOBlockStorageDevice")
+            if (owned.GetClassName() == "IOBlockStorageDevice")
             {
                 break;
             }
         }
 
-        if (shouldRelease)
-        {
-            _ = IOObjectRelease(current);
-        }
-
+        owned.Dispose();
         return false;
     }
 
-    /// <summary>IOKit エントリから BSD 名を取得する。</summary>
-    private static string? GetBsdNameFromEntry(uint entry)
+    // IOKitを使用してパーティションサイズを取得
+    // Retrieves partition size using IOKit
+    private static ulong GetPartitionSize(string bsdName)
     {
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, "BSD Name", kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
+        var matching = IOServiceMatching("IOMedia");
+        if (matching == IntPtr.Zero)
         {
-            return null;
+            return 0;
         }
 
-        try
+        // BSD Nameでマッチング / Match by BSD Name
+        using var cfBsdName = CFRef.CreateString(bsdName);
+        using var cfKey = CFRef.CreateString("BSD Name");
+        if (!cfBsdName.IsValid || !cfKey.IsValid)
         {
-            var val = IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0);
-            if (val == IntPtr.Zero)
-            {
-                return null;
-            }
-
-            try
-            {
-                return CFGetTypeID(val) == CFStringGetTypeID() ? DiskInfo.CfStringToManaged(val) : null;
-            }
-            finally
-            {
-                CFRelease(val);
-            }
+            // IOServiceGetMatchingServiceに渡す前に早期リターンするため手動解放
+            // Manual release because we return before passing to IOServiceGetMatchingService
+            CFRelease(matching);
+            return 0;
         }
-        finally
+
+        CoreFoundationSetDictionaryValue(matching, cfKey, cfBsdName);
+
+        // IOServiceGetMatchingServiceはmatchingを消費する (CFRelease不要)
+        // IOServiceGetMatchingService consumes matching (no CFRelease needed)
+        var serviceHandle = IOServiceGetMatchingService(0, matching);
+        if (serviceHandle == 0)
         {
-            CFRelease(cfKey);
+            return 0;
         }
-    }
 
-    /// <summary>IOKit オブジェクトのクラス名を取得する。</summary>
-    private static unsafe string? GetIokitClassName(uint @object)
-    {
-        var buf = stackalloc byte[128];
-        return IOObjectGetClass(@object, buf) == KERN_SUCCESS
-            ? Marshal.PtrToStringUTF8((IntPtr)buf)
-            : null;
+        using var service = new IOObj(serviceHandle);
+        var size = service.GetInt64("Size");
+        return size > 0 ? (ulong)size : 0;
     }
 
     /// <summary>"diskNsX..." → "diskN" のようにベースのディスク番号を抽出する。</summary>
@@ -463,84 +411,4 @@ public static class DiskInfoExtensions
         return SmartHealthStatus.Healthy;
     }
 
-    //------------------------------------------------------------------------
-    // GetPartitionSize (既存)
-    //------------------------------------------------------------------------
-
-    // IOKitを使用してパーティションサイズを取得
-    // Retrieves partition size using IOKit
-    private static ulong GetPartitionSize(string bsdName)
-    {
-        var matching = IOServiceMatching("IOMedia");
-        if (matching == IntPtr.Zero)
-        {
-            return 0;
-        }
-
-        // BSD Nameでマッチング / Match by BSD Name
-        var cfBsdName = CFStringCreateWithCString(IntPtr.Zero, bsdName, kCFStringEncodingUTF8);
-        if (cfBsdName == IntPtr.Zero)
-        {
-            return 0;
-        }
-
-        var cfKey = CFStringCreateWithCString(IntPtr.Zero, "BSD Name", kCFStringEncodingUTF8);
-        if (cfKey == IntPtr.Zero)
-        {
-            CFRelease(cfBsdName);
-            return 0;
-        }
-
-        CoreFoundationSetDictionaryValue(matching, cfKey, cfBsdName);
-        CFRelease(cfKey);
-        CFRelease(cfBsdName);
-
-        var service = IOServiceGetMatchingService(0, matching);
-        if (service == 0)
-        {
-            return 0;
-        }
-
-        try
-        {
-            var sizeKey = CFStringCreateWithCString(IntPtr.Zero, "Size", kCFStringEncodingUTF8);
-            if (sizeKey == IntPtr.Zero)
-            {
-                return 0;
-            }
-
-            try
-            {
-                var val = IORegistryEntryCreateCFProperty(service, sizeKey, IntPtr.Zero, 0);
-                if (val == IntPtr.Zero)
-                {
-                    return 0;
-                }
-
-                try
-                {
-                    if (CFGetTypeID(val) != CFNumberGetTypeID())
-                    {
-                        return 0;
-                    }
-
-                    long result = 0;
-                    CFNumberGetValue(val, kCFNumberSInt64Type, ref result);
-                    return result > 0 ? (ulong)result : 0;
-                }
-                finally
-                {
-                    CFRelease(val);
-                }
-            }
-            finally
-            {
-                CFRelease(sizeKey);
-            }
-        }
-        finally
-        {
-            _ = IOObjectRelease(service);
-        }
     }
-}
