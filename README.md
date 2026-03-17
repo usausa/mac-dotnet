@@ -332,3 +332,10 @@ SMART infotmation.
 ## Usage
 
 (TODO)
+
+# 🌐Link
+
+- [LinuxDotNet](https://github.com/usausa/linux-dotnet)
+- [RaspberryDotNet](https://github.com/usausa/raspberrypi-dotnet)
+- [Disk information library](https://github.com/usausa/hardwareinfo-disk)
+
