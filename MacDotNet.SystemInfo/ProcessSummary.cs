@@ -59,6 +59,13 @@ public sealed class ProcessSummary
                         continue;
                     }
 
+                    proc_bsdinfo bsdInfo;
+                    var bsdSize = proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &bsdInfo, sizeof(proc_bsdinfo));
+                    if (bsdSize < sizeof(proc_bsdinfo))
+                    {
+                        continue;
+                    }
+
                     process++;
 
                     proc_taskinfo taskInfo;
