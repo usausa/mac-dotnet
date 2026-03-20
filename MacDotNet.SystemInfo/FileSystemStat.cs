@@ -48,6 +48,8 @@ public sealed class FileSystemEntry
 
     public string DeviceName { get; }
 
+    public string? DiskBsdName { get; }
+
     // Block
 
     public uint BlockSize { get; internal set; }
@@ -80,13 +82,13 @@ public sealed class FileSystemEntry
 
     public uint OwnerUid { get; internal set; }
 
-    public string? PhysicalDiskBsdName { get; internal set; }
-
-    internal FileSystemEntry(string mountPoint, string fileSystem, string deviceName)
+    internal FileSystemEntry(string mountPoint, string fileSystem, string deviceName, string? diskBsdName)
     {
         MountPoint = mountPoint;
         FileSystem = fileSystem;
         DeviceName = deviceName;
+        DiskBsdName = diskBsdName;
+
     }
 }
 
@@ -164,8 +166,8 @@ public sealed class FileSystemStat
                     entry = new FileSystemEntry(
                         mountPoint,
                         Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
-                        deviceName);
-                    entry.PhysicalDiskBsdName = FindPhysicalDiskBsdName(deviceName);
+                        deviceName,
+                        FindPhysicalDiskBsdName(deviceName));
                     entries.Add(entry);
                     added = true;
                 }
@@ -204,7 +206,7 @@ public sealed class FileSystemStat
     }
 
     //--------------------------------------------------------------------------------
-    // IOKit helper: find physical disk BSD name for a device path
+    // Helpers
     //--------------------------------------------------------------------------------
 
     private static string? FindPhysicalDiskBsdName(string devName)
@@ -238,7 +240,7 @@ public sealed class FileSystemStat
             return null;
         }
 
-        string? result = null;
+        var result = default(string);
         try
         {
             for (var depth = 0; depth < 20; depth++)
@@ -271,9 +273,7 @@ public sealed class FileSystemStat
     private static unsafe string? GetEntryClassName(uint entry)
     {
         var buffer = stackalloc byte[128];
-        return IOObjectGetClass(entry, buffer) == KERN_SUCCESS
-            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
-            : null;
+        return IOObjectGetClass(entry, buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
     private static string? GetEntryBsdName(uint entry)
@@ -285,7 +285,7 @@ public sealed class FileSystemStat
         }
 
         using var value = new CFRef(IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0));
-        if (!value.IsValid || CFGetTypeID(value) != CFStringGetTypeID())
+        if (!value.IsValid || (CFGetTypeID(value) != CFStringGetTypeID()))
         {
             return null;
         }
