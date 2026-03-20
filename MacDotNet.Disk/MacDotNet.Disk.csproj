@@ -13,8 +13,4 @@
     <PackageTags>macos iokit system disk smart</PackageTags>
   </PropertyGroup>
 
-  <PropertyGroup>
-    <Version>0.1.0</Version>
-  </PropertyGroup>
-
 </Project>
