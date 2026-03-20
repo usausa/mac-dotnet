@@ -5,8 +5,6 @@
 |MacDotNet.SystemInfo|[![NuGet](https://img.shields.io/nuget/v/MacDotNet.SystemInfo.svg)](https://www.nuget.org/packages/MacDotNet.SystemInfo)|
 |MacDotNet.Disk|[![NuGet](https://img.shields.io/nuget/v/MacDotNet.Disk.svg)](https://www.nuget.org/packages/MacDotNet.Disk)|
 
----
-
 # 💽 MacDotNet.Disk
 
 SMART information.
@@ -72,8 +70,6 @@ static void PrintGenericSmart(ISmartGeneric smart)
     }
 }
 ```
-
----
 
 # 🖥️ MacDotNet.SystemInfo
 
@@ -446,8 +442,6 @@ foreach (var fan in monitor.Fans)
     Console.WriteLine($"Fan {fan.Index}: {fan.ActualRpm:F0} RPM (min={fan.MinRpm:F0}, max={fan.MaxRpm:F0})");
 }
 ```
-
----
 
 # 🌐Link
 
