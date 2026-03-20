@@ -99,30 +99,6 @@ public static class DiskInfo
         var ejectable = entry.SearchBool("Ejectable");
         var contentType = entry.SearchString("Content");
 
-        // TODO 重複チェック、分離
-        // IOBlockStorageDriverのStatistics辞書からI/O統計を取得
-        // Retrieve I/O statistics from the IOBlockStorageDriver Statistics dictionary
-        DiskIOStatistics? ioStats = null;
-        using var statsDict = entry.SearchDictionary("Statistics");
-        if (statsDict.IsValid)
-        {
-            ioStats = new DiskIOStatistics
-            {
-                BytesRead = (ulong)Math.Max(0L, statsDict.GetInt64("Bytes (Read)")),
-                BytesWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Bytes (Write)")),
-                OperationsRead = (ulong)Math.Max(0L, statsDict.GetInt64("Operations (Read)")),
-                OperationsWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Operations (Write)")),
-                TotalTimeRead = (ulong)Math.Max(0L, statsDict.GetInt64("Total Time (Read)")),
-                TotalTimeWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Total Time (Write)")),
-                RetriesRead = (ulong)Math.Max(0L, statsDict.GetInt64("Retries (Read)")),
-                RetriesWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Retries (Write)")),
-                ErrorsRead = (ulong)Math.Max(0L, statsDict.GetInt64("Errors (Read)")),
-                ErrorsWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Errors (Write)")),
-                LatencyTimeRead = (ulong)Math.Max(0L, statsDict.GetInt64("Latency Time (Read)")),
-                LatencyTimeWritten = (ulong)Math.Max(0L, statsDict.GetInt64("Latency Time (Write)"))
-            };
-        }
-
         // 物理ブロックサイズが取得できなかった場合、論理ブロックサイズをフォールバック
         // Fall back to logical block size when physical block size is unavailable
         if (physicalBlockSize <= 0 && logicalBlockSize > 0)
@@ -197,8 +173,7 @@ public static class DiskInfo
                 BusLocation = physInterconnectLocation,
                 ContentType = contentType,
                 SmartType = smartType,
-                Smart = smart,
-                IOStatistics = ioStats
+                Smart = smart
             };
         }
         catch

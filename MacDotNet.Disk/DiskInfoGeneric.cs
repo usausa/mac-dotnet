@@ -57,9 +57,6 @@ internal sealed class DiskInfoGeneric : IDiskInfo
     // SMARTインターフェース / SMART interface
     public ISmart Smart { get; set; } = SmartUnsupported.Default;
 
-    // I/O統計情報 / I/O statistics
-    public DiskIOStatistics? IOStatistics { get; set; }
-
     /// <summary>
     /// SMARTセッションなどのリソースを解放する。
     /// Releases resources such as the SMART session.

@@ -294,7 +294,7 @@ public sealed class DiskCommand : ICommandHandler
         var diskStats = PlatformProvider.GetDiskStat();
         foreach (var d in diskStats.Devices.Where(x => All || x.IsPhysical))
         {
-            var deviceLabel = d.MediaName is not null ? $"{d.Name} [{d.MediaName}]" : d.Name;
+            var deviceLabel = d.MediaName is not null ? $"{d.BsdName} [{d.MediaName}]" : d.BsdName;
             Console.WriteLine($"[Device] {deviceLabel}");
             if (d.VendorName is not null)
             {

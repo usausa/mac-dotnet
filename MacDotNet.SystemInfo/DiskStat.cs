@@ -26,7 +26,7 @@ public sealed class DiskDeviceStat
 
     // Interface
 
-    public string Name { get; }
+    public string BsdName { get; }
 
     // Statistics
 
@@ -73,7 +73,7 @@ public sealed class DiskDeviceStat
     internal DiskDeviceStat(ulong registryEntryId, string name, DiskBusType busType, bool isPhysicalMedium, bool isRemovable, ulong diskSize, string? mediaName, string? vendorName, string? mediumType)
     {
         RegistryEntryId = registryEntryId;
-        Name = name;
+        BsdName = name;
         BusType = busType;
         IsPhysical = isPhysicalMedium;
         IsRemovable = isRemovable;
@@ -196,10 +196,10 @@ public sealed class DiskStat
 
         if (added)
         {
-            devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+            devices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.BsdName, y.BsdName));
             if (filterAdded)
             {
-                filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.Name, y.Name));
+                filteredDevices.Sort(static (x, y) => StringComparer.Ordinal.Compare(x.BsdName, y.BsdName));
             }
         }
 

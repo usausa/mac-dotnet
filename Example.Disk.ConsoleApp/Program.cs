@@ -38,26 +38,6 @@ internal static class Program
             Console.WriteLine($"SMART Type:         {disk.SmartType}");
             Console.WriteLine();
 
-            // I/O統計
-            if (disk.IOStatistics is not null)
-            {
-                var s = disk.IOStatistics;
-                Console.WriteLine("--- I/O Statistics ---");
-                Console.WriteLine($"Bytes Read:         {FormatBytes(s.BytesRead)}");
-                Console.WriteLine($"Bytes Written:      {FormatBytes(s.BytesWritten)}");
-                Console.WriteLine($"Ops Read:           {s.OperationsRead}");
-                Console.WriteLine($"Ops Written:        {s.OperationsWritten}");
-                Console.WriteLine($"Time Read:          {s.TotalTimeRead / 1_000_000} ms");
-                Console.WriteLine($"Time Written:       {s.TotalTimeWritten / 1_000_000} ms");
-                Console.WriteLine($"Retries Read:       {s.RetriesRead}");
-                Console.WriteLine($"Retries Written:    {s.RetriesWritten}");
-                Console.WriteLine($"Errors Read:        {s.ErrorsRead}");
-                Console.WriteLine($"Errors Written:     {s.ErrorsWritten}");
-                Console.WriteLine($"Latency Read:       {s.LatencyTimeRead / 1_000_000} ms");
-                Console.WriteLine($"Latency Written:    {s.LatencyTimeWritten / 1_000_000} ms");
-                Console.WriteLine();
-            }
-
             // NVMe SMART
             if (disk.Smart is ISmartNvme nvme)
             {

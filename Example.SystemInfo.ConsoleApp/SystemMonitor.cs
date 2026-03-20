@@ -15,7 +15,7 @@ public sealed class DiskDeviceEntry
     internal ulong PreviousBytesWrite;
 
     // Delegation properties
-    public string Name => Stat.Name;
+    public string Name => Stat.BsdName;
     public DiskBusType BusType => Stat.BusType;
     public ulong DiskSize => Stat.DiskSize;
 
