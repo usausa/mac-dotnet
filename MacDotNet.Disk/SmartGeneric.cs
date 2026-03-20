@@ -2,8 +2,6 @@ namespace MacDotNet.Disk;
 
 using static MacDotNet.Disk.NativeMethods;
 
-// IOCreatePlugInInterfaceForServiceで取得したプラグインインターフェースを保持し、
-// SMARTReadDataを繰り返し呼び出すことで最新のSMARTデータを取得する。
 internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 {
     private const int SmartDataSize = 512;
@@ -42,43 +40,28 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     public bool LastUpdate { get; private set; }
 
-    // デバイスサービスからSMARTセッションを開く
-    // Opens a SMART session from the device service
     internal unsafe SmartGeneric(uint service)
     {
         IntPtr ppPlugin;
         int score;
-        var kr = IOCreatePlugInInterfaceForService(
-            service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
-        if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
+        var kr = IOCreatePlugInInterfaceForService(service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
+        if ((kr != KERN_SUCCESS) || (ppPlugin == IntPtr.Zero))
         {
             return;
         }
 
         pluginInterface = ppPlugin;
 
-        // QueryInterfaceでSMARTインターフェースを取得
-        // Obtain the SMART interface via QueryInterface
         var vtable = *(IntPtr*)ppPlugin;
         var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
 
         var pSmartInterface = IntPtr.Zero;
         var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
-        if (hr != S_OK || pSmartInterface == IntPtr.Zero)
+        if ((hr != S_OK) || (pSmartInterface == IntPtr.Zero))
         {
             return;
         }
 
-        // SMART操作を有効化
-        // Enable SMART operations
-        // ATA SMART interface vtable layout (64-bit):
-        //   0: _reserved, 8: QI, 16: AddRef, 24: Release
-        //   32: version(2) + revision(2) + pad(4)
-        //   40: SMARTEnableDisableOperations
-        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
-        //       macOSのアップデートにより変更される可能性がある。
-        // Note: This offset depends on the private Apple API layout
-        //       and may change with macOS updates.
         var smartVtable = *(IntPtr*)pSmartInterface;
         var enableFn = (delegate* unmanaged<IntPtr, byte, int>)(*(IntPtr*)((byte*)smartVtable + 40));
         kr = enableFn(pSmartInterface, 1);
@@ -106,8 +89,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         }
     }
 
-    // SMARTデータ読み取り (繰り返し呼び出し可能)
-    // Reads SMART data (can be called repeatedly)
     public unsafe bool Update()
     {
         if (smartInterface == IntPtr.Zero)
@@ -116,11 +97,11 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
             return false;
         }
 
-        // ATA SMART interface vtable offset 72: SMARTReadData
-        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
-        //       macOSのアップデートにより変更される可能性がある。
-        // Note: This offset depends on the private Apple API layout
-        //       and may change with macOS updates.
+        // Enable SMART operations
+        // ATA SMART interface vtable layout (64-bit):
+        //   0: _reserved, 8: QI, 16: AddRef, 24: Release
+        //   32: version(2) + revision(2) + pad(4)
+        //   40: SMARTEnableDisableOperations
         var smartVtable = *(IntPtr*)smartInterface;
         var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 72));
 
@@ -132,10 +113,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         }
     }
 
-    /// <summary>
-    /// サポートされているSMART属性ID一覧を取得する。
-    /// Returns the list of supported SMART attribute IDs.
-    /// </summary>
     public IReadOnlyList<SmartId> GetSupportedIds()
     {
         var list = new List<SmartId>();
@@ -153,10 +130,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         return list;
     }
 
-    /// <summary>
-    /// 指定IDのSMART属性を取得する。
-    /// Retrieves the SMART attribute for the specified ID.
-    /// </summary>
     public SmartAttribute? GetAttribute(SmartId id)
     {
         var target = (byte)id;
@@ -180,8 +153,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         return null;
     }
 
-    // 48ビットRAW値を符号なも64ビット整数に変換する
-    // Converts a 48-bit raw value to an unsigned 64-bit integer
     private ulong Raw48ToU64(int offset)
     {
         var v = 0ul;
@@ -189,7 +160,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         {
             v = (v << 8) | buffer[offset + i];
         }
-
         return v;
     }
 }

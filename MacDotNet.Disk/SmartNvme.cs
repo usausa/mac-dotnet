@@ -72,29 +72,24 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     public short[] TemperatureSensors { get; } = new short[8];
 
-    // デバイスサービスからSMARTセッションを開く
-    // Opens a SMART session from the device service
     internal unsafe SmartNvme(uint service)
     {
         IntPtr ppPlugin;
         int score;
-        var kr = IOCreatePlugInInterfaceForService(
-            service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
-        if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
+        var kr = IOCreatePlugInInterfaceForService(service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
+        if ((kr != KERN_SUCCESS) || (ppPlugin == IntPtr.Zero))
         {
             return;
         }
 
         pluginInterface = ppPlugin;
 
-        // QueryInterfaceでSMARTインターフェースを取得
-        // Obtain the SMART interface via QueryInterface
         var vtable = *(IntPtr*)ppPlugin;
         var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
 
         var pSmartInterface = IntPtr.Zero;
         var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
-        if (hr != S_OK || pSmartInterface == IntPtr.Zero)
+        if ((hr != S_OK) || (pSmartInterface == IntPtr.Zero))
         {
             return;
         }
@@ -117,8 +112,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         }
     }
 
-    // SMARTデータ読み取り (繰り返し呼び出し可能)
-    // Reads SMART data (can be called repeatedly)
     public unsafe bool Update()
     {
         if (smartInterface == IntPtr.Zero)
@@ -131,10 +124,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTReadData
-        // 注意: このオフセットはApple非公開APIのレイアウトに依存するため、
-        //       macOSのアップデートにより変更される可能性がある。
-        // Note: This offset depends on the private Apple API layout
-        //       and may change with macOS updates.
         var smartVtable = *(IntPtr*)smartInterface;
         var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 40));
 
@@ -163,7 +152,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         ErrorInfoLogEntries = Le128ToUInt64(buffer + 176);
         WarningCompositeTemperatureTime = *(uint*)(buffer + 192);
         CriticalCompositeTemperatureTime = *(uint*)(buffer + 196);
-
         for (var i = 0; i < TemperatureSensors.Length; i++)
         {
             TemperatureSensors[i] = KelvinToCelsius(*(ushort*)(buffer + 200 + (i * 2)));
@@ -173,10 +161,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         return true;
     }
 
-    // NVMe仕様では一部カウンタが128-bitリトルエンディアンで格納される。
-    // 実運用上は下位64-bitに収まるため上位8バイトは無視する。
-    // In the NVMe spec, some counters are stored as 128-bit little-endian.
-    // In practice they fit in the lower 64 bits, so the upper 8 bytes are ignored.
     private static unsafe ulong Le128ToUInt64(byte* p)
     {
         var v = 0ul;
@@ -184,7 +168,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         {
             v = (v << 8) | p[i];
         }
-
         return v;
     }
 }
