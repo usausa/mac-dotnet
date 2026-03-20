@@ -4,6 +4,8 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+#pragma warning disable CA1806
+
 [Flags]
 public enum MountOption
 {
@@ -77,6 +79,8 @@ public sealed class FileSystemEntry
     public uint SubType { get; internal set; }
 
     public uint OwnerUid { get; internal set; }
+
+    public string? PhysicalDiskBsdName { get; internal set; }
 
     internal FileSystemEntry(string mountPoint, string fileSystem, string deviceName)
     {
@@ -156,10 +160,12 @@ public sealed class FileSystemStat
 
                 if (entry is null)
                 {
+                    var deviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty;
                     entry = new FileSystemEntry(
                         mountPoint,
                         Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
-                        Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty);
+                        deviceName);
+                    entry.PhysicalDiskBsdName = FindPhysicalDiskBsdName(deviceName);
                     entries.Add(entry);
                     added = true;
                 }
@@ -195,5 +201,95 @@ public sealed class FileSystemStat
 
             return true;
         }
+    }
+
+    //--------------------------------------------------------------------------------
+    // IOKit helper: find physical disk BSD name for a device path
+    //--------------------------------------------------------------------------------
+
+    private static string? FindPhysicalDiskBsdName(string devName)
+    {
+        if (!devName.StartsWith("/dev/", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var bsdName = devName["/dev/".Length..];
+
+        var matching = IOServiceMatching("IOMedia");
+        if (matching == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        using var cfKey = CFRef.CreateString("BSD Name");
+        using var cfValue = CFRef.CreateString(bsdName);
+        if (!cfKey.IsValid || !cfValue.IsValid)
+        {
+            CFRelease(matching);
+            return null;
+        }
+
+        CFDictionarySetValue(matching, cfKey, cfValue);
+
+        var current = IOServiceGetMatchingService(0, matching);
+        if (current == 0)
+        {
+            return null;
+        }
+
+        string? result = null;
+        try
+        {
+            for (var depth = 0; depth < 20; depth++)
+            {
+                if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+                {
+                    break;
+                }
+
+                var parentClass = GetEntryClassName(parent);
+                if (parentClass == "IOBlockStorageDriver")
+                {
+                    result = GetEntryBsdName(current);
+                    IOObjectRelease(parent);
+                    break;
+                }
+
+                IOObjectRelease(current);
+                current = parent;
+            }
+        }
+        finally
+        {
+            IOObjectRelease(current);
+        }
+
+        return result;
+    }
+
+    private static unsafe string? GetEntryClassName(uint entry)
+    {
+        var buffer = stackalloc byte[128];
+        return IOObjectGetClass(entry, buffer) == KERN_SUCCESS
+            ? Marshal.PtrToStringUTF8((IntPtr)buffer)
+            : null;
+    }
+
+    private static string? GetEntryBsdName(uint entry)
+    {
+        using var cfKey = CFRef.CreateString("BSD Name");
+        if (!cfKey.IsValid)
+        {
+            return null;
+        }
+
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(entry, cfKey, IntPtr.Zero, 0));
+        if (!value.IsValid || CFGetTypeID(value) != CFStringGetTypeID())
+        {
+            return null;
+        }
+
+        return value.GetString();
     }
 }

@@ -73,19 +73,6 @@ internal static class Program
 
                 Console.WriteLine();
             }
-
-            // パーティション情報
-            var partitions = disk.GetPartitions().ToList();
-            if (partitions.Count > 0)
-            {
-                Console.WriteLine("--- Partitions ---");
-                foreach (var part in partitions)
-                {
-                    Console.WriteLine($"  [{part.Index}] {part.Name,-16} Size: {FormatBytes(part.Size)}");
-                }
-
-                Console.WriteLine();
-            }
         }
 
         // リソース解放

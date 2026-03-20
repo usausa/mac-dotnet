@@ -437,6 +437,9 @@ internal static class NativeMethods
     public static extern unsafe bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
 
     [DllImport(CoreFoundationLib)]
+    public static extern void CFDictionarySetValue(IntPtr theDict, IntPtr key, IntPtr value);
+
+    [DllImport(CoreFoundationLib)]
     public static extern IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
 
     [DllImport(CoreFoundationLib)]
