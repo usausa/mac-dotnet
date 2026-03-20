@@ -4,8 +4,6 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-#pragma warning disable CA1806
-
 [Flags]
 public enum MountOption
 {
@@ -244,7 +242,7 @@ public sealed class FileSystemStat
         {
             for (var depth = 0; depth < 20; depth++)
             {
-                if (IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+                if ((IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS) || parent == 0)
                 {
                     break;
                 }
@@ -253,17 +251,17 @@ public sealed class FileSystemStat
                 if (parentClass == "IOBlockStorageDriver")
                 {
                     result = GetEntryBsdName(current);
-                    IOObjectRelease(parent);
+                    _ = IOObjectRelease(parent);
                     break;
                 }
 
-                IOObjectRelease(current);
+                _ = IOObjectRelease(current);
                 current = parent;
             }
         }
         finally
         {
-            IOObjectRelease(current);
+            _ = IOObjectRelease(current);
         }
 
         return result;

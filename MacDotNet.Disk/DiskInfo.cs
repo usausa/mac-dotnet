@@ -10,7 +10,6 @@ using static MacDotNet.Disk.NativeMethods;
 // IOKitレジストリからディスクの各種プロパティを取得する。
 // Uses IOBlockStorageDevice as the matching key to retrieve
 // various disk properties from the IOKit registry.
-#pragma warning disable CA1806
 public static class DiskInfo
 {
     /// <summary>
@@ -56,7 +55,7 @@ public static class DiskInfo
     {
         // IORegistryエントリ名を取得 / Get the IORegistry entry name
         var nameBuf = stackalloc byte[128];
-        IORegistryEntryGetName(entry, nameBuf);
+        _ = IORegistryEntryGetName(entry, nameBuf);
         var deviceName = Marshal.PtrToStringUTF8((IntPtr)nameBuf);
 
         // Device Characteristics辞書からデバイス基本情報を取得
@@ -265,4 +264,3 @@ public static class DiskInfo
         }
     }
 }
-#pragma warning restore CA1806
