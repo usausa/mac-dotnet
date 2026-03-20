@@ -1,11 +1,10 @@
 namespace Example.SystemInfo.ConsoleApp;
 
-#pragma warning disable SA1401
-
 using MacDotNet.SystemInfo;
 
 public sealed class DiskDeviceEntry
 {
+#pragma warning disable SA1401
     internal readonly DiskDeviceStat Stat;
 
     internal bool Live;
@@ -13,6 +12,7 @@ public sealed class DiskDeviceEntry
     internal ulong PreviousBytesRead;
 
     internal ulong PreviousBytesWrite;
+#pragma warning restore SA1401
 
     // Delegation properties
     public string Name => Stat.BsdName;
@@ -34,9 +34,11 @@ public sealed class DiskDeviceEntry
 
 public sealed class FileSystemMonitorEntry
 {
+#pragma warning disable SA1401
     internal readonly FileSystemEntry Entry;
 
     internal bool Live;
+#pragma warning restore SA1401
 
     // Delegation properties
     public string MountPoint => Entry.MountPoint;
@@ -54,6 +56,7 @@ public sealed class FileSystemMonitorEntry
 
 public sealed class NetworkIfEntry
 {
+#pragma warning disable SA1401
     internal readonly NetworkStatEntry Stat;
 
     internal bool Live;
@@ -61,6 +64,7 @@ public sealed class NetworkIfEntry
     internal uint PreviousRxBytes;
 
     internal uint PreviousTxBytes;
+#pragma warning restore SA1401
 
     // Delegation properties
     public string Name => Stat.Name;
@@ -83,7 +87,9 @@ public sealed class NetworkIfEntry
 
 public sealed class GpuEntry
 {
+#pragma warning disable SA1401
     internal readonly GpuDevice Device;
+#pragma warning restore SA1401
 
     // Delegation properties
     public string Name => Device.Name;
