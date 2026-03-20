@@ -62,6 +62,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
             return;
         }
 
+        // Enable SMART operations
         var smartVtable = *(IntPtr*)pSmartInterface;
         var enableFn = (delegate* unmanaged<IntPtr, byte, int>)(*(IntPtr*)((byte*)smartVtable + 40));
         kr = enableFn(pSmartInterface, 1);

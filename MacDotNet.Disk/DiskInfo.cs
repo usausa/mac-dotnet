@@ -36,12 +36,11 @@ public static class DiskInfo
         return list;
     }
 
-    // TODO Check
     private static unsafe DiskInfoGeneric ReadDiskEntry(IOObj entry, uint index)
     {
-        var nameBuf = stackalloc byte[128];
-        _ = IORegistryEntryGetName(entry, nameBuf);
-        var deviceName = Marshal.PtrToStringUTF8((IntPtr)nameBuf);
+        var nameBuffer = stackalloc byte[128];
+        _ = IORegistryEntryGetName(entry, nameBuffer);
+        var deviceName = Marshal.PtrToStringUTF8((IntPtr)nameBuffer);
 
         // Device Characteristics
         string? modelName = null;
@@ -69,8 +68,7 @@ public static class DiskInfo
             physInterconnectLocation = protoCharDict.GetString("Physical Interconnect Location");
         }
 
-        // 子エントリを再帰検索してIOMedia/IOBlockStorageDriverのプロパティを取得
-        // Recursively search child entries to obtain IOMedia / IOBlockStorageDriver properties
+        // IOMedia / IOBlockStorageDriver properties
         var bsdName = entry.SearchString("BSD Name");
         var diskSize = entry.SearchInt64("Size");
         var logicalBlockSize = entry.SearchInt64("Preferred Block Size");
@@ -79,13 +77,12 @@ public static class DiskInfo
         var ejectable = entry.SearchBool("Ejectable");
         var contentType = entry.SearchString("Content");
 
-        // Fall back to logical block size when physical block size is unavailable
-        if (physicalBlockSize <= 0 && logicalBlockSize > 0)
+        // Fall back block size
+        if ((physicalBlockSize <= 0) && (logicalBlockSize > 0))
         {
             physicalBlockSize = logicalBlockSize;
         }
 
-        // モデル名の構築 (ベンダ名がある場合は結合)
         // Build the model string (concatenate vendor name if present)
         var model = BuildModelString(modelName, vendorName);
         var busType = ParseBusType(physInterconnect);
@@ -96,7 +93,6 @@ public static class DiskInfo
         // Smart
         SmartType smartType;
         ISmart smart;
-
         if (busType is BusType.Nvme or BusType.AppleFabric)
         {
             var session = new SmartNvme(entry);
@@ -133,46 +129,34 @@ public static class DiskInfo
             smart = SmartUnsupported.Default;
         }
 
-        try
+        return new DiskInfoGeneric
         {
-            return new DiskInfoGeneric
-            {
-                Index = index,
-                BsdName = bsdName ?? string.Empty,
-                DeviceName = deviceName ?? string.Empty,
-                Model = model,
-                SerialNumber = serialNumber?.Trim() ?? string.Empty,
-                FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
-                MediumType = medium,
-                Removable = removable,
-                Ejectable = ejectable,
-                PhysicalBlockSize = physicalBlockSize > 0 ? (uint)physicalBlockSize : 0,
-                LogicalBlockSize = logicalBlockSize > 0 ? (uint)logicalBlockSize : 0,
-                Size = diskSize > 0 ? (ulong)diskSize : 0,
-                BusType = busType,
-                BusLocation = busLocation,
-                ContentType = content,
-                SmartType = smartType,
-                Smart = smart
-            };
-        }
-        catch
-        {
-            (smart as IDisposable)?.Dispose();
-            throw;
-        }
+            Index = index,
+            BsdName = bsdName ?? string.Empty,
+            DeviceName = deviceName ?? string.Empty,
+            Model = model,
+            SerialNumber = serialNumber?.Trim() ?? string.Empty,
+            FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
+            MediumType = medium,
+            Removable = removable,
+            Ejectable = ejectable,
+            PhysicalBlockSize = physicalBlockSize > 0 ? (uint)physicalBlockSize : 0,
+            LogicalBlockSize = logicalBlockSize > 0 ? (uint)logicalBlockSize : 0,
+            Size = diskSize > 0 ? (ulong)diskSize : 0,
+            BusType = busType,
+            BusLocation = busLocation,
+            ContentType = content,
+            SmartType = smartType,
+            Smart = smart
+        };
     }
 
-    /// <summary>
-    /// モデル文字列を構築する (ベンダ名がある場合は結合)。
-    /// Builds the model string, concatenating vendor name if present.
-    /// </summary>
     private static string BuildModelString(string? modelName, string? vendorName)
     {
         var model = modelName?.Trim();
         var vendor = vendorName?.Trim();
 
-        if (!string.IsNullOrEmpty(vendor) && !string.IsNullOrEmpty(model))
+        if (!String.IsNullOrEmpty(vendor) && !String.IsNullOrEmpty(model))
         {
             return $"{vendor} {model}";
         }
@@ -180,9 +164,6 @@ public static class DiskInfo
         return model ?? vendor ?? string.Empty;
     }
 
-    // 物理接続文字列からバス種別を判定する
-    // Determines the bus type from the physical interconnect string
-    // ReSharper disable StringLitalTypo
     private static BusType ParseBusType(string? physInterconnect) => physInterconnect switch
     {
         "NVMe" => BusType.Nvme,
@@ -198,10 +179,7 @@ public static class DiskInfo
         "Virtual Interface" => BusType.Virtual,
         _ => BusType.Unknown
     };
-    // ReSharper restore StringLitalTypo
 
-    // メディアタイプ文字列からMediumType列挙値を判定する
-    // Determines the medium type from the medium type string
     private static MediumType ParseMediumType(string? mediumType) => mediumType switch
     {
         "Solid State" => MediumType.SolidState,
@@ -209,8 +187,6 @@ public static class DiskInfo
         _ => MediumType.Unknown
     };
 
-    // 接続ロケーション文字列からBusLocation列挙値を判定する
-    // Determines the bus location from the physical interconnect location string
     private static BusLocation ParseBusLocation(string? location) => location switch
     {
         "Internal" => BusLocation.Internal,
@@ -219,8 +195,6 @@ public static class DiskInfo
         _ => BusLocation.Unknown
     };
 
-    // コンテントタイプ文字列からContentType列挙値を判定する
-    // Determines the content type from the content type string
     private static ContentType ParseContentType(string? contentType) => contentType switch
     {
         "GUID_partition_scheme" => ContentType.GuidPartitionScheme,
