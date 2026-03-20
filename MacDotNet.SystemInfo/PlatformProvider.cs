@@ -54,10 +54,10 @@ public static class PlatformProvider
     public static ProcessInfo? GetProcess(int processId) => ProcessInfo.GetProcess(processId);
 
     //--------------------------------------------------------------------------------
-    // Handle
+    // File
     //--------------------------------------------------------------------------------
 
-    public static HandleStat GetHandleStat() => new();
+    public static FileHandleStat GetFileHandleStat() => new();
 
     //--------------------------------------------------------------------------------
     // CPU

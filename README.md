@@ -18,8 +18,8 @@ CPU Usage:                   Total: 6.0 %  (E: 8.0 %  P: 4.6 %)
 CPU Usage Breakdown:         User: 2.5 %  System: 3.4 %  Idle: 94.0 %
 CPU Frequency All:           1849 MHz  (E: 1494 MHz  P: 2086 MHz)
 Uptime:                      0.15:20:40
-System:                      Processes: 712  Threads: 1400  Open Files: 1234
-Handles:                     Files: 1234  Vnodes: 5678  Sockets: 910
+System:                      Processes: 712  Threads: 1400
+Handles:                     Files: 1234  Vnodes: 5678
 Load Average:                1.24  1.37  1.39  (1/5/15 min)
 Memory Usage:                57.5 %  (Active: 38.5 %  Wired: 11.6 %  Compressor: 7.4 %)
 Swap Usage:                  0.0 %

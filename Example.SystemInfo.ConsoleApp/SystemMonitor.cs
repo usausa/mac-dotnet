@@ -128,7 +128,7 @@ internal sealed class SystemMonitor
     private readonly DiskStat diskStat;
     private readonly NetworkStat networkStat;
     private readonly ProcessSummary processSummary;
-    private readonly HandleStat handleStat;
+    private readonly FileHandleStat fileHandleStat;
     private readonly PowerStat powerStat;
     private readonly SmcMonitor smcMonitor;
     private readonly FileSystemStat fileSystemStat;
@@ -233,13 +233,11 @@ internal sealed class SystemMonitor
 
     public int ProcessCount => processSummary.ProcessCount;
     public int ThreadCount => processSummary.ThreadCount;
-    public int OpenFileCount => processSummary.OpenFileCount;
 
     // Handle
 
-    public int HandleOpenFiles => handleStat.OpenFiles;
-    public int HandleOpenVnodes => handleStat.OpenVnodes;
-    public int HandleOpenSockets => handleStat.OpenSockets;
+    public int HandleOpenFiles => fileHandleStat.OpenFiles;
+    public int HandleOpenVnodes => fileHandleStat.OpenVnodes;
 
     // Memory
 
@@ -298,7 +296,6 @@ internal sealed class SystemMonitor
     public double PowerAneW => powerAneW;
     public double PowerRamW => powerRamW;
     public double PowerPciW => powerPciW;
-    public double PowerTotalW => powerCpuW + powerGpuW + powerAneW + powerRamW + powerPciW;
 
     //--------------------------------------------------------------------------------
     // Constructor
@@ -317,7 +314,7 @@ internal sealed class SystemMonitor
         diskStat = PlatformProvider.GetDiskStat();
         networkStat = PlatformProvider.GetNetworkStat();
         processSummary = PlatformProvider.GetProcessSummary();
-        handleStat = PlatformProvider.GetHandleStat();
+        fileHandleStat = PlatformProvider.GetFileHandleStat();
         powerStat = PlatformProvider.GetPowerStat();
         smcMonitor = PlatformProvider.GetSmcMonitor();
         fileSystemStat = PlatformProvider.GetFileSystemStat();
@@ -368,10 +365,10 @@ internal sealed class SystemMonitor
         memoryStat.Update();
         swapUsage.Update();
         diskStat.Update();
+        fileSystemStat.Update();
         networkStat.Update();
         processSummary.Update();
-        handleStat.Update();
-        fileSystemStat.Update();
+        fileHandleStat.Update();
 
         for (var i = 0; i < gpuEntries.Count; i++)
         {

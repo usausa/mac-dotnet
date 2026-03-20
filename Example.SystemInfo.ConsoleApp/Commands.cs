@@ -422,9 +422,8 @@ public sealed class ProcessCommand : ICommandHandler
     public ValueTask ExecuteAsync(CommandContext context)
     {
         var ps = PlatformProvider.GetProcessSummary();
-        Console.WriteLine($"Process Count:   {ps.ProcessCount}");
-        Console.WriteLine($"Thread Count:    {ps.ThreadCount}");
-        Console.WriteLine($"Open File Count: {ps.OpenFileCount}");
+        Console.WriteLine($"Process Count: {ps.ProcessCount}");
+        Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
 
         return ValueTask.CompletedTask;
     }
@@ -483,15 +482,14 @@ public sealed class ProcessesCommand : ICommandHandler
 //--------------------------------------------------------------------------------
 // Handle
 //--------------------------------------------------------------------------------
-[Command("handle", "Get handle stat")]
+[Command("handle", "Get handle count")]
 public sealed class HandleCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var hs = PlatformProvider.GetHandleStat();
+        var hs = PlatformProvider.GetFileHandleStat();
         Console.WriteLine($"Open Files:   {hs.OpenFiles}");
         Console.WriteLine($"Open Vnodes:  {hs.OpenVnodes}");
-        Console.WriteLine($"Open Sockets: {hs.OpenSockets}");
 
         return ValueTask.CompletedTask;
     }
@@ -933,8 +931,8 @@ public sealed class SummaryCommand : ICommandHandler
         lines.Add(("CPU Frequency All:", $"{monitor.CpuFrequencyAllHz / 1_000_000.0:F0} MHz  (E: {monitor.CpuFrequencyEfficiencyHz / 1_000_000.0:F0} MHz  P: {monitor.CpuFrequencyPerformanceHz / 1_000_000.0:F0} MHz)"));
         // System
         lines.Add(("Uptime:", $"{monitor.Uptime:d\\.hh\\:mm\\:ss}"));
-        lines.Add(("System:", $"Processes: {monitor.ProcessCount}  Threads: {monitor.ThreadCount}  Open Files: {monitor.OpenFileCount}"));
-        lines.Add(("Handles:", $"Files: {monitor.HandleOpenFiles}  Vnodes: {monitor.HandleOpenVnodes}  Sockets: {monitor.HandleOpenSockets}"));
+        lines.Add(("System:", $"Processes: {monitor.ProcessCount}  Threads: {monitor.ThreadCount}"));
+        lines.Add(("Handles:", $"Files: {monitor.HandleOpenFiles}  Vnodes: {monitor.HandleOpenVnodes}"));
         lines.Add(("Load Average:", $"{monitor.LoadAverage1:F2}  {monitor.LoadAverage5:F2}  {monitor.LoadAverage15:F2}  (1/5/15 min)"));
         // Memory
         lines.Add(("Memory Usage:", $"{monitor.MemoryUsagePercent:F1} %  (Active: {monitor.MemoryActivePercent:F1} %  Wired: {monitor.MemoryWiredPercent:F1} %  Compressor: {monitor.MemoryCompressorPercent:F1} %)"));

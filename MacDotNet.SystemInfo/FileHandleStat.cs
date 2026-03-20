@@ -2,7 +2,7 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public sealed class HandleStat
+public sealed class FileHandleStat
 {
     public DateTime UpdateAt { get; private set; }
 
@@ -10,13 +10,11 @@ public sealed class HandleStat
 
     public int OpenVnodes { get; private set; }
 
-    public int OpenSockets { get; private set; }
-
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal HandleStat()
+    internal FileHandleStat()
     {
         Update();
     }
@@ -30,7 +28,6 @@ public sealed class HandleStat
     {
         OpenFiles = GetSystemControlInt32("kern.num_files");
         OpenVnodes = GetSystemControlInt32("kern.num_vnodes");
-        OpenSockets = GetSystemControlInt32("kern.ipc.numopensockets");
 
         UpdateAt = DateTime.Now;
 

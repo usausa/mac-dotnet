@@ -12,8 +12,6 @@ public sealed class ProcessSummary
 
     public int ThreadCount { get; private set; }
 
-    public int OpenFileCount { get; private set; }
-
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
@@ -53,7 +51,6 @@ public sealed class ProcessSummary
 
                 var process = 0;
                 var thread = 0;
-                var openFile = 0;
                 for (var i = 0; i < actualCount; i++)
                 {
                     var pid = pids[i];
@@ -70,7 +67,6 @@ public sealed class ProcessSummary
                     }
 
                     process++;
-                    openFile += (int)bsdInfo.pbi_nfiles;
 
                     proc_taskinfo taskInfo;
                     var taskSize = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &taskInfo, sizeof(proc_taskinfo));
@@ -82,7 +78,6 @@ public sealed class ProcessSummary
 
                 ProcessCount = process;
                 ThreadCount = thread;
-                OpenFileCount = openFile;
 
                 UpdateAt = DateTime.Now;
             }
