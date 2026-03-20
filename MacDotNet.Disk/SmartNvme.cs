@@ -72,10 +72,34 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     public short[] TemperatureSensors { get; } = new short[8];
 
-    private SmartNvme(IntPtr pluginInterface, IntPtr smartInterface)
+    // デバイスサービスからSMARTセッションを開く
+    // Opens a SMART session from the device service
+    internal unsafe SmartNvme(uint service)
     {
-        this.pluginInterface = pluginInterface;
-        this.smartInterface = smartInterface;
+        IntPtr ppPlugin;
+        int score;
+        var kr = IOCreatePlugInInterfaceForService(
+            service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
+        if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
+        {
+            return;
+        }
+
+        pluginInterface = ppPlugin;
+
+        // QueryInterfaceでSMARTインターフェースを取得
+        // Obtain the SMART interface via QueryInterface
+        var vtable = *(IntPtr*)ppPlugin;
+        var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
+
+        var pSmartInterface = IntPtr.Zero;
+        var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
+        if (hr != S_OK || pSmartInterface == IntPtr.Zero)
+        {
+            return;
+        }
+
+        smartInterface = pSmartInterface;
     }
 
     public void Dispose()
@@ -91,35 +115,6 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             ReleasePlugInInterface(pluginInterface);
             pluginInterface = IntPtr.Zero;
         }
-    }
-
-    // デバイスサービスからSMARTセッションを開く
-    // Opens a SMART session from the device service
-    public static unsafe SmartNvme? Open(uint service)
-    {
-        IntPtr ppPlugin;
-        int score;
-        var kr = IOCreatePlugInInterfaceForService(
-            service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
-        if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        // QueryInterfaceでSMARTインターフェースを取得
-        // Obtain the SMART interface via QueryInterface
-        var vtable = *(IntPtr*)ppPlugin;
-        var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
-
-        var pSmartInterface = IntPtr.Zero;
-        var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
-        if (hr != S_OK || pSmartInterface == IntPtr.Zero)
-        {
-            ReleasePlugInInterface(ppPlugin);
-            return null;
-        }
-
-        return new SmartNvme(ppPlugin, pSmartInterface);
     }
 
     // SMARTデータ読み取り (繰り返し呼び出し可能)

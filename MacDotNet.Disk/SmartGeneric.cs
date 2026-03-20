@@ -42,30 +42,9 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     public bool LastUpdate { get; private set; }
 
-    private SmartGeneric(IntPtr pluginInterface, IntPtr smartInterface)
-    {
-        this.pluginInterface = pluginInterface;
-        this.smartInterface = smartInterface;
-    }
-
-    public void Dispose()
-    {
-        if (smartInterface != IntPtr.Zero)
-        {
-            ReleasePlugInInterface(smartInterface);
-            smartInterface = IntPtr.Zero;
-        }
-
-        if (pluginInterface != IntPtr.Zero)
-        {
-            ReleasePlugInInterface(pluginInterface);
-            pluginInterface = IntPtr.Zero;
-        }
-    }
-
     // デバイスサービスからSMARTセッションを開く
     // Opens a SMART session from the device service
-    public static unsafe SmartGeneric? Open(uint service)
+    internal unsafe SmartGeneric(uint service)
     {
         IntPtr ppPlugin;
         int score;
@@ -73,8 +52,10 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
             service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
         if (kr != KERN_SUCCESS || ppPlugin == IntPtr.Zero)
         {
-            return null;
+            return;
         }
+
+        pluginInterface = ppPlugin;
 
         // QueryInterfaceでSMARTインターフェースを取得
         // Obtain the SMART interface via QueryInterface
@@ -85,8 +66,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
         if (hr != S_OK || pSmartInterface == IntPtr.Zero)
         {
-            ReleasePlugInInterface(ppPlugin);
-            return null;
+            return;
         }
 
         // SMART操作を有効化
@@ -105,11 +85,25 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         if (kr != KERN_SUCCESS)
         {
             ReleasePlugInInterface(pSmartInterface);
-            ReleasePlugInInterface(ppPlugin);
-            return null;
+            return;
         }
 
-        return new SmartGeneric(ppPlugin, pSmartInterface);
+        smartInterface = pSmartInterface;
+    }
+
+    public void Dispose()
+    {
+        if (smartInterface != IntPtr.Zero)
+        {
+            ReleasePlugInInterface(smartInterface);
+            smartInterface = IntPtr.Zero;
+        }
+
+        if (pluginInterface != IntPtr.Zero)
+        {
+            ReleasePlugInInterface(pluginInterface);
+            pluginInterface = IntPtr.Zero;
+        }
     }
 
     // SMARTデータ読み取り (繰り返し呼び出し可能)

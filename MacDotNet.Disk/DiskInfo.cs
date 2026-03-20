@@ -99,30 +99,30 @@ public static class DiskInfo
 
         if (busType is BusType.Nvme or BusType.AppleFabric)
         {
-            var session = SmartNvme.Open(entry);
-            if (session is not null && session.Update())
+            var session = new SmartNvme(entry);
+            if (session.Update())
             {
                 smartType = SmartType.Nvme;
                 smart = session;
             }
             else
             {
-                session?.Dispose();
+                session.Dispose();
                 smartType = SmartType.Unsupported;
                 smart = SmartUnsupported.Default;
             }
         }
         else if (busType is BusType.Ata or BusType.Sata or BusType.Atapi)
         {
-            var session = SmartGeneric.Open(entry);
-            if (session is not null && session.Update())
+            var session = new SmartGeneric(entry);
+            if (session.Update())
             {
                 smartType = SmartType.Generic;
                 smart = session;
             }
             else
             {
-                session?.Dispose();
+                session.Dispose();
                 smartType = SmartType.Unsupported;
                 smart = SmartUnsupported.Default;
             }
