@@ -11,6 +11,12 @@ internal static class Program
         {
             using (disk)
             {
+                if ((disk.BusType == BusType.Virtual) ||
+                    (disk.ContentType == ContentType.Unknown))
+                {
+                    continue;
+                }
+
                 Console.WriteLine($"[disk{disk.Index}] {disk.Model}");
                 Console.WriteLine($"  BsdName:           {disk.BsdName}");
                 Console.WriteLine($"  SerialNumber:      {disk.SerialNumber}");
@@ -39,7 +45,7 @@ internal static class Program
 
     private static void PrintNvmeSmart(ISmartNvme smart)
     {
-        Console.WriteLine($"  SMART (NVMe): LastUpdate=[{smart.LastUpdate}]");
+        Console.WriteLine("  SMART (NVMe):");
         Console.WriteLine($"    Temperature:     {smart.Temperature} C");
         Console.WriteLine($"    AvailableSpare:  {smart.AvailableSpare} %");
         Console.WriteLine($"    PercentageUsed:  {smart.PercentageUsed} %");
@@ -54,7 +60,7 @@ internal static class Program
 
     private static void PrintGenericSmart(ISmartGeneric smart)
     {
-        Console.WriteLine($"  SMART (Generic): LastUpdate=[{smart.LastUpdate}]");
+        Console.WriteLine("  SMART (Generic):");
         Console.WriteLine("    ID   FLAG   CUR  WOR  RAW");
         Console.WriteLine("    ---  ----   ---  ---  --------");
         foreach (var id in smart.GetSupportedIds())
@@ -67,4 +73,3 @@ internal static class Program
         }
     }
 }
-
