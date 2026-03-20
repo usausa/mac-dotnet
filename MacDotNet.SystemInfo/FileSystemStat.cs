@@ -88,7 +88,6 @@ public sealed class FileSystemEntry
         FileSystem = fileSystem;
         DeviceName = deviceName;
         DiskBsdName = diskBsdName;
-
     }
 }
 
