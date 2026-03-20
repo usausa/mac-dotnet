@@ -226,6 +226,7 @@ internal sealed class SystemMonitor
 
     public int ProcessCount => processSummary.ProcessCount;
     public int ThreadCount => processSummary.ThreadCount;
+    public int OpenFileCount => processSummary.OpenFileCount;
 
     // Memory
 

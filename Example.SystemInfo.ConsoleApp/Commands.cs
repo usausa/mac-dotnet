@@ -364,8 +364,9 @@ public sealed class ProcessCommand : ICommandHandler
     public ValueTask ExecuteAsync(CommandContext context)
     {
         var ps = PlatformProvider.GetProcessSummary();
-        Console.WriteLine($"Process Count: {ps.ProcessCount}");
-        Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
+        Console.WriteLine($"Process Count:   {ps.ProcessCount}");
+        Console.WriteLine($"Thread Count:    {ps.ThreadCount}");
+        Console.WriteLine($"Open File Count: {ps.OpenFileCount}");
 
         return ValueTask.CompletedTask;
     }
@@ -912,7 +913,7 @@ public sealed class SummaryCommand : ICommandHandler
         lines.Add(("CPU Frequency All:", $"{monitor.CpuFrequencyAllHz / 1_000_000.0:F0} MHz  (E: {monitor.CpuFrequencyEfficiencyHz / 1_000_000.0:F0} MHz  P: {monitor.CpuFrequencyPerformanceHz / 1_000_000.0:F0} MHz)"));
         // System
         lines.Add(("Uptime:", $"{monitor.Uptime:d\\.hh\\:mm\\:ss}"));
-        lines.Add(("System:", $"Processes: {monitor.ProcessCount}  Threads: {monitor.ThreadCount}"));
+        lines.Add(("System:", $"Processes: {monitor.ProcessCount}  Threads: {monitor.ThreadCount}  Open Files: {monitor.OpenFileCount}"));
         lines.Add(("Load Average:", $"{monitor.LoadAverage1:F2}  {monitor.LoadAverage5:F2}  {monitor.LoadAverage15:F2}  (1/5/15 min)"));
         // Memory
         lines.Add(("Memory Usage:", $"{monitor.MemoryUsagePercent:F1} %  (Active: {monitor.MemoryActivePercent:F1} %  Wired: {monitor.MemoryWiredPercent:F1} %  Compressor: {monitor.MemoryCompressorPercent:F1} %)"));
