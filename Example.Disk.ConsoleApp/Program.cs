@@ -20,21 +20,26 @@ internal static class Program
         {
             var disk = disks[i];
 
+            if (disk.BusType == BusType.Virtual)
+            {
+                continue;
+            }
+
             Console.WriteLine($"=== Disk [{i}] ===");
             Console.WriteLine($"BSD Name:           {disk.BsdName ?? "(n/a)"}");
             Console.WriteLine($"Device Name:        {disk.DeviceName ?? "(n/a)"}");
             Console.WriteLine($"Model:              {(string.IsNullOrEmpty(disk.Model) ? "(n/a)" : disk.Model)}");
             Console.WriteLine($"Serial Number:      {(string.IsNullOrEmpty(disk.SerialNumber) ? "(n/a)" : disk.SerialNumber)}");
             Console.WriteLine($"Firmware Revision:  {(string.IsNullOrEmpty(disk.FirmwareRevision) ? "(n/a)" : disk.FirmwareRevision)}");
-            Console.WriteLine($"Medium Type:        {disk.MediumType ?? "(n/a)"}");
+            Console.WriteLine($"Medium Type:        {disk.MediumType}");
             Console.WriteLine($"Removable:          {disk.Removable}");
             Console.WriteLine($"Ejectable:          {disk.Ejectable}");
             Console.WriteLine($"Physical Block:     {disk.PhysicalBlockSize}");
             Console.WriteLine($"Logical Block:      {disk.LogicalBlockSize}");
             Console.WriteLine($"Disk Size:          {FormatBytes(disk.Size)}");
             Console.WriteLine($"Bus Type:           {disk.BusType}");
-            Console.WriteLine($"Bus Location:       {disk.BusLocation ?? "(n/a)"}");
-            Console.WriteLine($"Content Type:       {disk.ContentType ?? "(n/a)"}");
+            Console.WriteLine($"Bus Location:       {disk.BusLocation}");
+            Console.WriteLine($"Content Type:       {disk.ContentType}");
             Console.WriteLine($"SMART Type:         {disk.SmartType}");
             Console.WriteLine();
 

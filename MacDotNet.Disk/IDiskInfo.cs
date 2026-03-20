@@ -1,5 +1,47 @@
 namespace MacDotNet.Disk;
 
+// ReSharper disable IdentifierTypo
+public enum BusType
+{
+    Unknown = 0,
+    Nvme,
+    AppleFabric,
+    Ata,
+    Sata,
+    Atapi,
+    Usb,
+    FibreChannel,
+    FireWire,
+    Thunderbolt,
+    SdCard,
+    Virtual
+}
+// ReSharper restore IdentifierTypo
+
+public enum MediumType
+{
+    Unknown = 0,
+    SolidState,
+    Rotational
+}
+
+public enum BusLocation
+{
+    Unknown = 0,
+    Internal,
+    External,
+    File
+}
+
+public enum ContentType
+{
+    Unknown = 0,
+    GuidPartitionScheme,
+    ApplePartitionScheme,
+    FDiskPartitionScheme,
+    AppleApfs
+}
+
 public interface IDiskInfo : IDisposable
 {
     public uint Index { get; }
@@ -14,7 +56,7 @@ public interface IDiskInfo : IDisposable
 
     public string FirmwareRevision { get; }
 
-    public string? MediumType { get; }
+    public MediumType MediumType { get; }
 
     public ulong Size { get; }
 
@@ -28,9 +70,9 @@ public interface IDiskInfo : IDisposable
 
     public BusType BusType { get; }
 
-    public string? BusLocation { get; }
+    public BusLocation BusLocation { get; }
 
-    public string? ContentType { get; }
+    public ContentType ContentType { get; }
 
     public SmartType SmartType { get; }
 

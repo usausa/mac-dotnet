@@ -112,6 +112,15 @@ public static class DiskInfo
         // バス種別の判定 / Determine the bus type
         var busType = ParseBusType(physInterconnect);
 
+        // メディアタイプの判定 / Determine the medium type
+        var medium = ParseMediumType(mediumType?.Trim());
+
+        // 接続ロケーションの判定 / Determine the bus location
+        var busLocation = ParseBusLocation(physInterconnectLocation);
+
+        // コンテントタイプの判定 / Determine the content type
+        var content = ParseContentType(contentType);
+
         // SMARTセッションの作成 / Create SMART session
         SmartType smartType;
         ISmart smart;
@@ -162,15 +171,15 @@ public static class DiskInfo
                 Model = model,
                 SerialNumber = serialNumber?.Trim() ?? string.Empty,
                 FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
-                MediumType = mediumType?.Trim(),
+                MediumType = medium,
                 Removable = removable,
                 Ejectable = ejectable,
                 PhysicalBlockSize = physicalBlockSize > 0 ? (uint)physicalBlockSize : 0,
                 LogicalBlockSize = logicalBlockSize > 0 ? (uint)logicalBlockSize : 0,
                 Size = diskSize > 0 ? (ulong)diskSize : 0,
                 BusType = busType,
-                BusLocation = physInterconnectLocation,
-                ContentType = contentType,
+                BusLocation = busLocation,
+                ContentType = content,
                 SmartType = smartType,
                 Smart = smart
             };
@@ -218,6 +227,36 @@ public static class DiskInfo
         _ => BusType.Unknown
     };
     // ReSharper restore StringLiteralTypo
+
+    // メディアタイプ文字列からMediumType列挙値を判定する
+    // Determines the medium type from the medium type string
+    private static MediumType ParseMediumType(string? mediumType) => mediumType switch
+    {
+        "Solid State" => MediumType.SolidState,
+        "Rotational" => MediumType.Rotational,
+        _ => MediumType.Unknown
+    };
+
+    // 接続ロケーション文字列からBusLocation列挙値を判定する
+    // Determines the bus location from the physical interconnect location string
+    private static BusLocation ParseBusLocation(string? location) => location switch
+    {
+        "Internal" => BusLocation.Internal,
+        "External" => BusLocation.External,
+        "File" => BusLocation.File,
+        _ => BusLocation.Unknown
+    };
+
+    // コンテントタイプ文字列からContentType列挙値を判定する
+    // Determines the content type from the content type string
+    private static ContentType ParseContentType(string? contentType) => contentType switch
+    {
+        "GUID_partition_scheme" => ContentType.GuidPartitionScheme,
+        "Apple_partition_scheme" => ContentType.ApplePartitionScheme,
+        "FDisk_partition_scheme" => ContentType.FDiskPartitionScheme,
+        "Apple_APFS" => ContentType.AppleApfs,
+        _ => ContentType.Unknown
+    };
 
     // CFStringをマネージド文字列に変換
     // Converts a CFString to a managed string

@@ -25,7 +25,7 @@ internal sealed class DiskInfoGeneric : IDiskInfo
     public string FirmwareRevision { get; set; } = string.Empty;
 
     // メディアタイプ (Solid State / Rotational 等) / Medium type (Solid State / Rotational etc.)
-    public string? MediumType { get; set; }
+    public MediumType MediumType { get; set; }
 
     // ディスク容量 (バイト) / Disk capacity in bytes
     public ulong Size { get; set; }
@@ -46,10 +46,10 @@ internal sealed class DiskInfoGeneric : IDiskInfo
     public BusType BusType { get; set; }
 
     // 接続ロケーション (Internal, External 等) / Bus location (Internal, External etc.)
-    public string? BusLocation { get; set; }
+    public BusLocation BusLocation { get; set; }
 
     // コンテントタイプ (GUID_partition_scheme, Apple_APFS 等) / Content type (GUID_partition_scheme, Apple_APFS etc.)
-    public string? ContentType { get; set; }
+    public ContentType ContentType { get; set; }
 
     // SMART種別 / SMART type
     public SmartType SmartType { get; set; }
