@@ -4,18 +4,8 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.Disk.NativeMethods;
 
-// ディスク情報取得処理
-// Disk information retrieval.
-// IOBlockStorageDeviceをマッチングキーとして使用し、
-// IOKitレジストリからディスクの各種プロパティを取得する。
-// Uses IOBlockStorageDevice as the matching key to retrieve
-// various disk properties from the IOKit registry.
 public static class DiskInfo
 {
-    /// <summary>
-    /// 接続されている全ディスクの情報を取得する。
-    /// Retrieves information for all connected disks.
-    /// </summary>
     public static IReadOnlyList<IDiskInfo> GetInformation()
     {
         var matching = IOServiceMatching("IOBlockStorageDevice");
@@ -24,48 +14,41 @@ public static class DiskInfo
             return [];
         }
 
-        // IOServiceGetMatchingServicesはmatchingを消費する (CFRelease不要)
-        // IOServiceGetMatchingServices consumes matching (no CFRelease needed)
-        var iterHandle = 0u;
-        if (IOServiceGetMatchingServices(0, matching, ref iterHandle) != KERN_SUCCESS || iterHandle == 0)
+        var itHandle = 0u;
+        if ((IOServiceGetMatchingServices(0, matching, ref itHandle) != KERN_SUCCESS) || (itHandle == 0))
         {
             return [];
         }
 
-        using var iter = new IOObj(iterHandle);
-        var results = new List<IDiskInfo>();
+        var list = new List<IDiskInfo>();
+
         var index = 0u;
+        using var it = new IOObj(itHandle);
         uint entryHandle;
-        while ((entryHandle = IOIteratorNext(iter)) != 0u)
+        while ((entryHandle = IOIteratorNext(it)) != 0u)
         {
 #pragma warning disable CA2000
             using var entry = new IOObj(entryHandle);
 #pragma warning restore CA2000
-            results.Add(ReadDiskEntry(entry, index++));
+            list.Add(ReadDiskEntry(entry, index++));
         }
 
-        return results;
+        return list;
     }
 
-    /// <summary>
-    /// 個々のIORegistryエントリからディスク情報を読み取る。
-    /// Reads disk information from an individual IORegistry entry.
-    /// </summary>
+    // TODO Check
     private static unsafe DiskInfoGeneric ReadDiskEntry(IOObj entry, uint index)
     {
-        // IORegistryエントリ名を取得 / Get the IORegistry entry name
         var nameBuf = stackalloc byte[128];
         _ = IORegistryEntryGetName(entry, nameBuf);
         var deviceName = Marshal.PtrToStringUTF8((IntPtr)nameBuf);
 
-        // Device Characteristics辞書からデバイス基本情報を取得
-        // Retrieve basic device info from the Device Characteristics dictionary
+        // Device Characteristics
         string? modelName = null;
         string? vendorName = null;
         string? serialNumber = null;
         string? firmwareRevision = null;
         string? mediumType = null;
-
         using var devCharDict = entry.GetDictionary("Device Characteristics");
         if (devCharDict.IsValid)
         {
@@ -76,11 +59,9 @@ public static class DiskInfo
             mediumType = devCharDict.GetString("Medium Type");
         }
 
-        // Protocol Characteristics辞書からバス情報を取得
-        // Retrieve bus information from the Protocol Characteristics dictionary
+        // Protocol Characteristics
         string? physInterconnect = null;
         string? physInterconnectLocation = null;
-
         using var protoCharDict = entry.GetDictionary("Protocol Characteristics");
         if (protoCharDict.IsValid)
         {
@@ -98,7 +79,6 @@ public static class DiskInfo
         var ejectable = entry.SearchBool("Ejectable");
         var contentType = entry.SearchString("Content");
 
-        // 物理ブロックサイズが取得できなかった場合、論理ブロックサイズをフォールバック
         // Fall back to logical block size when physical block size is unavailable
         if (physicalBlockSize <= 0 && logicalBlockSize > 0)
         {
@@ -108,20 +88,12 @@ public static class DiskInfo
         // モデル名の構築 (ベンダ名がある場合は結合)
         // Build the model string (concatenate vendor name if present)
         var model = BuildModelString(modelName, vendorName);
-
-        // バス種別の判定 / Determine the bus type
         var busType = ParseBusType(physInterconnect);
-
-        // メディアタイプの判定 / Determine the medium type
         var medium = ParseMediumType(mediumType?.Trim());
-
-        // 接続ロケーションの判定 / Determine the bus location
         var busLocation = ParseBusLocation(physInterconnectLocation);
-
-        // コンテントタイプの判定 / Determine the content type
         var content = ParseContentType(contentType);
 
-        // SMARTセッションの作成 / Create SMART session
+        // Smart
         SmartType smartType;
         ISmart smart;
 
@@ -166,8 +138,8 @@ public static class DiskInfo
             return new DiskInfoGeneric
             {
                 Index = index,
-                BsdName = bsdName,
-                DeviceName = deviceName,
+                BsdName = bsdName ?? string.Empty,
+                DeviceName = deviceName ?? string.Empty,
                 Model = model,
                 SerialNumber = serialNumber?.Trim() ?? string.Empty,
                 FirmwareRevision = firmwareRevision?.Trim() ?? string.Empty,
@@ -210,7 +182,7 @@ public static class DiskInfo
 
     // 物理接続文字列からバス種別を判定する
     // Determines the bus type from the physical interconnect string
-    // ReSharper disable StringLiteralTypo
+    // ReSharper disable StringLitalTypo
     private static BusType ParseBusType(string? physInterconnect) => physInterconnect switch
     {
         "NVMe" => BusType.Nvme,
@@ -226,7 +198,7 @@ public static class DiskInfo
         "Virtual Interface" => BusType.Virtual,
         _ => BusType.Unknown
     };
-    // ReSharper restore StringLiteralTypo
+    // ReSharper restore StringLitalTypo
 
     // メディアタイプ文字列からMediumType列挙値を判定する
     // Determines the medium type from the medium type string
@@ -257,49 +229,4 @@ public static class DiskInfo
         "Apple_APFS" => ContentType.AppleApfs,
         _ => ContentType.Unknown
     };
-
-    // CFStringをマネージド文字列に変換
-    // Converts a CFString to a managed string
-    internal static unsafe string? CfStringToManaged(IntPtr cfString)
-    {
-        var ptr = CFStringGetCStringPtr(cfString, kCFStringEncodingUTF8);
-        if (ptr != IntPtr.Zero)
-        {
-            return Marshal.PtrToStringUTF8(ptr);
-        }
-
-        var length = CFStringGetLength(cfString);
-        if (length <= 0)
-        {
-            return string.Empty;
-        }
-
-        // CFStringGetCStringPtrが失敗した場合のフォールバック
-        // Fallback when CFStringGetCStringPtr fails
-        const int stackAllocThreshold = 1024;
-        var bufSize = (int)((length * 4) + 1);
-
-        if (bufSize <= stackAllocThreshold)
-        {
-            var buf = stackalloc byte[bufSize];
-            return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-                ? Marshal.PtrToStringUTF8((IntPtr)buf)
-                : null;
-        }
-
-        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(bufSize);
-        try
-        {
-            fixed (byte* buf = rented)
-            {
-                return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8)
-                    ? Marshal.PtrToStringUTF8((IntPtr)buf)
-                    : null;
-            }
-        }
-        finally
-        {
-            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
-        }
-    }
 }

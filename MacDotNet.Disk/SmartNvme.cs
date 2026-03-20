@@ -3,8 +3,6 @@ namespace MacDotNet.Disk;
 using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
-// IOCreatePlugInInterfaceForServiceで取得したプラグインインターフェースを保持し、
-// SMARTReadDataを繰り返し呼び出すことで最新のSMARTデータを取得する。
 internal sealed class SmartNvme : ISmartNvme, IDisposable
 {
     private const int SmartDataSize = 512;

@@ -10,7 +10,7 @@
     <PackageId>MacDotNet.SystemInfo</PackageId>
     <Title>MacDotNet.SystemInfo</Title>
     <Description>MacDotNet.SystemInfo.</Description>
-    <PackageTags>macos system iokit</PackageTags>
+    <PackageTags>macos iokit system</PackageTags>
   </PropertyGroup>
 
 </Project>

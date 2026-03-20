@@ -28,7 +28,7 @@ internal readonly ref struct CFRef(IntPtr pointer)
     // CFString
     //------------------------------------------------------------------------
 
-    public string? GetString() => DiskInfo.CfStringToManaged(Pointer);
+    public string? GetString() => ToManagedString(Pointer);
 
     //------------------------------------------------------------------------
     // CFDictionary
@@ -42,15 +42,13 @@ internal readonly ref struct CFRef(IntPtr pointer)
             return null;
         }
 
-        // CFDictionaryGetValueはGet規則 — 返り値をCFReleaseしてはならない
-        // CFDictionaryGetValue follows the Get Rule — the returned value must NOT be CFReleased
         var value = CFDictionaryGetValue(Pointer, cfKey);
         if (value == IntPtr.Zero || CFGetTypeID(value) != CFStringGetTypeID())
         {
             return null;
         }
 
-        return DiskInfo.CfStringToManaged(value);
+        return ToManagedString(value);
     }
 
     public long GetInt64(string key)
@@ -192,7 +190,7 @@ internal readonly ref struct IOObj(uint handle)
             return null;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFStringGetTypeID())
         {
             return null;
@@ -209,7 +207,7 @@ internal readonly ref struct IOObj(uint handle)
             return 0;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFNumberGetTypeID())
         {
             return 0;
@@ -228,7 +226,7 @@ internal readonly ref struct IOObj(uint handle)
             return false;
         }
 
-        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
         if (!val.IsValid || CFGetTypeID(val) != CFBooleanGetTypeID())
         {
             return false;
@@ -247,7 +245,7 @@ internal readonly ref struct IOObj(uint handle)
 
         // ownership transferred to caller
 #pragma warning disable CA2000
-        var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, kIOServicePlane, cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
+        var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
 #pragma warning restore CA2000
         if (!val.IsValid)
         {

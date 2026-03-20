@@ -687,8 +687,26 @@ internal static class NativeMethods
             return string.Empty;
         }
 
-        var bufSize = (length * 4) + 1;
-        var buf = stackalloc byte[(int)bufSize];
-        return CFStringGetCString(cfString, buf, bufSize, kCFStringEncodingUTF8) ? Marshal.PtrToStringUTF8((IntPtr)buf) : null;
+        var bufferSize = (int)((length * 4) + 1);
+        if (bufferSize <= 1024)
+        {
+            var buffer = stackalloc byte[bufferSize];
+            return CFStringGetCString(cfString, buffer, bufferSize, kCFStringEncodingUTF8) ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
+        }
+        else
+        {
+            var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(bufferSize);
+            try
+            {
+                fixed (byte* p = buffer)
+                {
+                    return CFStringGetCString(cfString, p, bufferSize, kCFStringEncodingUTF8) ? Marshal.PtrToStringUTF8((IntPtr)p) : null;
+                }
+            }
+            finally
+            {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
     }
 }

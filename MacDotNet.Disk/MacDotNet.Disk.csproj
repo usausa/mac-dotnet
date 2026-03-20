@@ -10,7 +10,7 @@
     <PackageId>MacDotNet.Disk</PackageId>
     <Title>MacDotNet.Disk</Title>
     <Description>MacDotNet.Disk.</Description>
-    <PackageTags>macos system disk smart</PackageTags>
+    <PackageTags>macos iokit system disk smart</PackageTags>
   </PropertyGroup>
 
   <PropertyGroup>
