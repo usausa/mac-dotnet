@@ -18,7 +18,8 @@ CPU Usage:                   Total: 6.0 %  (E: 8.0 %  P: 4.6 %)
 CPU Usage Breakdown:         User: 2.5 %  System: 3.4 %  Idle: 94.0 %
 CPU Frequency All:           1849 MHz  (E: 1494 MHz  P: 2086 MHz)
 Uptime:                      0.15:20:40
-System:                      Processes: 712  Threads: 1400
+System:                      Processes: 712  Threads: 1400  Open Files: 1234
+Handles:                     Files: 1234  Vnodes: 5678  Sockets: 910
 Load Average:                1.24  1.37  1.39  (1/5/15 min)
 Memory Usage:                57.5 %  (Active: 38.5 %  Wired: 11.6 %  Compressor: 7.4 %)
 Swap Usage:                  0.0 %
@@ -49,43 +50,55 @@ Power:                       CPU: 0.61 W  GPU: 0.00 W  ANE: 0.00 W  RAM: 0.09 W 
 var hw = PlatformProvider.GetHardware();
 
 Console.WriteLine("[System]");
-Console.WriteLine($"Model:             {hw.Model}");
-Console.WriteLine($"Machine:           {hw.Machine}");
-Console.WriteLine($"SerialNumber:      {hw.SerialNumber}");
+Console.WriteLine($"  Model:             {hw.Model}");
+Console.WriteLine($"  Machine:           {hw.Machine}");
+Console.WriteLine($"  TargetType:        {hw.TargetType}");
+Console.WriteLine($"  SerialNumber:      {hw.SerialNumber}");
 
 Console.WriteLine("[CPU]");
-Console.WriteLine($"CpuBrand:          {hw.CpuBrandString}");
-Console.WriteLine($"PhysicalCpu:       {hw.PhysicalCpu} (max: {hw.PhysicalCpuMax})");
-Console.WriteLine($"LogicalCpu:        {hw.LogicalCpu} (max: {hw.LogicalCpuMax})");
-Console.WriteLine($"ActiveCpu:         {hw.ActiveCpu}");
-Console.WriteLine($"CoreCount:         {hw.CpuCoreCount}");
-Console.WriteLine($"ThreadCount:       {hw.CpuThreadCount}");
-Console.WriteLine($"TimebaseFrequency: {hw.TimebaseFrequency} Hz");
+Console.WriteLine($"  CpuBrand:          {hw.CpuBrandString}");
+Console.WriteLine($"  PhysicalCpu:       {hw.PhysicalCpu} (max: {hw.PhysicalCpuMax})");
+Console.WriteLine($"  LogicalCpu:        {hw.LogicalCpu} (max: {hw.LogicalCpuMax})");
+Console.WriteLine($"  ActiveCpu:         {hw.ActiveCpu}");
+Console.WriteLine($"  CoreCount:         {hw.CpuCoreCount}");
+Console.WriteLine($"  ThreadCount:       {hw.CpuThreadCount}");
+Console.WriteLine($"  Packages:          {hw.Packages}");
+Console.WriteLine($"  TimebaseFrequency: {hw.TimebaseFrequency} Hz");
 
 Console.WriteLine("[Memory]");
-Console.WriteLine($"MemorySize:        {hw.MemorySize / 1024 / 1024 / 1024} GB");
-Console.WriteLine($"PageSize:          {hw.PageSize} bytes");
+Console.WriteLine($"  MemorySize:        {hw.MemorySize / 1024 / 1024 / 1024} GB");
+Console.WriteLine($"  PageSize:          {hw.PageSize} bytes");
 
 Console.WriteLine("[Cache]");
-Console.WriteLine($"CacheLineSize:     {hw.CacheLineSize} bytes");
-Console.WriteLine($"L1I:               {hw.L1ICacheSize / 1024} KB");
-Console.WriteLine($"L1D:               {hw.L1DCacheSize / 1024} KB");
-Console.WriteLine($"L2:                {hw.L2CacheSize / 1024} KB");
+Console.WriteLine($"  CacheLineSize:     {hw.CacheLineSize} bytes");
+Console.WriteLine($"  L1I:               {hw.L1ICacheSize / 1024} KB");
+Console.WriteLine($"  L1D:               {hw.L1DCacheSize / 1024} KB");
+Console.WriteLine($"  L2:                {hw.L2CacheSize / 1024} KB");
+Console.WriteLine($"  L3:                {hw.L3CacheSize / 1024} KB");
 
-// P-core / E-core
 if (hw.PerformanceCoreCount > 0)
 {
+    Console.WriteLine("[CPU Cores]");
     var pCore = hw.PerformanceCoreLevel;
-    Console.WriteLine($"P-Core ({pCore.Name}): {pCore.PhysicalCpu} physical, {pCore.LogicalCpu} logical");
-    var eCore = hw.EfficiencyCoreLevel;
-    Console.WriteLine($"E-Core ({eCore.Name}): {eCore.PhysicalCpu} physical, {eCore.LogicalCpu} logical");
+    Console.WriteLine($"  P-Core ({pCore.Name}): {pCore.PhysicalCpu} physical, {pCore.LogicalCpu} logical");
+    if (hw.EfficiencyCoreCount > 0)
+    {
+        var eCore = hw.EfficiencyCoreLevel;
+        Console.WriteLine($"  E-Core ({eCore.Name}): {eCore.PhysicalCpu} physical, {eCore.LogicalCpu} logical");
+    }
 }
 
-// GPU list
-foreach (var gpu in hw.Gpus)
+if (hw.Gpus.Count > 0)
 {
-    Console.WriteLine($"GPU Model:   {gpu.Model}");
-    Console.WriteLine($"GPU Cores:   {gpu.CoreCount}");
+    Console.WriteLine("[GPU]");
+    foreach (var gpu in hw.Gpus)
+    {
+        Console.WriteLine($"  Model:       {gpu.Model}");
+        Console.WriteLine($"  Name:        {gpu.Name}");
+        Console.WriteLine($"  CoreCount:   {gpu.CoreCount}");
+        Console.WriteLine($"  VendorId:    0x{gpu.VendorId:X}");
+        Console.WriteLine($"  MetalPlugin: {gpu.MetalPluginName}");
+    }
 }
 ```
 
@@ -97,10 +110,17 @@ Console.WriteLine($"OsType:              {kernel.OsType}");
 Console.WriteLine($"OsRelease:           {kernel.OsRelease}");
 Console.WriteLine($"OsVersion:           {kernel.OsVersion}");
 Console.WriteLine($"OsProductVersion:    {kernel.OsProductVersion}");
+Console.WriteLine($"OsRevision:          {kernel.OsRevision}");
 Console.WriteLine($"KernelVersion:       {kernel.KernelVersion}");
 Console.WriteLine($"Uuid:                {kernel.Uuid}");
 Console.WriteLine($"MaxProcesses:        {kernel.MaxProcesses}");
+Console.WriteLine($"MaxProcessesPerUser: {kernel.MaxProcessesPerUser}");
 Console.WriteLine($"MaxFiles:            {kernel.MaxFiles}");
+Console.WriteLine($"MaxFilesPerProcess:  {kernel.MaxFilesPerProcess}");
+Console.WriteLine($"MaxVnodes:           {kernel.MaxVnodes}");
+Console.WriteLine($"MaxSockets:          {kernel.MaxSockets}");
+Console.WriteLine($"MaxArguments:        {kernel.MaxArguments}");
+Console.WriteLine($"SecureLevel:         {kernel.SecureLevel}");
 Console.WriteLine($"BootTime:            {kernel.BootTime:yyyy-MM-dd HH:mm:ss zzz}");
 ```
 
@@ -156,23 +176,32 @@ foreach (var core in cpuFreq.PerformanceCores)
 
 ```csharp
 var mem = PlatformProvider.GetMemoryStat();
-Console.WriteLine($"PhysicalMemory: {mem.PhysicalMemory / 1024 / 1024} MB");
-Console.WriteLine($"Active:         {mem.ActiveCount} pages");
-Console.WriteLine($"Inactive:       {mem.InactiveCount} pages");
-Console.WriteLine($"Wired:          {mem.WireCount} pages");
-Console.WriteLine($"Free:           {mem.FreeCount} pages");
-Console.WriteLine($"PageIn:         {mem.PageIn}");
-Console.WriteLine($"PageOut:        {mem.PageOut}");
-Console.WriteLine($"SwapIn:         {mem.SwapIn}");
-Console.WriteLine($"SwapOut:        {mem.SwapOut}");
+var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
+
+Console.WriteLine("[Usage]");
+Console.WriteLine($"  Total:       {mem.PhysicalMemory / 1024 / 1024} MB");
+Console.WriteLine($"  Used:        {mem.UsedBytes / 1024 / 1024} MB  ({usage:F1}%)");
+Console.WriteLine($"  Free:        {mem.FreeBytes / 1024 / 1024} MB");
+
+Console.WriteLine("[Breakdown]");
+Console.WriteLine($"  Active:      {mem.ActiveBytes / 1024 / 1024} MB  ({mem.ActiveCount} pages)");
+Console.WriteLine($"  Inactive:    {mem.InactiveBytes / 1024 / 1024} MB  ({mem.InactiveCount} pages)");
+Console.WriteLine($"  Wired:       {mem.WiredBytes / 1024 / 1024} MB  ({mem.WireCount} pages)");
+Console.WriteLine($"  AppMemory:   {mem.AppMemoryBytes / 1024 / 1024} MB");
+Console.WriteLine($"  Compressed:  {mem.CompressorBytes / 1024 / 1024} MB  ({mem.CompressorPageCount} pages)");
+
+Console.WriteLine("[Compressor]");
+Console.WriteLine($"  Compressions:  {mem.Compression}");
+Console.WriteLine($"  Decompression: {mem.Decompression}");
 ```
 
 ### Swap
 
 ```csharp
 var swap = PlatformProvider.GetSwapUsage();
+var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
 Console.WriteLine($"Total:     {swap.TotalBytes / 1024 / 1024} MB");
-Console.WriteLine($"Used:      {swap.UsedBytes / 1024 / 1024} MB");
+Console.WriteLine($"Used:      {swap.UsedBytes / 1024 / 1024} MB  ({usage:F1}%)");
 Console.WriteLine($"Available: {swap.AvailableBytes / 1024 / 1024} MB");
 Console.WriteLine($"Encrypted: {swap.IsEncrypted}");
 ```
@@ -181,13 +210,28 @@ Console.WriteLine($"Encrypted: {swap.IsEncrypted}");
 
 ```csharp
 var diskStat = PlatformProvider.GetDiskStat();
-foreach (var d in diskStat.Devices.Where(d => d.IsPhysical))
+foreach (var d in diskStat.Devices.Where(static d => d.IsPhysical))
 {
-    Console.WriteLine($"[{d.Name}]  BusType: {d.BusType}  Size: {d.DiskSize / 1024 / 1024 / 1024} GB");
-    Console.WriteLine($"  BytesRead:       {d.BytesRead}");
-    Console.WriteLine($"  BytesWrite:      {d.BytesWrite}");
+    var label = d.MediaName is not null ? $"{d.BsdName} [{d.MediaName}]" : d.BsdName;
+    Console.WriteLine($"[Device] {label}");
+    if (d.VendorName is not null)
+    {
+        Console.WriteLine($"  Vendor:          {d.VendorName}");
+    }
+    if (d.MediumType is not null)
+    {
+        Console.WriteLine($"  MediumType:      {d.MediumType}");
+    }
+    Console.WriteLine($"  BusType:         {d.BusType}");
+    Console.WriteLine($"  IsPhysical:      {d.IsPhysical}");
+    Console.WriteLine($"  IsRemovable:     {d.IsRemovable}");
+    Console.WriteLine($"  DiskSize:        {d.DiskSize / 1024 / 1024 / 1024} GB");
+    Console.WriteLine($"  BytesRead:       {d.BytesRead / 1024 / 1024} MB");
+    Console.WriteLine($"  BytesWrite:      {d.BytesWrite / 1024 / 1024} MB");
     Console.WriteLine($"  ReadsCompleted:  {d.ReadsCompleted}");
     Console.WriteLine($"  WritesCompleted: {d.WritesCompleted}");
+    Console.WriteLine($"  TimeRead:        {d.TotalTimeRead / 1_000_000} ms");
+    Console.WriteLine($"  TimeWrite:       {d.TotalTimeWrite / 1_000_000} ms");
     Console.WriteLine($"  ErrorsRead:      {d.ErrorsRead}");
     Console.WriteLine($"  ErrorsWrite:     {d.ErrorsWrite}");
 }
@@ -199,12 +243,18 @@ foreach (var d in diskStat.Devices.Where(d => d.IsPhysical))
 var fsStat = PlatformProvider.GetFileSystemStat();
 foreach (var fs in fsStat.Entries)
 {
-    Console.WriteLine($"MountPoint:    {fs.MountPoint}");
-    Console.WriteLine($"DeviceName:    {fs.DeviceName}");
-    Console.WriteLine($"FileSystem:    {fs.FileSystem}");
-    Console.WriteLine($"TotalSize:     {fs.TotalSize / 1024 / 1024 / 1024} GB");
-    Console.WriteLine($"AvailableSize: {fs.AvailableSize / 1024 / 1024 / 1024} GB");
-    Console.WriteLine($"TotalFiles:    {fs.TotalFiles}");
+    var usedSize = fs.TotalSize > fs.AvailableSize ? fs.TotalSize - fs.AvailableSize : 0;
+    var usage = fs.TotalSize > 0 ? usedSize * 100.0 / fs.TotalSize : 0;
+    Console.WriteLine($"[MountPoint] {fs.MountPoint}");
+    Console.WriteLine($"  DeviceName:    {fs.DeviceName}");
+    Console.WriteLine($"  FileSystem:    {fs.FileSystem}");
+    Console.WriteLine($"  Option:        {fs.Option}");
+    Console.WriteLine($"  BlockSize:     {fs.BlockSize}");
+    Console.WriteLine($"  IOSize:        {fs.IOSize}");
+    Console.WriteLine($"  Usage:         {usage:F1}%  ({usedSize / 1024 / 1024 / 1024} GB / {fs.TotalSize / 1024 / 1024 / 1024} GB)");
+    Console.WriteLine($"  AvailableSize: {fs.AvailableSize / 1024 / 1024 / 1024} GB");
+    Console.WriteLine($"  TotalFiles:    {fs.TotalFiles}");
+    Console.WriteLine($"  FreeFiles:     {fs.FreeFiles}");
 }
 ```
 
@@ -212,13 +262,14 @@ foreach (var fs in fsStat.Entries)
 
 ```csharp
 var network = PlatformProvider.GetNetworkStat();
-foreach (var nif in network.Interfaces.Where(x => x.IsEnabled))
+foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
 {
-    Console.WriteLine($"[{nif.Name}] {nif.DisplayName} ({nif.InterfaceType})");
-    Console.WriteLine($"  RxBytes:   {nif.RxBytes}");
+    var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
+    Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})");
+    Console.WriteLine($"  RxBytes:   {nif.RxBytes / 1024 / 1024} MB");
     Console.WriteLine($"  RxPackets: {nif.RxPackets}");
     Console.WriteLine($"  RxErrors:  {nif.RxErrors}");
-    Console.WriteLine($"  TxBytes:   {nif.TxBytes}");
+    Console.WriteLine($"  TxBytes:   {nif.TxBytes / 1024 / 1024} MB");
     Console.WriteLine($"  TxPackets: {nif.TxPackets}");
     Console.WriteLine($"  TxErrors:  {nif.TxErrors}");
 }
@@ -228,15 +279,16 @@ foreach (var nif in network.Interfaces.Where(x => x.IsEnabled))
 
 ```csharp
 var summary = PlatformProvider.GetProcessSummary();
-Console.WriteLine($"ProcessCount: {summary.ProcessCount}");
-Console.WriteLine($"ThreadCount:  {summary.ThreadCount}");
+Console.WriteLine($"Process Count:   {summary.ProcessCount}");
+Console.WriteLine($"Thread Count:    {summary.ThreadCount}");
+Console.WriteLine($"Open File Count: {summary.OpenFileCount}");
 
 var processes = PlatformProvider.GetProcesses();
-foreach (var p in processes.OrderBy(p => p.ProcessId))
+foreach (var p in processes.OrderBy(static p => p.ProcessId))
 {
-    Console.WriteLine($"PID={p.ProcessId,-6} Name={p.Name,-20} Status={p.Status}");
-    Console.WriteLine($"  Threads={p.ThreadCount}  RSS={p.ResidentMemorySize / 1024 / 1024} MB");
-    Console.WriteLine($"  UserTime={p.UserTime.TotalSeconds:F2}s  SystemTime={p.SystemTime.TotalSeconds:F2}s");
+    var rss = (double)p.ResidentMemorySize / 1024 / 1024;
+    var cpu = (p.UserTime + p.SystemTime).TotalSeconds;
+    Console.WriteLine($"{p.ProcessId,-6} {p.Name,-20} {p.Status,-12} {p.UserId,-5} Threads={p.ThreadCount,3}  RSS={rss,8:F2} MB  CPU={cpu,8:F2}s");
 }
 
 var proc = PlatformProvider.GetProcess(Environment.ProcessId);
@@ -272,22 +324,26 @@ foreach (var device in devices)
 var power = PlatformProvider.GetPowerStat();
 if (!power.Supported)
 {
-    Console.WriteLine("Power reporting requires.");
+    Console.WriteLine("Power reporting not supported.");
     return;
 }
 
-// Measure wattage over 1 second
+power.Update();
 var prevCpu = power.Cpu;
 var prevGpu = power.Gpu;
 var prevAne = power.Ane;
+var prevRam = power.Ram;
+var prevPci = power.Pci;
 var prevTotal = power.Total;
 
 await Task.Delay(1000);
 power.Update();
 
-Console.WriteLine($"CPU: {power.Cpu - prevCpu:F2} W");
-Console.WriteLine($"GPU: {power.Gpu - prevGpu:F2} W");
-Console.WriteLine($"ANE: {power.Ane - prevAne:F2} W");
+Console.WriteLine($"CPU:   {power.Cpu - prevCpu:F2} W");
+Console.WriteLine($"GPU:   {power.Gpu - prevGpu:F2} W");
+Console.WriteLine($"ANE:   {power.Ane - prevAne:F2} W");
+Console.WriteLine($"RAM:   {power.Ram - prevRam:F2} W");
+Console.WriteLine($"PCI:   {power.Pci - prevPci:F2} W");
 Console.WriteLine($"Total: {power.Total - prevTotal:F2} W");
 ```
 
@@ -327,15 +383,72 @@ foreach (var fan in monitor.Fans)
 
 # 💽 MacDotNet.Disk
 
-SMART infotmation.
+SMART information.
 
 ## Usage
 
-(TODO)
+```csharp
+var disks = DiskInfo.GetInformation();
+foreach (var disk in disks)
+{
+    using (disk)
+    {
+        Console.WriteLine($"[disk{disk.Index}] {disk.Model}");
+        Console.WriteLine($"  BsdName:           {disk.BsdName}");
+        Console.WriteLine($"  SerialNumber:      {disk.SerialNumber}");
+        Console.WriteLine($"  FirmwareRevision:  {disk.FirmwareRevision}");
+        Console.WriteLine($"  Size:              {disk.Size / 1024 / 1024 / 1024} GB");
+        Console.WriteLine($"  MediumType:        {disk.MediumType}");
+        Console.WriteLine($"  BusType:           {disk.BusType}");
+        Console.WriteLine($"  BusLocation:       {disk.BusLocation}");
+        Console.WriteLine($"  ContentType:       {disk.ContentType}");
+        Console.WriteLine($"  SmartType:         {disk.SmartType}");
+
+        disk.Smart.Update();
+        if (disk.SmartType == SmartType.Nvme)
+        {
+            PrintNvmeSmart((ISmartNvme)disk.Smart);
+        }
+        else if (disk.SmartType == SmartType.Generic)
+        {
+            PrintGenericSmart((ISmartGeneric)disk.Smart);
+        }
+    }
+}
+
+static void PrintNvmeSmart(ISmartNvme smart)
+{
+    Console.WriteLine($"  SMART (NVMe): LastUpdate=[{smart.LastUpdate}]");
+    Console.WriteLine($"    Temperature:     {smart.Temperature} C");
+    Console.WriteLine($"    AvailableSpare:  {smart.AvailableSpare} %");
+    Console.WriteLine($"    PercentageUsed:  {smart.PercentageUsed} %");
+    Console.WriteLine($"    DataUnitRead:    {smart.DataUnitRead}");
+    Console.WriteLine($"    DataUnitWritten: {smart.DataUnitWritten}");
+    Console.WriteLine($"    PowerCycles:     {smart.PowerCycles}");
+    Console.WriteLine($"    PowerOnHours:    {smart.PowerOnHours}");
+    Console.WriteLine($"    UnsafeShutdowns: {smart.UnsafeShutdowns}");
+    Console.WriteLine($"    MediaErrors:     {smart.MediaErrors}");
+    Console.WriteLine($"    CriticalWarning: {smart.CriticalWarning}");
+}
+
+static void PrintGenericSmart(ISmartGeneric smart)
+{
+    Console.WriteLine($"  SMART (Generic): LastUpdate=[{smart.LastUpdate}]");
+    Console.WriteLine("    ID   FLAG   CUR  WOR  RAW");
+    Console.WriteLine("    ---  ----   ---  ---  --------");
+    foreach (var id in smart.GetSupportedIds())
+    {
+        var attr = smart.GetAttribute(id);
+        if (attr.HasValue)
+        {
+            Console.WriteLine($"    {(byte)id,3}  0x{attr.Value.Flags:X4}  {attr.Value.CurrentValue,3}  {attr.Value.WorstValue,3}  {attr.Value.RawValue}");
+        }
+    }
+}
+```
 
 # 🌐Link
 
 - [LinuxDotNet](https://github.com/usausa/linux-dotnet)
 - [RaspberryDotNet](https://github.com/usausa/raspberrypi-dotnet)
 - [Disk information library](https://github.com/usausa/hardwareinfo-disk)
-
