@@ -25,6 +25,7 @@ public static class CommandBuilderExtensions
         commands.AddCommand<NetworkCommand>();
         commands.AddCommand<ProcessCommand>();
         commands.AddCommand<ProcessesCommand>();
+        commands.AddCommand<HandleCommand>();
         commands.AddCommand<CpuCommand>();
         commands.AddCommand<CpuFrequencyCommand>();
         commands.AddCommand<GpuCommand>();
@@ -173,6 +174,8 @@ public sealed class KernelCommand : ICommandHandler
         Console.WriteLine($"MaxProcessesPerUser: {kernel.MaxProcessesPerUser}");
         Console.WriteLine($"MaxFiles:            {kernel.MaxFiles}");
         Console.WriteLine($"MaxFilesPerProcess:  {kernel.MaxFilesPerProcess}");
+        Console.WriteLine($"MaxVnodes:           {kernel.MaxVnodes}");
+        Console.WriteLine($"MaxSockets:          {kernel.MaxSockets}");
         Console.WriteLine($"MaxArguments:        {kernel.MaxArguments}");
         Console.WriteLine($"SecureLevel:         {kernel.SecureLevel}");
         Console.WriteLine($"BootTime:            {kernel.BootTime:yyyy-MM-dd HH:mm:ss zzz}");
@@ -356,6 +359,61 @@ public sealed class FileSystemCommand : ICommandHandler
 }
 
 //--------------------------------------------------------------------------------
+// Network
+//--------------------------------------------------------------------------------
+[Command("network", "Get network stat")]
+public sealed class NetworkCommand : ICommandHandler
+{
+    [Option<bool>("--all", "-a", Description = "All")]
+    public bool All { get; set; }
+
+    public async ValueTask ExecuteAsync(CommandContext context)
+    {
+        var network = PlatformProvider.GetNetworkStat(All);
+
+        using var cts = new CancellationTokenSource();
+#pragma warning disable SA1107
+        // ReSharper disable once AccessToDisposedClosure
+        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+#pragma warning restore SA1107
+
+        while (!cts.Token.IsCancellationRequested)
+        {
+            var snapshot = network.Interfaces
+                .Where(static x => x.IsEnabled)
+                .ToDictionary(x => x.Name, x => (x.RxBytes, x.RxPackets, x.RxErrors, x.TxBytes, x.TxPackets, x.TxErrors));
+            var t0 = DateTime.UtcNow;
+
+            await Task.Delay(1000, cts.Token);
+
+            network.Update();
+            var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
+
+            Console.Clear();
+            foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
+            {
+                var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
+                Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})");
+
+                snapshot.TryGetValue(nif.Name, out var prev);
+                var deltaRxBytes = unchecked(nif.RxBytes - prev.RxBytes);
+                var deltaRxPackets = unchecked(nif.RxPackets - prev.RxPackets);
+                var deltaRxErrors = unchecked(nif.RxErrors - prev.RxErrors);
+                var deltaTxBytes = unchecked(nif.TxBytes - prev.TxBytes);
+                var deltaTxPackets = unchecked(nif.TxPackets - prev.TxPackets);
+                var deltaTxErrors = unchecked(nif.TxErrors - prev.TxErrors);
+
+                var rxKbps = elapsed > 0 ? deltaRxBytes / 1024.0 / elapsed : 0;
+                var txKbps = elapsed > 0 ? deltaTxBytes / 1024.0 / elapsed : 0;
+
+                Console.WriteLine($"  RX: {DisplayFormatter.FormatBytes(nif.RxBytes),10} total  {rxKbps,8:F2} KB/s  ({deltaRxPackets} packet/s, {deltaRxErrors} error)");
+                Console.WriteLine($"  TX: {DisplayFormatter.FormatBytes(nif.TxBytes),10} total  {txKbps,8:F2} KB/s  ({deltaTxPackets} packet/s, {deltaTxErrors} error)");
+            }
+        }
+    }
+}
+
+//--------------------------------------------------------------------------------
 // Process
 //--------------------------------------------------------------------------------
 [Command("process", "Get process summary")]
@@ -423,57 +481,19 @@ public sealed class ProcessesCommand : ICommandHandler
 }
 
 //--------------------------------------------------------------------------------
-// Network
+// Handle
 //--------------------------------------------------------------------------------
-[Command("network", "Get network stat")]
-public sealed class NetworkCommand : ICommandHandler
+[Command("handle", "Get handle stat")]
+public sealed class HandleCommand : ICommandHandler
 {
-    [Option<bool>("--all", "-a", Description = "All")]
-    public bool All { get; set; }
-
-    public async ValueTask ExecuteAsync(CommandContext context)
+    public ValueTask ExecuteAsync(CommandContext context)
     {
-        var network = PlatformProvider.GetNetworkStat(All);
+        var hs = PlatformProvider.GetHandleStat();
+        Console.WriteLine($"Open Files:   {hs.OpenFiles}");
+        Console.WriteLine($"Open Vnodes:  {hs.OpenVnodes}");
+        Console.WriteLine($"Open Sockets: {hs.OpenSockets}");
 
-        using var cts = new CancellationTokenSource();
-#pragma warning disable SA1107
-        // ReSharper disable once AccessToDisposedClosure
-        Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
-#pragma warning restore SA1107
-
-        while (!cts.Token.IsCancellationRequested)
-        {
-            var snapshot = network.Interfaces
-                .Where(static x => x.IsEnabled)
-                .ToDictionary(x => x.Name, x => (x.RxBytes, x.RxPackets, x.RxErrors, x.TxBytes, x.TxPackets, x.TxErrors));
-            var t0 = DateTime.UtcNow;
-
-            await Task.Delay(1000, cts.Token);
-
-            network.Update();
-            var elapsed = (DateTime.UtcNow - t0).TotalSeconds;
-
-            Console.Clear();
-            foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
-            {
-                var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
-                Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})");
-
-                snapshot.TryGetValue(nif.Name, out var prev);
-                var deltaRxBytes   = unchecked(nif.RxBytes   - prev.RxBytes);
-                var deltaRxPackets = unchecked(nif.RxPackets - prev.RxPackets);
-                var deltaRxErrors  = unchecked(nif.RxErrors  - prev.RxErrors);
-                var deltaTxBytes   = unchecked(nif.TxBytes   - prev.TxBytes);
-                var deltaTxPackets = unchecked(nif.TxPackets - prev.TxPackets);
-                var deltaTxErrors  = unchecked(nif.TxErrors  - prev.TxErrors);
-
-                var rxKbps = elapsed > 0 ? deltaRxBytes / 1024.0 / elapsed : 0;
-                var txKbps = elapsed > 0 ? deltaTxBytes / 1024.0 / elapsed : 0;
-
-                Console.WriteLine($"  RX: {DisplayFormatter.FormatBytes(nif.RxBytes),10} total  {rxKbps,8:F2} KB/s  ({deltaRxPackets} packet/s, {deltaRxErrors} error)");
-                Console.WriteLine($"  TX: {DisplayFormatter.FormatBytes(nif.TxBytes),10} total  {txKbps,8:F2} KB/s  ({deltaTxPackets} packet/s, {deltaTxErrors} error)");
-            }
-        }
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -914,6 +934,7 @@ public sealed class SummaryCommand : ICommandHandler
         // System
         lines.Add(("Uptime:", $"{monitor.Uptime:d\\.hh\\:mm\\:ss}"));
         lines.Add(("System:", $"Processes: {monitor.ProcessCount}  Threads: {monitor.ThreadCount}  Open Files: {monitor.OpenFileCount}"));
+        lines.Add(("Handles:", $"Files: {monitor.HandleOpenFiles}  Vnodes: {monitor.HandleOpenVnodes}  Sockets: {monitor.HandleOpenSockets}"));
         lines.Add(("Load Average:", $"{monitor.LoadAverage1:F2}  {monitor.LoadAverage5:F2}  {monitor.LoadAverage15:F2}  (1/5/15 min)"));
         // Memory
         lines.Add(("Memory Usage:", $"{monitor.MemoryUsagePercent:F1} %  (Active: {monitor.MemoryActivePercent:F1} %  Wired: {monitor.MemoryWiredPercent:F1} %  Compressor: {monitor.MemoryCompressorPercent:F1} %)"));

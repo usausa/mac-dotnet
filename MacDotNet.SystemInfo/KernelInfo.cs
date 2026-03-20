@@ -30,6 +30,10 @@ public sealed class KernelInfo
 
     public int MaxArguments { get; }
 
+    public int MaxVnodes { get; }
+
+    public int MaxSockets { get; }
+
     public int SecureLevel { get; }
 
     public DateTimeOffset BootTime { get; }
@@ -53,6 +57,8 @@ public sealed class KernelInfo
         MaxFiles = GetSystemControlInt32("kern.maxfiles");
         MaxFilesPerProcess = GetSystemControlInt32("kern.maxfilesperproc");
         MaxArguments = GetSystemControlInt32("kern.argmax");
+        MaxVnodes = GetSystemControlInt32("kern.maxvnodes");
+        MaxSockets = GetSystemControlInt32("kern.ipc.maxsockets");
         SecureLevel = GetSystemControlInt32("kern.securelevel");
 
         var time = new timeval { tv_sec = 0, tv_usec = 0 };

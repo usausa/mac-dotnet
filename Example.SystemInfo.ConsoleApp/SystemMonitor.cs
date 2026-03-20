@@ -122,6 +122,7 @@ internal sealed class SystemMonitor
     private readonly DiskStat diskStat;
     private readonly NetworkStat networkStat;
     private readonly ProcessSummary processSummary;
+    private readonly HandleStat handleStat;
     private readonly PowerStat powerStat;
     private readonly SmcMonitor smcMonitor;
     private readonly FileSystemStat fileSystemStat;
@@ -228,6 +229,12 @@ internal sealed class SystemMonitor
     public int ThreadCount => processSummary.ThreadCount;
     public int OpenFileCount => processSummary.OpenFileCount;
 
+    // Handle
+
+    public int HandleOpenFiles => handleStat.OpenFiles;
+    public int HandleOpenVnodes => handleStat.OpenVnodes;
+    public int HandleOpenSockets => handleStat.OpenSockets;
+
     // Memory
 
     public double MemoryUsagePercent => memoryUsagePercent;
@@ -304,6 +311,7 @@ internal sealed class SystemMonitor
         diskStat = PlatformProvider.GetDiskStat();
         networkStat = PlatformProvider.GetNetworkStat();
         processSummary = PlatformProvider.GetProcessSummary();
+        handleStat = PlatformProvider.GetHandleStat();
         powerStat = PlatformProvider.GetPowerStat();
         smcMonitor = PlatformProvider.GetSmcMonitor();
         fileSystemStat = PlatformProvider.GetFileSystemStat();
@@ -356,6 +364,7 @@ internal sealed class SystemMonitor
         diskStat.Update();
         networkStat.Update();
         processSummary.Update();
+        handleStat.Update();
         fileSystemStat.Update();
 
         for (var i = 0; i < gpuEntries.Count; i++)
