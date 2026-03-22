@@ -444,3 +444,5 @@ foreach (var fan in monitor.Fans)
 - [LinuxDotNet](https://github.com/usausa/linux-dotnet)
 - [RaspberryDotNet](https://github.com/usausa/raspberrypi-dotnet)
 - [Disk information library](https://github.com/usausa/hardwareinfo-disk)
+- [Prometheus Exporter alternative](https://github.com/usausa/prometheus-exporter-alternative)
+
