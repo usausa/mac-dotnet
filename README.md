@@ -374,10 +374,6 @@ foreach (var device in devices)
     Console.WriteLine($"  TilerUtilization:    {device.TilerUtilization}%");
     Console.WriteLine($"  AllocSystemMemory:   {device.AllocSystemMemory / 1024 / 1024} MB");
     Console.WriteLine($"  InUseSystemMemory:   {device.InUseSystemMemory / 1024 / 1024} MB");
-    Console.WriteLine($"  Temperature:         {device.Temperature} C");
-    Console.WriteLine($"  FanSpeed:            {device.FanSpeed}%");
-    Console.WriteLine($"  CoreClock:           {device.CoreClock} MHz");
-    Console.WriteLine($"  MemoryClock:         {device.MemoryClock} MHz");
     Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
 }
 ```

@@ -96,7 +96,6 @@ public sealed class GpuEntry
     public long DeviceUtilization => Device.DeviceUtilization;
     public long RendererUtilization => Device.RendererUtilization;
     public long TilerUtilization => Device.TilerUtilization;
-    public int Temperature => Device.Temperature;
 
     internal GpuEntry(GpuDevice gpuDevice) => Device = gpuDevice;
 }

@@ -678,10 +678,6 @@ public sealed class GpuCommand : ICommandHandler
                     Console.WriteLine($"  TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization,3}%");
                     Console.WriteLine($"  AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
                     Console.WriteLine($"  InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
-                    Console.WriteLine($"  Temperature:         {device.Temperature} C");
-                    Console.WriteLine($"  FanSpeed:            {device.FanSpeed}%");
-                    Console.WriteLine($"  CoreClock:           {device.CoreClock} MHz");
-                    Console.WriteLine($"  MemoryClock:         {device.MemoryClock} MHz");
                     Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
                 }
             }

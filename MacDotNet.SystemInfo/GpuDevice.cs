@@ -30,16 +30,6 @@ public sealed class GpuDevice
 
     public long SplitSceneCount { get; private set; }
 
-    // Sensor
-
-    public int Temperature { get; private set; }
-
-    public int FanSpeed { get; private set; }
-
-    public int CoreClock { get; private set; }
-
-    public int MemoryClock { get; private set; }
-
     public bool PowerState { get; private set; }
 
     //--------------------------------------------------------------------------------
@@ -130,16 +120,6 @@ public sealed class GpuDevice
             AllocatedParameterBufferSize = perfDict.GetInt64("Allocated PB Size");
             RecoveryCount = perfDict.GetInt64("recoveryCount");
             SplitSceneCount = perfDict.GetInt64("SplitSceneCount");
-
-            var rawTemperature = perfDict.GetInt64("Temperature(C)");
-            var rawFanSpeed = perfDict.GetInt64("Fan Speed(%)");
-            var rawCoreClock = perfDict.GetInt64("Core Clock(MHz)");
-            var rawMemoryClock = perfDict.GetInt64("Memory Clock(MHz)");
-
-            Temperature = rawTemperature is > 0 and < 128 ? (int)rawTemperature : 0;
-            FanSpeed = rawFanSpeed > 0 ? (int)rawFanSpeed : 0;
-            CoreClock = rawCoreClock > 0 ? (int)rawCoreClock : 0;
-            MemoryClock = rawMemoryClock > 0 ? (int)rawMemoryClock : 0;
         }
         else
         {
@@ -153,11 +133,6 @@ public sealed class GpuDevice
             AllocatedParameterBufferSize = 0;
             RecoveryCount = 0;
             SplitSceneCount = 0;
-
-            Temperature = 0;
-            FanSpeed = 0;
-            CoreClock = 0;
-            MemoryClock = 0;
         }
 
         using var agcInfo = entry.GetDictionary("AGCInfo");
