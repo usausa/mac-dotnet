@@ -44,37 +44,37 @@ public enum ContentType
 
 public interface IDiskInfo : IDisposable
 {
-    public uint Index { get; }
+    uint Index { get; }
 
-    public string? BsdName { get; }
+    string? BsdName { get; }
 
-    public string? DeviceName { get; }
+    string? DeviceName { get; }
 
-    public string Model { get; }
+    string Model { get; }
 
-    public string SerialNumber { get; }
+    string SerialNumber { get; }
 
-    public string FirmwareRevision { get; }
+    string FirmwareRevision { get; }
 
-    public MediumType MediumType { get; }
+    MediumType MediumType { get; }
 
-    public ulong Size { get; }
+    ulong Size { get; }
 
-    public uint PhysicalBlockSize { get; }
+    uint PhysicalBlockSize { get; }
 
-    public uint LogicalBlockSize { get; }
+    uint LogicalBlockSize { get; }
 
-    public bool Removable { get; }
+    bool Removable { get; }
 
-    public bool Ejectable { get; }
+    bool Ejectable { get; }
 
-    public BusType BusType { get; }
+    BusType BusType { get; }
 
-    public BusLocation BusLocation { get; }
+    BusLocation BusLocation { get; }
 
-    public ContentType ContentType { get; }
+    ContentType ContentType { get; }
 
-    public SmartType SmartType { get; }
+    SmartType SmartType { get; }
 
-    public ISmart Smart { get; }
+    ISmart Smart { get; }
 }

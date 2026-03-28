@@ -93,7 +93,7 @@ public sealed class FileSystemStat
 {
     private readonly bool includeAll;
 
-    private readonly List<FileSystemEntry> entries = new();
+    private readonly List<FileSystemEntry> entries = [];
 
     public DateTime UpdateAt { get; private set; }
 

@@ -68,9 +68,9 @@ public sealed class NetworkStat
 {
     private readonly bool includeAll;
 
-    private readonly List<NetworkStatEntry> interfaces = new();
+    private readonly List<NetworkStatEntry> interfaces = [];
 
-    private readonly List<NetworkStatEntry> filteredInterfaces = new();
+    private readonly List<NetworkStatEntry> filteredInterfaces = [];
 
     public DateTime UpdateAt { get; private set; }
 

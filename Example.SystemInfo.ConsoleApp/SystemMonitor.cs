@@ -2,6 +2,7 @@ namespace Example.SystemInfo.ConsoleApp;
 
 using MacDotNet.SystemInfo;
 
+#pragma warning disable IDE0032
 public sealed class DiskDeviceEntry
 {
 #pragma warning disable SA1401
@@ -728,3 +729,4 @@ internal sealed class SystemMonitor
         SavePowerCounters();
     }
 }
+#pragma warning restore IDE0032

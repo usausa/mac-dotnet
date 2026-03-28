@@ -88,9 +88,9 @@ public sealed class DiskStat
 {
     private readonly bool includeAll;
 
-    private readonly List<DiskDeviceStat> devices = new();
+    private readonly List<DiskDeviceStat> devices = [];
 
-    private readonly List<DiskDeviceStat> filteredDevices = new();
+    private readonly List<DiskDeviceStat> filteredDevices = [];
 
     public DateTime UpdateAt { get; private set; }
 

@@ -7,6 +7,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 {
     private const int SmartDataSize = 512;
 
+#pragma warning disable IDE0055
 #pragma warning disable SA1117
     // kIONVMeSMARTUserClientTypeID
     private static readonly IntPtr PluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
@@ -29,6 +30,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         byte12 = 0x4B, byte13 = 0x23, byte14 = 0x0A, byte15 = 0xB6
     };
 #pragma warning restore SA1117
+#pragma warning restore IDE0055
 
     private IntPtr pluginInterface;
 

@@ -1,3 +1,4 @@
+#pragma warning disable IDE0055
 // ReSharper disable AutoPropertyCanBeMadeGetOnly.Global
 // ReSharper disable ClassNeverInstantiated.Global
 // ReSharper disable MemberCanBeProtected.Global

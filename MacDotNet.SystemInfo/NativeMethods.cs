@@ -210,7 +210,7 @@ internal static class NativeMethods
         public uint ifi_xmittiming;
         public long ifi_lastchange_tv_sec;
         public int ifi_lastchange_tv_usec;
-        private int ifi_lastchange_pad;
+        public int ifi_lastchange_pad;
         public uint ifi_unused2;
         public uint ifi_hwassist;
         public uint ifi_reserved1;
