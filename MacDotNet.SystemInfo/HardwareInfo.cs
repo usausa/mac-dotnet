@@ -73,21 +73,21 @@ public sealed class HardwareInfo
 
     public int CpuThreadCount { get; }
 
-    public long TimebaseFrequency { get; }
+    public ulong TimebaseFrequency { get; }
 
-    public long MemorySize { get; }
+    public ulong MemorySize { get; }
 
-    public long PageSize { get; }
+    public ulong PageSize { get; }
 
-    public long CacheLineSize { get; }
+    public ulong CacheLineSize { get; }
 
-    public long L1ICacheSize { get; }
+    public ulong L1ICacheSize { get; }
 
-    public long L1DCacheSize { get; }
+    public ulong L1DCacheSize { get; }
 
-    public long L2CacheSize { get; }
+    public ulong L2CacheSize { get; }
 
-    public long L3CacheSize { get; }
+    public ulong L3CacheSize { get; }
 
     public int Packages { get; }
 
@@ -119,14 +119,14 @@ public sealed class HardwareInfo
         ActiveCpu = GetSystemControlInt32("hw.activecpu");
         CpuCoreCount = GetSystemControlInt32("machdep.cpu.core_count");
         CpuThreadCount = GetSystemControlInt32("machdep.cpu.thread_count");
-        TimebaseFrequency = GetSystemControlInt64("hw.tbfrequency");
-        MemorySize = GetSystemControlInt64("hw.memsize");
-        PageSize = GetSystemControlInt64("hw.pagesize");
-        CacheLineSize = GetSystemControlInt64("hw.cachelinesize");
-        L1ICacheSize = GetSystemControlInt64("hw.l1icachesize");
-        L1DCacheSize = GetSystemControlInt64("hw.l1dcachesize");
-        L2CacheSize = GetSystemControlInt64("hw.l2cachesize");
-        L3CacheSize = GetSystemControlInt64("hw.l3cachesize");
+        TimebaseFrequency = GetSystemControlUInt64("hw.tbfrequency");
+        MemorySize = GetSystemControlUInt64("hw.memsize");
+        PageSize = GetSystemControlUInt64("hw.pagesize");
+        CacheLineSize = GetSystemControlUInt64("hw.cachelinesize");
+        L1ICacheSize = GetSystemControlUInt64("hw.l1icachesize");
+        L1DCacheSize = GetSystemControlUInt64("hw.l1dcachesize");
+        L2CacheSize = GetSystemControlUInt64("hw.l2cachesize");
+        L3CacheSize = GetSystemControlUInt64("hw.l3cachesize");
         Packages = GetSystemControlInt32("hw.packages");
 
         var levels = GetSystemControlInt32("hw.nperflevels");
@@ -177,14 +177,13 @@ public sealed class HardwareInfo
 
     private static List<GpuInfo> ReadGpus()
     {
-        var itPtr = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref itPtr);
-        if ((kr != KERN_SUCCESS) || (itPtr == IntPtr.Zero))
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), out var itHandle);
+        if ((kr != KERN_SUCCESS) || (itHandle == 0))
         {
             return [];
         }
 
-        using var it = new IORef(itPtr);
+        using var it = new IORef(itHandle);
         var results = new List<GpuInfo>();
         uint raw;
         while ((raw = IOIteratorNext(it)) != 0)

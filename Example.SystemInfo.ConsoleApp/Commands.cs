@@ -107,15 +107,15 @@ public sealed class HardwareCommand : ICommandHandler
         Console.WriteLine($"  TimebaseFrequency: {hw.TimebaseFrequency} Hz");
 
         Console.WriteLine("[Memory]");
-        Console.WriteLine($"  MemorySize:        {DisplayFormatter.FormatBytes((ulong)hw.MemorySize)}");
+        Console.WriteLine($"  MemorySize:        {DisplayFormatter.FormatBytes(hw.MemorySize)}");
         Console.WriteLine($"  PageSize:          {hw.PageSize} bytes");
 
         Console.WriteLine("[Cache]");
         Console.WriteLine($"  CacheLineSize:     {hw.CacheLineSize} bytes");
-        Console.WriteLine($"  L1I:               {DisplayFormatter.FormatBytes((ulong)hw.L1ICacheSize)}");
-        Console.WriteLine($"  L1D:               {DisplayFormatter.FormatBytes((ulong)hw.L1DCacheSize)}");
-        Console.WriteLine($"  L2:                {DisplayFormatter.FormatBytes((ulong)hw.L2CacheSize)}");
-        Console.WriteLine($"  L3:                {DisplayFormatter.FormatBytes((ulong)hw.L3CacheSize)}");
+        Console.WriteLine($"  L1I:               {DisplayFormatter.FormatBytes(hw.L1ICacheSize)}");
+        Console.WriteLine($"  L1D:               {DisplayFormatter.FormatBytes(hw.L1DCacheSize)}");
+        Console.WriteLine($"  L2:                {DisplayFormatter.FormatBytes(hw.L2CacheSize)}");
+        Console.WriteLine($"  L3:                {DisplayFormatter.FormatBytes(hw.L3CacheSize)}");
 
         if (hw.PerformanceCoreCount > 0)
         {
@@ -677,8 +677,8 @@ public sealed class GpuCommand : ICommandHandler
                     Console.WriteLine($"  DeviceUtilization:   {DisplayFormatter.MakeBar(device.DeviceUtilization, 100)} {device.DeviceUtilization,3}%");
                     Console.WriteLine($"  RendererUtilization: {DisplayFormatter.MakeBar(device.RendererUtilization, 100)} {device.RendererUtilization,3}%");
                     Console.WriteLine($"  TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization,3}%");
-                    Console.WriteLine($"  AllocSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.AllocSystemMemory)}");
-                    Console.WriteLine($"  InUseSystemMemory:   {DisplayFormatter.FormatBytes((ulong)device.InUseSystemMemory)}");
+                    Console.WriteLine($"  AllocSystemMemory:   {DisplayFormatter.FormatBytes(device.AllocSystemMemory)}");
+                    Console.WriteLine($"  InUseSystemMemory:   {DisplayFormatter.FormatBytes(device.InUseSystemMemory)}");
                     Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
                 }
             }

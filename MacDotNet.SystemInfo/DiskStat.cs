@@ -117,9 +117,8 @@ public sealed class DiskStat
             device.Live = false;
         }
 
-        var itPtr = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), ref itPtr);
-        if ((kr != KERN_SUCCESS) || (itPtr == IntPtr.Zero))
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOMedia"), out var itHandle);
+        if ((kr != KERN_SUCCESS) || (itHandle == 0))
         {
             return false;
         }
@@ -128,7 +127,7 @@ public sealed class DiskStat
         var filterAdded = false;
 
         uint rawEntry;
-        using var it = new IORef(itPtr);
+        using var it = new IORef(itHandle);
         while ((rawEntry = IOIteratorNext(it)) != 0)
         {
             using var entry = new IOObj(rawEntry);

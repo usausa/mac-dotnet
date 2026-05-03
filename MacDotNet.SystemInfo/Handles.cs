@@ -111,21 +111,21 @@ internal readonly ref struct CFRef(IntPtr pointer)
     }
 }
 
-internal readonly ref struct IORef(IntPtr pointer)
+internal readonly ref struct IORef(uint handle)
 {
     public static IORef Zero => default;
 
-    public IntPtr Pointer { get; } = pointer;
+    public uint Handle { get; } = handle;
 
-    public bool IsValid => Pointer != IntPtr.Zero;
+    public bool IsValid => Handle != 0;
 
-    public static implicit operator IntPtr(IORef r) => r.Pointer;
+    public static implicit operator uint(IORef r) => r.Handle;
 
     public void Dispose()
     {
         if (IsValid)
         {
-            _ = IOObjectRelease(Pointer);
+            _ = IOObjectRelease(Handle);
         }
     }
 }

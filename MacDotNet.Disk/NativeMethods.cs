@@ -132,19 +132,19 @@ internal static class NativeMethods
     public static extern bool CFBooleanGetValue(IntPtr boolean);
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFGetTypeID(IntPtr cf);
+    public static extern UIntPtr CFGetTypeID(IntPtr cf);
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFStringGetTypeID();
+    public static extern UIntPtr CFStringGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFNumberGetTypeID();
+    public static extern UIntPtr CFNumberGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFDictionaryGetTypeID();
+    public static extern UIntPtr CFDictionaryGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFBooleanGetTypeID();
+    public static extern UIntPtr CFBooleanGetTypeID();
 
     [DllImport(CoreFoundationLib)]
     public static extern IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);

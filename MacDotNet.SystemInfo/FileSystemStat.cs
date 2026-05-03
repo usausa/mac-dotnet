@@ -121,7 +121,7 @@ public sealed class FileSystemStat
             return false;
         }
 
-        var buf = (statfs*)NativeMemory.Alloc((nuint)count, (nuint)sizeof(statfs));
+        var buf = (statfs*)NativeMemory.Alloc((UIntPtr)count, (UIntPtr)sizeof(statfs));
         try
         {
             var actual = getfsstat(buf, count * sizeof(statfs), MNT_NOWAIT);

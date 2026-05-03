@@ -12,7 +12,7 @@ public sealed class SwapUsage
 
     public ulong UsedBytes { get; private set; }
 
-    public int PageSize { get; private set; }
+    public uint PageSize { get; private set; }
 
     public bool IsEncrypted { get; private set; }
 
@@ -42,7 +42,7 @@ public sealed class SwapUsage
         TotalBytes = swap.xsu_total;
         AvailableBytes = swap.xsu_avail;
         UsedBytes = swap.xsu_used;
-        PageSize = swap.xsu_pagesize;
+        PageSize = (uint)swap.xsu_pagesize;
         IsEncrypted = swap.xsu_encrypted != 0;
 
         UpdateAt = DateTime.Now;

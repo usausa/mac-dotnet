@@ -12,7 +12,7 @@ public sealed class MemoryStat
 
     // Page Size
 
-    public nuint PageSize { get; }
+    public ulong PageSize { get; }
 
     // Memory Count
 
@@ -98,13 +98,13 @@ public sealed class MemoryStat
 
     public ulong FreeBytes => PhysicalMemory > UsedBytes ? PhysicalMemory - UsedBytes : 0;
 
-    public ulong ActiveBytes => (ulong)ActiveCount * PageSize;
+    public ulong ActiveBytes => ActiveCount * PageSize;
 
-    public ulong InactiveBytes => (ulong)InactiveCount * PageSize;
+    public ulong InactiveBytes => InactiveCount * PageSize;
 
-    public ulong WiredBytes => (ulong)WireCount * PageSize;
+    public ulong WiredBytes => WireCount * PageSize;
 
-    public ulong CompressorBytes => (ulong)CompressorPageCount * PageSize;
+    public ulong CompressorBytes => CompressorPageCount * PageSize;
 
     public ulong AppMemoryBytes => InternalPageCount > PurgeableCount ? ((ulong)InternalPageCount - PurgeableCount) * PageSize : 0;
 

@@ -359,13 +359,13 @@ internal static class NativeMethods
     public static extern int host_processor_info(uint host, int flavor, out int processorCount, out IntPtr processorInfo, out int processorInfoCnt);
 
     [DllImport("libSystem.dylib")]
-    public static extern int vm_deallocate(uint targetTask, IntPtr address, IntPtr size);
+    public static extern int vm_deallocate(uint targetTask, IntPtr address, UIntPtr size);
 
     [DllImport("libSystem.dylib")]
     public static extern unsafe int host_statistics64(uint host_priv, int flavor, vm_statistics64* host_info_out, ref int host_info_outCnt);
 
     [DllImport("libSystem.dylib")]
-    public static extern int host_page_size(uint host, out nuint page_size);
+    public static extern int host_page_size(uint host, out UIntPtr page_size);
 
     //------------------------------------------------------------------------
     // libc
@@ -459,19 +459,19 @@ internal static class NativeMethods
     public static extern bool CFBooleanGetValue(IntPtr boolean);
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFGetTypeID(IntPtr cf);
+    public static extern UIntPtr CFGetTypeID(IntPtr cf);
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFStringGetTypeID();
+    public static extern UIntPtr CFStringGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFNumberGetTypeID();
+    public static extern UIntPtr CFNumberGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFDictionaryGetTypeID();
+    public static extern UIntPtr CFDictionaryGetTypeID();
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFDataGetTypeID();
+    public static extern UIntPtr CFDataGetTypeID();
 
     [DllImport(CoreFoundationLib)]
     public static extern IntPtr CFDataGetLength(IntPtr theData);
@@ -486,19 +486,10 @@ internal static class NativeMethods
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
 
     [DllImport(IOKitLib)]
-    public static extern int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, ref IntPtr existing);
-
-    [DllImport(IOKitLib)]
     public static extern uint IOServiceGetMatchingService(uint mainPort, IntPtr matching);
 
     [DllImport(IOKitLib)]
-    public static extern uint IOIteratorNext(IntPtr iterator);
-
-    [DllImport(IOKitLib)]
-    public static extern int IORegistryEntryGetChildIterator(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out IntPtr iterator);
-
-    [DllImport(IOKitLib)]
-    public static extern int IOObjectRelease(IntPtr @object);
+    public static extern int IORegistryEntryGetChildIterator(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint iterator);
 
     [DllImport(IOKitLib)]
     public static extern int IOObjectRelease(uint @object);
@@ -522,7 +513,7 @@ internal static class NativeMethods
     public static extern int IOServiceClose(uint connect);
 
     [DllImport(IOKitLib)]
-    public static extern unsafe int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, nuint inputStructCnt, void* outputStruct, nuint* outputStructCnt);
+    public static extern unsafe int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, UIntPtr inputStructCnt, void* outputStruct, UIntPtr* outputStructCnt);
 
     [DllImport(IOKitLib)]
     public static extern int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
@@ -582,7 +573,7 @@ internal static class NativeMethods
     public static extern long IOReportStateGetResidency(IntPtr channel, int index);
 
     [DllImport(CoreFoundationLib)]
-    public static extern nuint CFArrayGetTypeID();
+    public static extern UIntPtr CFArrayGetTypeID();
 
     [DllImport(CoreFoundationLib)]
     public static extern IntPtr CFDictionaryCreateMutableCopy(IntPtr allocator, IntPtr capacity, IntPtr theDict);

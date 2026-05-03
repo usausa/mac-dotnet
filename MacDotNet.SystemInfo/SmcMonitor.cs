@@ -455,8 +455,8 @@ public sealed class SmcMonitor
 
     private static unsafe int SmcCall(uint conn, SMCKeyData_t* input, SMCKeyData_t* output)
     {
-        var outputSize = (nuint)sizeof(SMCKeyData_t);
-        return IOConnectCallStructMethod(conn, KERNEL_INDEX_SMC, input, (nuint)sizeof(SMCKeyData_t), output, &outputSize);
+        var outputSize = (UIntPtr)sizeof(SMCKeyData_t);
+        return IOConnectCallStructMethod(conn, KERNEL_INDEX_SMC, input, (UIntPtr)sizeof(SMCKeyData_t), output, &outputSize);
     }
 
     //--------------------------------------------------------------------------------

@@ -10,25 +10,25 @@ public sealed class GpuDevice
 
     // Performance
 
-    public long DeviceUtilization { get; private set; }
+    public ulong DeviceUtilization { get; private set; }
 
-    public long RendererUtilization { get; private set; }
+    public ulong RendererUtilization { get; private set; }
 
-    public long TilerUtilization { get; private set; }
+    public ulong TilerUtilization { get; private set; }
 
-    public long AllocSystemMemory { get; private set; }
+    public ulong AllocSystemMemory { get; private set; }
 
-    public long InUseSystemMemory { get; private set; }
+    public ulong InUseSystemMemory { get; private set; }
 
-    public long InUseSystemMemoryDriver { get; private set; }
+    public ulong InUseSystemMemoryDriver { get; private set; }
 
-    public long TiledSceneBytes { get; private set; }
+    public ulong TiledSceneBytes { get; private set; }
 
-    public long AllocatedParameterBufferSize { get; private set; }
+    public ulong AllocatedParameterBufferSize { get; private set; }
 
-    public long RecoveryCount { get; private set; }
+    public ulong RecoveryCount { get; private set; }
 
-    public long SplitSceneCount { get; private set; }
+    public ulong SplitSceneCount { get; private set; }
 
     public bool PowerState { get; private set; }
 
@@ -47,16 +47,15 @@ public sealed class GpuDevice
 
     public static IReadOnlyList<GpuDevice> GetDevices()
     {
-        var itPtr = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref itPtr);
-        if ((kr != KERN_SUCCESS) || (itPtr == IntPtr.Zero))
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), out var itHandle);
+        if ((kr != KERN_SUCCESS) || (itHandle == 0))
         {
             return [];
         }
 
         var results = new List<GpuDevice>();
 
-        using var it = new IORef(itPtr);
+        using var it = new IORef(itHandle);
         uint raw;
         while ((raw = IOIteratorNext(it)) != 0)
         {
@@ -78,14 +77,13 @@ public sealed class GpuDevice
 
     public bool Update()
     {
-        var itPtr = IntPtr.Zero;
-        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), ref itPtr);
-        if ((kr != KERN_SUCCESS) || (itPtr == IntPtr.Zero))
+        var kr = IOServiceGetMatchingServices(0, IOServiceMatching("IOAccelerator"), out var itHandle);
+        if ((kr != KERN_SUCCESS) || (itHandle == 0))
         {
             return false;
         }
 
-        using var it = new IORef(itPtr);
+        using var it = new IORef(itHandle);
         uint raw;
         while ((raw = IOIteratorNext(it)) != 0)
         {
@@ -110,16 +108,16 @@ public sealed class GpuDevice
         using var perfDict = entry.GetDictionary("PerformanceStatistics");
         if (perfDict.IsValid)
         {
-            DeviceUtilization = perfDict.GetInt64("Device Utilization %");
-            RendererUtilization = perfDict.GetInt64("Renderer Utilization %");
-            TilerUtilization = perfDict.GetInt64("Tiler Utilization %");
-            AllocSystemMemory = perfDict.GetInt64("Alloc system memory");
-            InUseSystemMemory = perfDict.GetInt64("In use system memory");
-            InUseSystemMemoryDriver = perfDict.GetInt64("In use system memory (driver)");
-            TiledSceneBytes = perfDict.GetInt64("TiledSceneBytes");
-            AllocatedParameterBufferSize = perfDict.GetInt64("Allocated PB Size");
-            RecoveryCount = perfDict.GetInt64("recoveryCount");
-            SplitSceneCount = perfDict.GetInt64("SplitSceneCount");
+            DeviceUtilization = perfDict.GetUInt64("Device Utilization %");
+            RendererUtilization = perfDict.GetUInt64("Renderer Utilization %");
+            TilerUtilization = perfDict.GetUInt64("Tiler Utilization %");
+            AllocSystemMemory = perfDict.GetUInt64("Alloc system memory");
+            InUseSystemMemory = perfDict.GetUInt64("In use system memory");
+            InUseSystemMemoryDriver = perfDict.GetUInt64("In use system memory (driver)");
+            TiledSceneBytes = perfDict.GetUInt64("TiledSceneBytes");
+            AllocatedParameterBufferSize = perfDict.GetUInt64("Allocated PB Size");
+            RecoveryCount = perfDict.GetUInt64("recoveryCount");
+            SplitSceneCount = perfDict.GetUInt64("SplitSceneCount");
         }
         else
         {

@@ -126,7 +126,7 @@ public sealed class CpuStat
         }
         finally
         {
-            _ = vm_deallocate(task_self_trap(), info, sizeof(int) * infoCount);
+            _ = vm_deallocate(task_self_trap(), info, (UIntPtr)(sizeof(int) * infoCount));
         }
     }
 
@@ -143,8 +143,7 @@ public sealed class CpuStat
             return coreTypes;
         }
 
-        var iterator = IntPtr.Zero;
-        if (IOServiceGetMatchingServices(0, matching, ref iterator) != KERN_SUCCESS || iterator == IntPtr.Zero)
+        if (IOServiceGetMatchingServices(0, matching, out var iterator) != KERN_SUCCESS || iterator == 0)
         {
             return coreTypes;
         }
@@ -154,7 +153,7 @@ public sealed class CpuStat
         while ((service = IOIteratorNext(services)) != 0)
         {
             using var serviceObject = new IOObj(service);
-            if (IORegistryEntryGetChildIterator(serviceObject, "IOService", out var childIterator) != KERN_SUCCESS || childIterator == IntPtr.Zero)
+            if (IORegistryEntryGetChildIterator(serviceObject, "IOService", out var childIterator) != KERN_SUCCESS || childIterator == 0)
             {
                 continue;
             }
@@ -165,7 +164,7 @@ public sealed class CpuStat
             {
                 using var childObject = new IOObj(child);
                 var name = GetEntryName(childObject);
-                if (string.IsNullOrEmpty(name) || !name.StartsWith("cpu", StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(name[3]))
+                if (String.IsNullOrEmpty(name) || !name.StartsWith("cpu", StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(name[3]))
                 {
                     continue;
                 }
@@ -226,7 +225,7 @@ public sealed class CpuStat
             return CpuCoreType.Unknown;
         }
 
-        var length = CFDataGetLength(value).ToInt32();
+        var length = (int)CFDataGetLength(value);
         if (length <= 0)
         {
             return CpuCoreType.Unknown;

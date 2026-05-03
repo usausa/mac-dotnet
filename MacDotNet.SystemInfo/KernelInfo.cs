@@ -64,7 +64,7 @@ public sealed class KernelInfo
         var time = new timeval { tv_sec = 0, tv_usec = 0 };
         var size = Marshal.SizeOf<timeval>();
         BootTime = sysctlbyname("kern.boottime", ref time, ref size, IntPtr.Zero, 0) == 0
-            ? DateTimeOffset.FromUnixTimeSeconds(time.tv_sec)
+            ? DateTimeOffset.FromUnixTimeSeconds(time.tv_sec).AddTicks(time.tv_usec * 10)
             : DateTimeOffset.MinValue;
         // ReSharper restore StringLiteralTypo
     }

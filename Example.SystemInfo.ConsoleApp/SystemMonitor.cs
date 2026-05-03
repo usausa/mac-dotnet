@@ -94,9 +94,9 @@ public sealed class GpuEntry
 
     // Delegation properties
     public string Name => Device.Name;
-    public long DeviceUtilization => Device.DeviceUtilization;
-    public long RendererUtilization => Device.RendererUtilization;
-    public long TilerUtilization => Device.TilerUtilization;
+    public ulong DeviceUtilization => Device.DeviceUtilization;
+    public ulong RendererUtilization => Device.RendererUtilization;
+    public ulong TilerUtilization => Device.TilerUtilization;
 
     internal GpuEntry(GpuDevice gpuDevice) => Device = gpuDevice;
 }
