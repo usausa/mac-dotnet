@@ -101,8 +101,8 @@ public sealed class CpuStat
 
                 cpuCores.Sort(static (x, y) =>
                 {
-                    var cmp = x.CoreType.CompareTo(y.CoreType);
-                    return cmp != 0 ? cmp : x.Number.CompareTo(y.Number);
+                    var cmp = (int)x.CoreType - (int)y.CoreType;
+                    return cmp != 0 ? cmp : x.Number - y.Number;
                 });
             }
 

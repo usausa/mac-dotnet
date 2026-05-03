@@ -51,9 +51,8 @@ public sealed class ProcessSummary
 
                 var process = 0;
                 var thread = 0;
-                for (var i = 0; i < actualCount; i++)
+                foreach (var pid in pids.AsSpan(0, actualCount))
                 {
-                    var pid = pids[i];
                     if (pid == 0)
                     {
                         continue;

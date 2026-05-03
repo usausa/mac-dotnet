@@ -116,7 +116,7 @@ public sealed class NetworkStat
                     (((sockaddr*)ifa->ifa_addr)->sa_family == AF_LINK) &&
                     (ifa->ifa_data != IntPtr.Zero))
                 {
-                    var raw = *(if_data*)ifa->ifa_data;
+                    var raw = (if_data*)ifa->ifa_data;
 
                     var iface = default(NetworkStatEntry);
                     foreach (var item in interfaces)
@@ -145,17 +145,17 @@ public sealed class NetworkStat
 
                     if (iface.Target)
                     {
-                        iface.RxBytes = raw.ifi_ibytes;
-                        iface.RxPackets = raw.ifi_ipackets;
-                        iface.RxErrors = raw.ifi_ierrors;
-                        iface.RxDrops = raw.ifi_iqdrops;
-                        iface.RxMulticast = raw.ifi_imcasts;
-                        iface.TxBytes = raw.ifi_obytes;
-                        iface.TxPackets = raw.ifi_opackets;
-                        iface.TxErrors = raw.ifi_oerrors;
-                        iface.TxMulticast = raw.ifi_omcasts;
-                        iface.Collisions = raw.ifi_collisions;
-                        iface.NoProto = raw.ifi_noproto;
+                        iface.RxBytes = raw->ifi_ibytes;
+                        iface.RxPackets = raw->ifi_ipackets;
+                        iface.RxErrors = raw->ifi_ierrors;
+                        iface.RxDrops = raw->ifi_iqdrops;
+                        iface.RxMulticast = raw->ifi_imcasts;
+                        iface.TxBytes = raw->ifi_obytes;
+                        iface.TxPackets = raw->ifi_opackets;
+                        iface.TxErrors = raw->ifi_oerrors;
+                        iface.TxMulticast = raw->ifi_omcasts;
+                        iface.Collisions = raw->ifi_collisions;
+                        iface.NoProto = raw->ifi_noproto;
                     }
 
                     iface.Live = true;

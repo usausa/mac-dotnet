@@ -121,10 +121,10 @@ public sealed class FileSystemStat
             return false;
         }
 
-        var buffer = new statfs[count];
-        fixed (statfs* ptr = buffer)
+        var buf = (statfs*)NativeMemory.Alloc((nuint)count, (nuint)sizeof(statfs));
+        try
         {
-            var actual = getfsstat(ptr, count * sizeof(statfs), MNT_NOWAIT);
+            var actual = getfsstat(buf, count * sizeof(statfs), MNT_NOWAIT);
             if (actual <= 0)
             {
                 return false;
@@ -139,13 +139,13 @@ public sealed class FileSystemStat
             count = Math.Min(actual, count);
             for (var i = 0; i < count; i++)
             {
-                var option = (MountOption)ptr[i].f_flags;
+                var option = (MountOption)buf[i].f_flags;
                 if (!includeAll && !(option.HasFlag(MountOption.Local) && !option.HasFlag(MountOption.DontBrowse)))
                 {
                     continue;
                 }
 
-                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntonname) ?? string.Empty;
+                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)buf[i].f_mntonname) ?? string.Empty;
 
                 var entry = default(FileSystemEntry);
                 foreach (var item in entries)
@@ -159,26 +159,26 @@ public sealed class FileSystemStat
 
                 if (entry is null)
                 {
-                    var deviceName = Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_mntfromname) ?? string.Empty;
+                    var deviceName = Marshal.PtrToStringUTF8((IntPtr)buf[i].f_mntfromname) ?? string.Empty;
                     entry = new FileSystemEntry(
                         mountPoint,
-                        Marshal.PtrToStringUTF8((IntPtr)ptr[i].f_fstypename) ?? string.Empty,
+                        Marshal.PtrToStringUTF8((IntPtr)buf[i].f_fstypename) ?? string.Empty,
                         deviceName,
                         FindPhysicalDiskBsdName(deviceName));
                     entries.Add(entry);
                     added = true;
                 }
 
-                entry.BlockSize = ptr[i].f_bsize;
-                entry.IOSize = ptr[i].f_iosize;
-                entry.TotalBlocks = ptr[i].f_blocks;
-                entry.FreeBlocks = ptr[i].f_bfree;
-                entry.AvailableBlocks = ptr[i].f_bavail;
-                entry.TotalFiles = ptr[i].f_files;
-                entry.FreeFiles = ptr[i].f_ffree;
+                entry.BlockSize = buf[i].f_bsize;
+                entry.IOSize = buf[i].f_iosize;
+                entry.TotalBlocks = buf[i].f_blocks;
+                entry.FreeBlocks = buf[i].f_bfree;
+                entry.AvailableBlocks = buf[i].f_bavail;
+                entry.TotalFiles = buf[i].f_files;
+                entry.FreeFiles = buf[i].f_ffree;
                 entry.Option = option;
-                entry.SubType = ptr[i].f_fssubtype;
-                entry.OwnerUid = ptr[i].f_owner;
+                entry.SubType = buf[i].f_fssubtype;
+                entry.OwnerUid = buf[i].f_owner;
 
                 entry.Live = true;
             }
@@ -199,6 +199,10 @@ public sealed class FileSystemStat
             UpdateAt = DateTime.Now;
 
             return true;
+        }
+        finally
+        {
+            NativeMemory.Free(buf);
         }
     }
 

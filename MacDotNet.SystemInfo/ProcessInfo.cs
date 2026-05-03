@@ -1,5 +1,6 @@
 namespace MacDotNet.SystemInfo;
 
+using System.Buffers;
 using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
@@ -101,38 +102,43 @@ public sealed record ProcessInfo
         }
 
         var count = size / sizeof(int);
-        var pids = new int[count];
-
-        fixed (int* pidPtr = pids)
+        var pids = ArrayPool<int>.Shared.Rent(count);
+        try
         {
-            size = proc_listpids(PROC_ALL_PIDS, 0, pidPtr, size);
-            if (size <= 0)
+            fixed (int* pidPtr = pids)
             {
-                return [];
-            }
-
-            count = Math.Min(size / sizeof(int), count);
-
-            var result = new List<ProcessInfo>();
-
-            for (var i = 0; i < count; i++)
-            {
-                var pid = pids[i];
-                if (pid == 0)
+                size = proc_listpids(PROC_ALL_PIDS, 0, pidPtr, size);
+                if (size <= 0)
                 {
-                    continue;
+                    return [];
                 }
 
-                var entry = GetProcess(pid);
-                if (entry is not null)
+                count = Math.Min(size / sizeof(int), count);
+
+                var result = new List<ProcessInfo>();
+
+                foreach (var pid in pids.AsSpan(0, count))
                 {
-                    result.Add(entry);
+                    if (pid == 0)
+                    {
+                        continue;
+                    }
+
+                    var entry = GetProcess(pid);
+                    if (entry is not null)
+                    {
+                        result.Add(entry);
+                    }
                 }
+
+                result.Sort(static (x, y) => x.ProcessId.CompareTo(y.ProcessId));
+
+                return result;
             }
-
-            result.Sort(static (x, y) => x.ProcessId.CompareTo(y.ProcessId));
-
-            return result;
+        }
+        finally
+        {
+            ArrayPool<int>.Shared.Return(pids);
         }
     }
 
