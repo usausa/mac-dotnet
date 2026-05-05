@@ -6,10 +6,9 @@ using System.Runtime.InteropServices;
 // ReSharper disable InconsistentNaming
 // ReSharper disable IdentifierTypo
 #pragma warning disable IDE1006
-#pragma warning disable CA2101
 #pragma warning disable CA5392
 #pragma warning disable CS8981
-internal static class NativeMethods
+internal static partial class NativeMethods
 {
     //------------------------------------------------------------------------
     // Constants
@@ -65,42 +64,42 @@ internal static class NativeMethods
 
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, ref uint existing);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, ref uint existing);
 
-    [DllImport(IOKitLib)]
-    public static extern uint IOIteratorNext(uint iterator);
+    [LibraryImport(IOKitLib)]
+    public static partial uint IOIteratorNext(uint iterator);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOObjectRelease(uint @object);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOObjectRelease(uint @object);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IORegistryEntrySearchCFProperty(
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IORegistryEntrySearchCFProperty(
         uint entry,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string plane,
         IntPtr key,
         IntPtr allocator,
         uint options);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IORegistryEntryGetName(uint entry, byte* name);
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IORegistryEntryGetName(uint entry, byte* name);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IOCreatePlugInInterfaceForService(
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IOCreatePlugInInterfaceForService(
         uint service,
         IntPtr pluginType,
         IntPtr interfaceType,
         IntPtr* theInterface,
         int* theScore);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IOObjectGetClass(uint @object, byte* className);
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IOObjectGetClass(uint @object, byte* className);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -108,53 +107,54 @@ internal static class NativeMethods
 
     private const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringCreateWithCString(
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringCreateWithCString(
         IntPtr alloc,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string cStr,
         uint encoding);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringGetLength(IntPtr theString);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringGetLength(IntPtr theString);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern unsafe bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
-
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref long valuePtr);
+    public static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
 
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFBooleanGetValue(IntPtr boolean);
+    public static partial bool CFNumberGetValue(IntPtr number, int theType, ref long valuePtr);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFGetTypeID(IntPtr cf);
+    [LibraryImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool CFBooleanGetValue(IntPtr boolean);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFStringGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFGetTypeID(IntPtr cf);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFNumberGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFStringGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFDictionaryGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFNumberGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFBooleanGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFDictionaryGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFBooleanGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern void CFRelease(IntPtr cf);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
+
+    [LibraryImport(CoreFoundationLib)]
+    public static partial void CFRelease(IntPtr cf);
 
 #pragma warning disable SA1117
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFUUIDGetConstantUUIDWithBytes(
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFUUIDGetConstantUUIDWithBytes(
         IntPtr alloc,
         byte byte0, byte byte1, byte byte2, byte byte3,
         byte byte4, byte byte5, byte byte6, byte byte7,

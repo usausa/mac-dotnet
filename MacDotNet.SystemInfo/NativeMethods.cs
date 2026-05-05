@@ -6,10 +6,9 @@ using System.Runtime.InteropServices;
 // ReSharper disable IdentifierTypo
 // ReSharper disable InconsistentNaming
 #pragma warning disable IDE1006
-#pragma warning disable CA2101
 #pragma warning disable CA5392
 #pragma warning disable CS8981
-internal static class NativeMethods
+internal static partial class NativeMethods
 {
     //------------------------------------------------------------------------
     // Constants
@@ -343,71 +342,71 @@ internal static class NativeMethods
     // Mach
     //------------------------------------------------------------------------
 
-    [DllImport("libSystem.dylib")]
-    public static extern uint mach_host_self();
+    [LibraryImport("libSystem.dylib")]
+    public static partial uint mach_host_self();
 
-    [DllImport("libSystem.dylib")]
-    public static extern uint mach_task_self();
+    [LibraryImport("libSystem.dylib")]
+    public static partial uint mach_task_self();
 
-    [DllImport("libSystem.dylib")]
-    public static extern int mach_port_deallocate(uint task, uint name);
+    [LibraryImport("libSystem.dylib")]
+    public static partial int mach_port_deallocate(uint task, uint name);
 
-    [DllImport("libSystem.dylib")]
-    public static extern uint task_self_trap();
+    [LibraryImport("libSystem.dylib")]
+    public static partial uint task_self_trap();
 
-    [DllImport("libSystem.dylib")]
-    public static extern int host_processor_info(uint host, int flavor, out int processorCount, out IntPtr processorInfo, out int processorInfoCnt);
+    [LibraryImport("libSystem.dylib")]
+    public static partial int host_processor_info(uint host, int flavor, out int processorCount, out IntPtr processorInfo, out int processorInfoCnt);
 
-    [DllImport("libSystem.dylib")]
-    public static extern int vm_deallocate(uint targetTask, IntPtr address, UIntPtr size);
+    [LibraryImport("libSystem.dylib")]
+    public static partial int vm_deallocate(uint targetTask, IntPtr address, UIntPtr size);
 
-    [DllImport("libSystem.dylib")]
-    public static extern unsafe int host_statistics64(uint host_priv, int flavor, vm_statistics64* host_info_out, ref int host_info_outCnt);
+    [LibraryImport("libSystem.dylib")]
+    public static unsafe partial int host_statistics64(uint host_priv, int flavor, vm_statistics64* host_info_out, ref int host_info_outCnt);
 
-    [DllImport("libSystem.dylib")]
-    public static extern int host_page_size(uint host, out UIntPtr page_size);
+    [LibraryImport("libSystem.dylib")]
+    public static partial int host_page_size(uint host, out UIntPtr page_size);
 
     //------------------------------------------------------------------------
     // libc
     //------------------------------------------------------------------------
 
-    [DllImport("libc")]
-    public static extern int sysctlbyname([MarshalAs(UnmanagedType.LPStr)] string name, ref timeval oldp, ref int oldlen, IntPtr newp, int newlen);
+    [LibraryImport("libc")]
+    public static partial int sysctlbyname([MarshalAs(UnmanagedType.LPStr)] string name, ref timeval oldp, ref int oldlen, IntPtr newp, int newlen);
 
-    [DllImport("libc")]
-    public static extern unsafe int sysctlbyname([MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
+    [LibraryImport("libc")]
+    public static unsafe partial int sysctlbyname([MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
 
-    [DllImport("libc")]
-    public static extern unsafe int getloadavg(double* loadavg, int nelem);
+    [LibraryImport("libc")]
+    public static unsafe partial int getloadavg(double* loadavg, int nelem);
 
-    [DllImport("libc")]
-    public static extern unsafe int getfsstat(statfs* buf, int bufsize, int mode);
+    [LibraryImport("libc")]
+    public static unsafe partial int getfsstat(statfs* buf, int bufsize, int mode);
 
     // ReSharper disable once StringLiteralTypo
-    [DllImport("libc", EntryPoint = "statfs")]
-    public static extern unsafe int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
+    [LibraryImport("libc", EntryPoint = "statfs")]
+    public static unsafe partial int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
 
-    [DllImport("libc")]
-    public static extern int getifaddrs(out IntPtr ifap);
+    [LibraryImport("libc")]
+    public static partial int getifaddrs(out IntPtr ifap);
 
-    [DllImport("libc")]
-    public static extern void freeifaddrs(IntPtr ifa);
+    [LibraryImport("libc")]
+    public static partial void freeifaddrs(IntPtr ifa);
 
     //------------------------------------------------------------------------
     // libproc
     //------------------------------------------------------------------------
 
-    [DllImport("libproc")]
-    public static extern unsafe int proc_listpids(uint type, uint typeinfo, int* buffer, int buffersize);
+    [LibraryImport("libproc")]
+    public static unsafe partial int proc_listpids(uint type, uint typeinfo, int* buffer, int buffersize);
 
-    [DllImport("libproc")]
-    public static extern unsafe int proc_pidinfo(int pid, int flavor, ulong arg, void* buffer, int buffersize);
+    [LibraryImport("libproc")]
+    public static unsafe partial int proc_pidinfo(int pid, int flavor, ulong arg, void* buffer, int buffersize);
 
-    [DllImport("libproc")]
-    public static extern unsafe int proc_pidpath(int pid, byte* buffer, uint buffersize);
+    [LibraryImport("libproc")]
+    public static unsafe partial int proc_pidpath(int pid, byte* buffer, uint buffersize);
 
-    [DllImport("libproc")]
-    public static extern unsafe int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
+    [LibraryImport("libproc")]
+    public static unsafe partial int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -415,69 +414,70 @@ internal static class NativeMethods
 
     private const string CoreFoundationLib = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
 
-    [DllImport(CoreFoundationLib)]
-    public static extern void CFRelease(IntPtr cf);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial void CFRelease(IntPtr cf);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern long CFArrayGetCount(IntPtr theArray);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial long CFArrayGetCount(IntPtr theArray);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFArrayGetValueAtIndex(IntPtr theArray, long idx);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFArrayGetValueAtIndex(IntPtr theArray, long idx);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringCreateWithCString(IntPtr alloc, [MarshalAs(UnmanagedType.LPUTF8Str)] string cStr, uint encoding);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringCreateWithCString(IntPtr alloc, [MarshalAs(UnmanagedType.LPUTF8Str)] string cStr, uint encoding);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringGetCStringPtr(IntPtr theString, uint encoding);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFStringGetLength(IntPtr theString);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFStringGetLength(IntPtr theString);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern unsafe bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
-
-    [DllImport(CoreFoundationLib)]
-    public static extern void CFDictionarySetValue(IntPtr theDict, IntPtr key, IntPtr value);
-
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
-
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFNumberGetValue(IntPtr number, int theType, out int valuePtr);
+    public static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
 
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
+    public static partial void CFDictionarySetValue(IntPtr theDict, IntPtr key, IntPtr value);
+
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
+
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref long valuePtr);
+    public static partial bool CFNumberGetValue(IntPtr number, int theType, out int valuePtr);
 
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref ulong valuePtr);
+    public static partial bool CFNumberGetValue(IntPtr number, int theType, ref long valuePtr);
 
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFBooleanGetValue(IntPtr boolean);
+    public static partial bool CFNumberGetValue(IntPtr number, int theType, ref ulong valuePtr);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFGetTypeID(IntPtr cf);
+    [LibraryImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool CFBooleanGetValue(IntPtr boolean);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFStringGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFGetTypeID(IntPtr cf);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFNumberGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFStringGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFDictionaryGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFNumberGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFDataGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFDictionaryGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFDataGetLength(IntPtr theData);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFDataGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFDataGetBytePtr(IntPtr theData);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFDataGetLength(IntPtr theData);
+
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFDataGetBytePtr(IntPtr theData);
 
     //------------------------------------------------------------------------
     // IOKit
@@ -485,50 +485,50 @@ internal static class NativeMethods
 
     private const string IOKitLib = "/System/Library/Frameworks/IOKit.framework/IOKit";
 
-    [DllImport(IOKitLib)]
-    public static extern uint IOServiceGetMatchingService(uint mainPort, IntPtr matching);
+    [LibraryImport(IOKitLib)]
+    public static partial uint IOServiceGetMatchingService(uint mainPort, IntPtr matching);
 
-    [DllImport(IOKitLib)]
-    public static extern int IORegistryEntryGetChildIterator(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint iterator);
+    [LibraryImport(IOKitLib)]
+    public static partial int IORegistryEntryGetChildIterator(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint iterator);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOObjectRelease(uint @object);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOObjectRelease(uint @object);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOServiceMatching([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, out uint existing);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOServiceGetMatchingServices(uint mainPort, IntPtr matching, out uint existing);
 
-    [DllImport(IOKitLib)]
-    public static extern uint IOIteratorNext(uint iterator);
+    [LibraryImport(IOKitLib)]
+    public static partial uint IOIteratorNext(uint iterator);
 
-    [DllImport(IOKitLib)]
-    public static extern IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IORegistryEntryCreateCFProperty(uint entry, IntPtr key, IntPtr allocator, uint options);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOServiceOpen(uint service, uint owningTask, uint type, out uint connect);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOServiceOpen(uint service, uint owningTask, uint type, out uint connect);
 
-    [DllImport(IOKitLib)]
-    public static extern int IOServiceClose(uint connect);
+    [LibraryImport(IOKitLib)]
+    public static partial int IOServiceClose(uint connect);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, UIntPtr inputStructCnt, void* outputStruct, UIntPtr* outputStructCnt);
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, UIntPtr inputStructCnt, void* outputStruct, UIntPtr* outputStructCnt);
 
-    [DllImport(IOKitLib)]
-    public static extern int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
+    [LibraryImport(IOKitLib)]
+    public static partial int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IORegistryEntryGetName(uint entry, byte* name);
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IORegistryEntryGetName(uint entry, byte* name);
 
-    [DllImport(IOKitLib)]
-    public static extern unsafe int IOObjectGetClass(uint @object, byte* className);
+    [LibraryImport(IOKitLib)]
+    public static unsafe partial int IOObjectGetClass(uint @object, byte* className);
 
-    [DllImport(IOKitLib)]
-    public static extern int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
+    [LibraryImport(IOKitLib)]
+    public static partial int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);
 
-    [DllImport(IOKitLib)]
-    public static extern int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
+    [LibraryImport(IOKitLib)]
+    public static partial int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
 
     //------------------------------------------------------------------------
     // IOReport
@@ -536,51 +536,51 @@ internal static class NativeMethods
 
     private const string IOReportLib = "/usr/lib/libIOReport.dylib";
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportCopyChannelsInGroup(IntPtr group, IntPtr subgroup, ulong a, ulong b, ulong c);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportCopyChannelsInGroup(IntPtr group, IntPtr subgroup, ulong a, ulong b, ulong c);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportCreateSubscription(IntPtr a, IntPtr channels, out IntPtr b, ulong c, IntPtr d);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportCreateSubscription(IntPtr a, IntPtr channels, out IntPtr b, ulong c, IntPtr d);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportCreateSamples(IntPtr subscription, IntPtr channels, IntPtr a);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportCreateSamples(IntPtr subscription, IntPtr channels, IntPtr a);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportChannelGetGroup(IntPtr channel);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportChannelGetGroup(IntPtr channel);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportChannelGetChannelName(IntPtr channel);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportChannelGetChannelName(IntPtr channel);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportChannelGetUnitLabel(IntPtr channel);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportChannelGetUnitLabel(IntPtr channel);
 
-    [DllImport(IOReportLib)]
-    public static extern long IOReportSimpleGetIntegerValue(IntPtr channel, int idx);
+    [LibraryImport(IOReportLib)]
+    public static partial long IOReportSimpleGetIntegerValue(IntPtr channel, int idx);
 
-    [DllImport(IOReportLib)]
-    public static extern void IOReportMergeChannels(IntPtr a, IntPtr b, IntPtr nil_);
+    [LibraryImport(IOReportLib)]
+    public static partial void IOReportMergeChannels(IntPtr a, IntPtr b, IntPtr nil_);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportChannelGetSubGroup(IntPtr channel);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportChannelGetSubGroup(IntPtr channel);
 
-    [DllImport(IOReportLib)]
-    public static extern int IOReportStateGetCount(IntPtr channel);
+    [LibraryImport(IOReportLib)]
+    public static partial int IOReportStateGetCount(IntPtr channel);
 
-    [DllImport(IOReportLib)]
-    public static extern IntPtr IOReportStateGetNameForIndex(IntPtr channel, int index);
+    [LibraryImport(IOReportLib)]
+    public static partial IntPtr IOReportStateGetNameForIndex(IntPtr channel, int index);
 
-    [DllImport(IOReportLib)]
-    public static extern long IOReportStateGetResidency(IntPtr channel, int index);
+    [LibraryImport(IOReportLib)]
+    public static partial long IOReportStateGetResidency(IntPtr channel, int index);
 
-    [DllImport(CoreFoundationLib)]
-    public static extern UIntPtr CFArrayGetTypeID();
+    [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFArrayGetTypeID();
 
-    [DllImport(CoreFoundationLib)]
-    public static extern IntPtr CFDictionaryCreateMutableCopy(IntPtr allocator, IntPtr capacity, IntPtr theDict);
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFDictionaryCreateMutableCopy(IntPtr allocator, IntPtr capacity, IntPtr theDict);
 
-    [DllImport(CoreFoundationLib)]
+    [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool CFNumberGetValue(IntPtr number, int theType, ref double valuePtr);
+    public static partial bool CFNumberGetValue(IntPtr number, int theType, ref double valuePtr);
 
     //------------------------------------------------------------------------
     // SystemConfiguration
@@ -588,33 +588,33 @@ internal static class NativeMethods
 
     private const string SystemConfigurationLib = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkServiceCopyAll(IntPtr prefs);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetName(IntPtr service);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkServiceGetName(IntPtr service);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetInterface(IntPtr service);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkServiceGetInterface(IntPtr service);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkInterfaceGetInterfaceType(IntPtr networkInterface);
 
-    [DllImport(SystemConfigurationLib)]
+    [LibraryImport(SystemConfigurationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static extern bool SCNetworkServiceGetEnabled(IntPtr service);
+    public static partial bool SCNetworkServiceGetEnabled(IntPtr service);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCNetworkServiceGetServiceID(IntPtr service);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCNetworkServiceGetServiceID(IntPtr service);
 
-    [DllImport(SystemConfigurationLib)]
-    public static extern IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCPreferencesPathGetValue(IntPtr prefs, IntPtr path);
 
     //------------------------------------------------------------------------
     // Helper
