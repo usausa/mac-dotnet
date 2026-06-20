@@ -24,9 +24,9 @@ public static class DiskInfo
 
         var index = 0u;
         using var it = new IOObj(itHandle);
-        uint entryHandle;
         try
         {
+            uint entryHandle;
             while ((entryHandle = IOIteratorNext(it)) != 0u)
             {
 #pragma warning disable CA2000
