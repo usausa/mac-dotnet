@@ -468,6 +468,9 @@ internal static partial class NativeMethods
     public static partial UIntPtr CFNumberGetTypeID();
 
     [LibraryImport(CoreFoundationLib)]
+    public static partial UIntPtr CFBooleanGetTypeID();
+
+    [LibraryImport(CoreFoundationLib)]
     public static partial UIntPtr CFDictionaryGetTypeID();
 
     [LibraryImport(CoreFoundationLib)]

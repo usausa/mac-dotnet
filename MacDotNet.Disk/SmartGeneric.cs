@@ -36,9 +36,11 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     private readonly byte[] buffer = new byte[SmartDataSize];
 
-    private IntPtr pluginInterface;
+    private readonly SafePlugInInterface? pluginInterface;
 
-    private IntPtr smartInterface;
+    private readonly SafePlugInInterface? smartInterface;
+
+    private bool disposed;
 
     public bool LastUpdate { get; private set; }
 
@@ -52,7 +54,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
             return;
         }
 
-        pluginInterface = ppPlugin;
+        pluginInterface = new SafePlugInInterface(ppPlugin);
 
         var vtable = *(IntPtr*)ppPlugin;
         var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
@@ -64,37 +66,36 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
             return;
         }
 
+        smartInterface = new SafePlugInInterface(pSmartInterface);
+
         // Enable SMART operations
         var smartVtable = *(IntPtr*)pSmartInterface;
         var enableFn = (delegate* unmanaged<IntPtr, byte, int>)(*(IntPtr*)((byte*)smartVtable + 40));
         kr = enableFn(pSmartInterface, 1);
         if (kr != KERN_SUCCESS)
         {
-            ReleasePlugInInterface(pSmartInterface);
-            return;
+            smartInterface.Dispose();
+            smartInterface = null;
         }
-
-        smartInterface = pSmartInterface;
     }
 
     public void Dispose()
     {
-        if (smartInterface != IntPtr.Zero)
+        if (disposed)
         {
-            ReleasePlugInInterface(smartInterface);
-            smartInterface = IntPtr.Zero;
+            return;
         }
 
-        if (pluginInterface != IntPtr.Zero)
-        {
-            ReleasePlugInInterface(pluginInterface);
-            pluginInterface = IntPtr.Zero;
-        }
+        smartInterface?.Dispose();
+        pluginInterface?.Dispose();
+        disposed = true;
     }
 
     public unsafe bool Update()
     {
-        if (smartInterface == IntPtr.Zero)
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        if (smartInterface is null)
         {
             LastUpdate = false;
             return false;
@@ -105,12 +106,12 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTEnableDisableOperations
-        var smartVtable = *(IntPtr*)smartInterface;
+        var smartVtable = *(IntPtr*)smartInterface.Pointer;
         var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 72));
 
         fixed (byte* bufPtr = buffer)
         {
-            var kr = readDataFn(smartInterface, bufPtr);
+            var kr = readDataFn(smartInterface.Pointer, bufPtr);
             LastUpdate = kr == KERN_SUCCESS;
             return LastUpdate;
         }
@@ -118,6 +119,8 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     public IReadOnlyList<SmartId> GetSupportedIds()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var list = new List<SmartId>();
 
         for (var i = 0; i < MaxAttributes; i++)
@@ -135,6 +138,8 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     public SmartAttribute? GetAttribute(SmartId id)
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var target = (byte)id;
         for (var i = 0; i < MaxAttributes; i++)
         {

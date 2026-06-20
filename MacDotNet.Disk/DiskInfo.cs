@@ -25,15 +25,26 @@ public static class DiskInfo
         var index = 0u;
         using var it = new IOObj(itHandle);
         uint entryHandle;
-        while ((entryHandle = IOIteratorNext(it)) != 0u)
+        try
         {
+            while ((entryHandle = IOIteratorNext(it)) != 0u)
+            {
 #pragma warning disable CA2000
-            using var entry = new IOObj(entryHandle);
+                using var entry = new IOObj(entryHandle);
 #pragma warning restore CA2000
-            list.Add(ReadDiskEntry(entry, index++));
-        }
+                list.Add(ReadDiskEntry(entry, index++));
+            }
 
-        return list;
+            return list;
+        }
+        catch
+        {
+            foreach (var disk in list)
+            {
+                disk.Dispose();
+            }
+            throw;
+        }
     }
 
     private static unsafe DiskInfoGeneric ReadDiskEntry(IOObj entry, uint index)

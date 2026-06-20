@@ -436,7 +436,7 @@ public sealed class SmcMonitor
         }
         if ((dataType == DATA_TYPE_IOFT) && (dataSize == 8))
         {
-            return *(int*)bytes / 65536.0;
+            return *(long*)bytes / 65536.0;
         }
         if ((dataType == DATA_TYPE_UI8) && (dataSize == 1))
         {

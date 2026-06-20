@@ -166,18 +166,6 @@ internal static partial class NativeMethods
     // Helper
     //------------------------------------------------------------------------
 
-    public static unsafe void ReleasePlugInInterface(IntPtr ppInterface)
-    {
-        if (ppInterface == IntPtr.Zero)
-        {
-            return;
-        }
-
-        var vtable = *(IntPtr*)ppInterface;
-        var releaseFn = (delegate* unmanaged<IntPtr, uint>)(*((IntPtr*)vtable + 3));
-        releaseFn(ppInterface);
-    }
-
     public static unsafe string? ToManagedString(IntPtr cfString)
     {
         if (cfString == IntPtr.Zero)

@@ -202,8 +202,13 @@ internal readonly ref struct IOObj(uint handle)
             return false;
         }
 
-        using var val = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
-        return val.GetBoolean();
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        if (!value.IsValid || (CFGetTypeID(value) != CFBooleanGetTypeID()))
+        {
+            return false;
+        }
+
+        return value.GetBoolean();
     }
 
     public ulong GetUInt64(string key)

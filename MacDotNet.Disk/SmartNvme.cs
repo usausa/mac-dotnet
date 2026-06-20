@@ -32,9 +32,11 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 #pragma warning restore SA1117
 #pragma warning restore IDE0055
 
-    private IntPtr pluginInterface;
+    private readonly SafePlugInInterface? pluginInterface;
 
-    private IntPtr smartInterface;
+    private readonly SafePlugInInterface? smartInterface;
+
+    private bool disposed;
 
     public bool LastUpdate { get; private set; }
 
@@ -84,7 +86,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             return;
         }
 
-        pluginInterface = ppPlugin;
+        pluginInterface = new SafePlugInInterface(ppPlugin);
 
         var vtable = *(IntPtr*)ppPlugin;
         var qiFn = (delegate* unmanaged<IntPtr, CFUUIDBytes, IntPtr*, int>)(*((IntPtr*)vtable + 1));
@@ -96,27 +98,26 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             return;
         }
 
-        smartInterface = pSmartInterface;
+        smartInterface = new SafePlugInInterface(pSmartInterface);
     }
 
     public void Dispose()
     {
-        if (smartInterface != IntPtr.Zero)
+        if (disposed)
         {
-            ReleasePlugInInterface(smartInterface);
-            smartInterface = IntPtr.Zero;
+            return;
         }
 
-        if (pluginInterface != IntPtr.Zero)
-        {
-            ReleasePlugInInterface(pluginInterface);
-            pluginInterface = IntPtr.Zero;
-        }
+        smartInterface?.Dispose();
+        pluginInterface?.Dispose();
+        disposed = true;
     }
 
     public unsafe bool Update()
     {
-        if (smartInterface == IntPtr.Zero)
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        if (smartInterface is null)
         {
             LastUpdate = false;
             return false;
@@ -126,11 +127,11 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTReadData
-        var smartVtable = *(IntPtr*)smartInterface;
+        var smartVtable = *(IntPtr*)smartInterface.Pointer;
         var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 40));
 
         var buffer = stackalloc byte[SmartDataSize];
-        var kr = readDataFn(smartInterface, buffer);
+        var kr = readDataFn(smartInterface.Pointer, buffer);
         if (kr != KERN_SUCCESS)
         {
             LastUpdate = false;
@@ -163,6 +164,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         return true;
     }
 
+    // NVMe spec defines these counters as 128-bit; only the low 64 bits are read (sufficient for realistic values).
     private static unsafe ulong Le128ToUInt64(byte* p)
     {
         var v = 0ul;
