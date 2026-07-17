@@ -424,7 +424,7 @@ public sealed class SmcMonitor
         var bytes = output.bytes;
         if ((dataType == DATA_TYPE_FLT) && (dataSize == 4))
         {
-            return *(float*)bytes;
+            return BinaryPrimitives.ReadSingleLittleEndian(new ReadOnlySpan<byte>(bytes, 4));
         }
         if ((dataType == DATA_TYPE_SP78) && (dataSize == 2))
         {
@@ -436,7 +436,8 @@ public sealed class SmcMonitor
         }
         if ((dataType == DATA_TYPE_IOFT) && (dataSize == 8))
         {
-            return *(long*)bytes / 65536.0;
+            // IOFT is a 48.16 fixed-point value; byte order matches the other little-endian native reads on Apple hardware
+            return BinaryPrimitives.ReadInt64LittleEndian(new ReadOnlySpan<byte>(bytes, 8)) / 65536.0;
         }
         if ((dataType == DATA_TYPE_UI8) && (dataSize == 1))
         {

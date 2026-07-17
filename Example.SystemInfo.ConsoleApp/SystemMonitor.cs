@@ -70,8 +70,8 @@ public sealed class NetworkIfEntry
     // Delegation properties
     public string Name => Stat.Name;
     public string? DisplayName => Stat.DisplayName;
-    public uint RxBytes => Stat.RxBytes;
-    public uint TxBytes => Stat.TxBytes;
+    public ulong RxBytes => Stat.RxBytes;
+    public ulong TxBytes => Stat.TxBytes;
 
     // Calculated rates (set by SystemMonitor)
     public double RxBytesPerSec { get; internal set; }
@@ -642,8 +642,8 @@ internal sealed class SystemMonitor
     {
         if (elapsed > 0)
         {
-            var rxDelta = entry.Stat.RxBytes >= entry.PreviousRxBytes ? entry.Stat.RxBytes - entry.PreviousRxBytes : 0;
-            var txDelta = entry.Stat.TxBytes >= entry.PreviousTxBytes ? entry.Stat.TxBytes - entry.PreviousTxBytes : 0;
+            var rxDelta = unchecked(entry.Stat.RxBytes - entry.PreviousRxBytes);
+            var txDelta = unchecked(entry.Stat.TxBytes - entry.PreviousTxBytes);
             entry.RxBytesPerSec = rxDelta / elapsed;
             entry.TxBytesPerSec = txDelta / elapsed;
         }

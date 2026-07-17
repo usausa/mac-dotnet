@@ -631,7 +631,7 @@ public sealed class CpuFrequencyCommand : ICommandHandler
                 Console.WriteLine($"  E{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxEfficiencyCoreFrequency)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
             }
 
-            var efficiencyAvg = cpuFreq.EfficiencyCores.Average(static c => c.Frequency);
+            var efficiencyAvg = cpuFreq.EfficiencyCores.Count > 0 ? cpuFreq.EfficiencyCores.Average(static c => c.Frequency) : 0;
             Console.WriteLine($"  Avg: {DisplayFormatter.MakeBar(efficiencyAvg, cpuFreq.MaxEfficiencyCoreFrequency)} {efficiencyAvg,7:F1} MHz");
 
             Console.WriteLine("[P-Core]");
@@ -640,7 +640,7 @@ public sealed class CpuFrequencyCommand : ICommandHandler
                 Console.WriteLine($"  P{core.Number,2}: {DisplayFormatter.MakeBar(core.Frequency, cpuFreq.MaxPerformanceCoreFrequency)} {core.Frequency,7:F1} MHz ({core.Frequency / 1000.0:F2} GHz)");
             }
 
-            var performanceAvg = cpuFreq.PerformanceCores.Average(static c => c.Frequency);
+            var performanceAvg = cpuFreq.PerformanceCores.Count > 0 ? cpuFreq.PerformanceCores.Average(static c => c.Frequency) : 0;
             Console.WriteLine($"  Avg: {DisplayFormatter.MakeBar(performanceAvg, cpuFreq.MaxPerformanceCoreFrequency)} {performanceAvg,7:F1} MHz");
         }
     }

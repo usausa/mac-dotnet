@@ -104,7 +104,7 @@ public static class DiskInfo
         // Smart
         SmartType smartType;
         ISmart smart;
-        if (busType is BusType.Nvme or BusType.AppleFabric)
+        if (busType is BusType.Nvme or BusType.AppleFabric or BusType.PciExpress)
         {
             var session = new SmartNvme(entry);
             if (session.Update())
@@ -167,12 +167,17 @@ public static class DiskInfo
         var model = modelName?.Trim();
         var vendor = vendorName?.Trim();
 
-        if (!String.IsNullOrEmpty(vendor) && !String.IsNullOrEmpty(model))
+        if (String.IsNullOrEmpty(model))
         {
-            return $"{vendor} {model}";
+            return vendor ?? string.Empty;
         }
 
-        return model ?? vendor ?? string.Empty;
+        if (String.IsNullOrEmpty(vendor))
+        {
+            return model;
+        }
+
+        return model.StartsWith(vendor, StringComparison.OrdinalIgnoreCase) ? model : $"{vendor} {model}";
     }
 
     private static BusType ParseBusType(string? physInterconnect) => physInterconnect switch
@@ -182,11 +187,13 @@ public static class DiskInfo
         "ATA" => BusType.Ata,
         "SATA" => BusType.Sata,
         "ATAPI" => BusType.Atapi,
+        "PCI-Express" => BusType.PciExpress,
         "USB" => BusType.Usb,
         "Fibre Channel" => BusType.FibreChannel,
         "FireWire" => BusType.FireWire,
         "Thunderbolt" => BusType.Thunderbolt,
-        "Secure Digital" => BusType.SdCard,
+        "SAS" => BusType.Sas,
+        "Secure Digital" or "SD" => BusType.SdCard,
         "Virtual Interface" => BusType.Virtual,
         _ => BusType.Unknown
     };

@@ -13,7 +13,11 @@ public enum DiskBusType
     Thunderbolt,
     FireWire,
     Sas,
-    Sd
+    Sd,
+    Ata,
+    Atapi,
+    FibreChannel,
+    Nvme
 }
 
 public sealed class DiskDeviceStat
@@ -249,13 +253,17 @@ public sealed class DiskStat
         {
             "Virtual Interface" => DiskBusType.VirtualInterface,
             "Apple Fabric" => DiskBusType.AppleFabric,
+            "NVMe" => DiskBusType.Nvme,
+            "ATA" => DiskBusType.Ata,
             "SATA" => DiskBusType.Sata,
+            "ATAPI" => DiskBusType.Atapi,
             "PCI-Express" => DiskBusType.PciExpress,
             "USB" => DiskBusType.Usb,
+            "Fibre Channel" => DiskBusType.FibreChannel,
             "Thunderbolt" => DiskBusType.Thunderbolt,
             "FireWire" => DiskBusType.FireWire,
             "SAS" => DiskBusType.Sas,
-            "SD" => DiskBusType.Sd,
+            "Secure Digital" or "SD" => DiskBusType.Sd,
             _ => DiskBusType.Unknown
         };
 

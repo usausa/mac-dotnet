@@ -110,6 +110,12 @@ public sealed class CpuFrequency
             }
 
             var isEfficiencyCore = channelName.StartsWith("ECPU", StringComparison.Ordinal);
+            var isPerformanceCore = channelName.StartsWith("PCPU", StringComparison.Ordinal);
+            if (!isEfficiencyCore && !isPerformanceCore)
+            {
+                continue;
+            }
+
             var targetCores = isEfficiencyCore ? efficiencyCores : performanceCores;
 
             var core = FindCore(targetCores, channelName);
@@ -299,10 +305,15 @@ public sealed class CpuFrequency
         var activeDelta = 0L;
         for (var i = offset; i < currentValues.Length; i++)
         {
-            activeDelta += currentValues[i] - previousValues[i];
+            // Clamp negative deltas to 0 (sleep/wake or counter reset can make a residency go backwards)
+            var delta = currentValues[i] - previousValues[i];
+            if (delta > 0)
+            {
+                activeDelta += delta;
+            }
         }
 
-        if (activeDelta == 0)
+        if (activeDelta <= 0)
         {
             return 0;
         }
@@ -317,6 +328,11 @@ public sealed class CpuFrequency
             }
 
             var delta = currentValues[key] - previousValues[key];
+            if (delta <= 0)
+            {
+                continue;
+            }
+
             avgFreq += (double)delta / activeDelta * table[i];
         }
 

@@ -14,7 +14,9 @@ public enum BusType
     FireWire,
     Thunderbolt,
     SdCard,
-    Virtual
+    Virtual,
+    PciExpress,
+    Sas
 }
 // ReSharper restore IdentifierTypo
 

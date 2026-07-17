@@ -1,5 +1,7 @@
 namespace MacDotNet.Disk;
 
+using System.Buffers.Binary;
+
 using static MacDotNet.Disk.Helper;
 using static MacDotNet.Disk.NativeMethods;
 
@@ -138,40 +140,30 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             return false;
         }
 
-        CriticalWarning = buffer[0];
-        Temperature = KelvinToCelsius((ushort)(buffer[1] | (buffer[2] << 8)));
-        AvailableSpare = buffer[3];
-        AvailableSpareThreshold = buffer[4];
-        PercentageUsed = buffer[5];
-        DataUnitRead = Le128ToUInt64(buffer + 32);
-        DataUnitWritten = Le128ToUInt64(buffer + 48);
-        HostReadCommands = Le128ToUInt64(buffer + 64);
-        HostWriteCommands = Le128ToUInt64(buffer + 80);
-        ControllerBusyTime = Le128ToUInt64(buffer + 96);
-        PowerCycles = Le128ToUInt64(buffer + 112);
-        PowerOnHours = Le128ToUInt64(buffer + 128);
-        UnsafeShutdowns = Le128ToUInt64(buffer + 144);
-        MediaErrors = Le128ToUInt64(buffer + 160);
-        ErrorInfoLogEntries = Le128ToUInt64(buffer + 176);
-        WarningCompositeTemperatureTime = *(uint*)(buffer + 192);
-        CriticalCompositeTemperatureTime = *(uint*)(buffer + 196);
+        var span = new ReadOnlySpan<byte>(buffer, SmartDataSize);
+        CriticalWarning = span[0];
+        Temperature = KelvinToCelsius(BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(1, 2)));
+        AvailableSpare = span[3];
+        AvailableSpareThreshold = span[4];
+        PercentageUsed = span[5];
+        DataUnitRead = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(32, 8));
+        DataUnitWritten = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(48, 8));
+        HostReadCommands = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(64, 8));
+        HostWriteCommands = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(80, 8));
+        ControllerBusyTime = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(96, 8));
+        PowerCycles = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(112, 8));
+        PowerOnHours = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(128, 8));
+        UnsafeShutdowns = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(144, 8));
+        MediaErrors = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(160, 8));
+        ErrorInfoLogEntries = BinaryPrimitives.ReadUInt64LittleEndian(span.Slice(176, 8));
+        WarningCompositeTemperatureTime = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(192, 4));
+        CriticalCompositeTemperatureTime = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(196, 4));
         for (var i = 0; i < TemperatureSensors.Length; i++)
         {
-            TemperatureSensors[i] = KelvinToCelsius(*(ushort*)(buffer + 200 + (i * 2)));
+            TemperatureSensors[i] = KelvinToCelsius(BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(200 + (i * 2), 2)));
         }
 
         LastUpdate = true;
         return true;
-    }
-
-    // NVMe spec defines these counters as 128-bit; only the low 64 bits are read (sufficient for realistic values).
-    private static unsafe ulong Le128ToUInt64(byte* p)
-    {
-        var v = 0ul;
-        for (var i = 7; i >= 0; i--)
-        {
-            v = (v << 8) | p[i];
-        }
-        return v;
     }
 }
