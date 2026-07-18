@@ -48,9 +48,9 @@ public interface IDiskInfo : IDisposable
 {
     uint Index { get; }
 
-    string? BsdName { get; }
+    string BsdName { get; }
 
-    string? DeviceName { get; }
+    string DeviceName { get; }
 
     string Model { get; }
 
