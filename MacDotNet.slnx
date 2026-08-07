@@ -1,7 +1,7 @@
 <Solution>
   <Folder Name="/Example/">
     <Project Path="Example.Disk.ConsoleApp/Example.Disk.ConsoleApp.csproj" />
-    <Project Path="Example.SystemInfo.ConsoleApp/Example.SystemInfo.ConsoleApp.csproj" />
+    <Project Path="Example.SystemInfo.ConsoleApp/Example.SystemInfo.ConsoleApp.csproj" DefaultStartup="true" />
   </Folder>
   <Folder Name="/Library/">
     <Project Path="MacDotNet.Disk/MacDotNet.Disk.csproj" />
