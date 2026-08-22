@@ -93,6 +93,7 @@ public sealed record ProcessInfo
     // Factory
     //--------------------------------------------------------------------------------
 
+    // ReSharper disable once RedundantUnsafeContext
     public static unsafe IReadOnlyList<ProcessInfo> GetProcesses()
     {
         var size = proc_listpids(PROC_ALL_PIDS, 0, null, 0);
