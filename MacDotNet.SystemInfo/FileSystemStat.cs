@@ -271,6 +271,7 @@ public sealed class FileSystemStat
         return result;
     }
 
+    // ReSharper disable once RedundantUnsafeContext
     private static unsafe string? GetEntryClassName(uint entry)
     {
         var buffer = stackalloc byte[128];

@@ -189,6 +189,7 @@ public sealed class CpuFrequency
     //--------------------------------------------------------------------------------
 
     // ReSharper disable StringLiteralTypo
+    // ReSharper disable once RedundantUnsafeContext
     private static unsafe (int[] ECore, int[] PCore) ReadFrequencyTables()
     {
         var cpuName = GetSystemControlString("machdep.cpu.brand_string") ?? string.Empty;

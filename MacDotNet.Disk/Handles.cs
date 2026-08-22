@@ -93,6 +93,7 @@ internal readonly ref struct IOObj(uint handle)
     // Property accessor
     //------------------------------------------------------------------------
 
+    // ReSharper disable once RedundantUnsafeContext
     public unsafe string? GetClassName()
     {
         var buffer = stackalloc byte[128];

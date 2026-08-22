@@ -188,6 +188,7 @@ public sealed class CpuStat
         return coreTypes;
     }
 
+    // ReSharper disable once RedundantUnsafeContext
     private static unsafe string? GetEntryName(IOObj entry)
     {
         var buffer = stackalloc byte[128];

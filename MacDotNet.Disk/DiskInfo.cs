@@ -47,6 +47,7 @@ public static class DiskInfo
         }
     }
 
+    // ReSharper disable once RedundantUnsafeContext
     private static unsafe DiskInfoGeneric ReadDiskEntry(IOObj entry, uint index)
     {
         var nameBuffer = stackalloc byte[128];
