@@ -239,7 +239,6 @@ public sealed class CpuFrequency
         return (eCore, pCore);
     }
 
-    // ReSharper restore StringLiteralTypo
     // ReSharper disable once RedundantUnsafeContext
     private static unsafe int[] ConvertToFrequencyTable(IntPtr cfData, uint multiplier)
     {
