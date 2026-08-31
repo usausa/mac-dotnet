@@ -43,7 +43,7 @@ internal readonly ref struct CFRef(IntPtr pointer)
         }
 
         var value = CFDictionaryGetValue(Pointer, cfKey);
-        if (value == IntPtr.Zero || CFGetTypeID(value) != CFStringGetTypeID())
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFStringGetTypeID()))
         {
             return null;
         }
@@ -60,7 +60,7 @@ internal readonly ref struct CFRef(IntPtr pointer)
         }
 
         var value = CFDictionaryGetValue(Pointer, cfKey);
-        if (value == IntPtr.Zero || CFGetTypeID(value) != CFNumberGetTypeID())
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return 0;
         }
@@ -109,7 +109,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
-        if (!value.IsValid || CFGetTypeID(value) != CFStringGetTypeID())
+        if (!value.IsValid || (CFGetTypeID(value) != CFStringGetTypeID()))
         {
             return null;
         }
@@ -126,7 +126,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
-        if (!value.IsValid || CFGetTypeID(value) != CFNumberGetTypeID())
+        if (!value.IsValid || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return 0;
         }
@@ -145,7 +145,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
-        if (!value.IsValid || CFGetTypeID(value) != CFBooleanGetTypeID())
+        if (!value.IsValid || (CFGetTypeID(value) != CFBooleanGetTypeID()))
         {
             return false;
         }
@@ -192,7 +192,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
-        if (!val.IsValid || CFGetTypeID(val) != CFStringGetTypeID())
+        if (!val.IsValid || (CFGetTypeID(val) != CFStringGetTypeID()))
         {
             return null;
         }
@@ -209,7 +209,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
-        if (!val.IsValid || CFGetTypeID(val) != CFNumberGetTypeID())
+        if (!val.IsValid || (CFGetTypeID(val) != CFNumberGetTypeID()))
         {
             return 0;
         }
@@ -228,7 +228,7 @@ internal readonly ref struct IOObj(uint handle)
         }
 
         using var val = new CFRef(IORegistryEntrySearchCFProperty(Handle, "IOService", cfKey, IntPtr.Zero, kIORegistryIterateRecursively));
-        if (!val.IsValid || CFGetTypeID(val) != CFBooleanGetTypeID())
+        if (!val.IsValid || (CFGetTypeID(val) != CFBooleanGetTypeID()))
         {
             return false;
         }

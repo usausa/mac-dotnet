@@ -246,7 +246,7 @@ public sealed class FileSystemStat
         {
             for (var depth = 0; depth < 20; depth++)
             {
-                if ((IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS) || parent == 0)
+                if ((IORegistryEntryGetParentEntry(current, "IOService", out var parent) != KERN_SUCCESS) || (parent == 0))
                 {
                     break;
                 }

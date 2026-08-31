@@ -89,10 +89,10 @@ internal static partial class NativeMethods
         uint options);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IORegistryEntryGetName(uint entry, byte* name);
+    public static partial int IORegistryEntryGetName(uint entry, byte* name);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IOCreatePlugInInterfaceForService(
+    public static partial int IOCreatePlugInInterfaceForService(
         uint service,
         IntPtr pluginType,
         IntPtr interfaceType,
@@ -100,7 +100,7 @@ internal static partial class NativeMethods
         int* theScore);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IOObjectGetClass(uint @object, byte* className);
+    public static partial int IOObjectGetClass(uint @object, byte* className);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -122,7 +122,7 @@ internal static partial class NativeMethods
 
     [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
+    public static partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
 
     [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
@@ -153,7 +153,6 @@ internal static partial class NativeMethods
     [LibraryImport(CoreFoundationLib)]
     public static partial void CFRelease(IntPtr cf);
 
-#pragma warning disable SA1117
     [LibraryImport(CoreFoundationLib)]
     public static partial IntPtr CFUUIDGetConstantUUIDWithBytes(
         IntPtr alloc,
@@ -161,7 +160,6 @@ internal static partial class NativeMethods
         byte byte4, byte byte5, byte byte6, byte byte7,
         byte byte8, byte byte9, byte byte10, byte byte11,
         byte byte12, byte byte13, byte byte14, byte byte15);
-#pragma warning restore SA1117
 
     //------------------------------------------------------------------------
     // Helper

@@ -109,7 +109,6 @@ public sealed class FanSensor
 
     public double TargetRpm { get; internal set; }
 
-#pragma warning disable SA1117
     internal FanSensor(
         int index,
         uint keyActual, uint dataTypeActual, uint dataSizeActual,
@@ -131,7 +130,6 @@ public sealed class FanSensor
         DataTypeTarget = dataTypeTarget;
         DataSizeTarget = dataSizeTarget;
     }
-#pragma warning restore SA1117
 }
 
 // Monitor
@@ -364,7 +362,7 @@ public sealed class SmcMonitor
 
     private static unsafe int ReadSmcInt(uint conn, uint key)
     {
-        if (!SmcReadKeyInfo(conn, key, out var dataSize, out _) || dataSize == 0)
+        if (!SmcReadKeyInfo(conn, key, out var dataSize, out _) || (dataSize == 0))
         {
             return 0;
         }

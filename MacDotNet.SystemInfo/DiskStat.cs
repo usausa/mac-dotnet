@@ -279,7 +279,7 @@ public sealed class DiskStat
         {
             for (var depth = 0; depth < 8; depth++)
             {
-                if (IORegistryEntryGetParentEntry(entry, "IOService", out var parent) != KERN_SUCCESS || parent == 0)
+                if ((IORegistryEntryGetParentEntry(entry, "IOService", out var parent) != KERN_SUCCESS) || (parent == 0))
                 {
                     break;
                 }

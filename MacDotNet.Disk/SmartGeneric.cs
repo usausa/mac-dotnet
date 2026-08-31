@@ -10,7 +10,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
     private const int EntrySize = 12;
 
 #pragma warning disable IDE0055
-#pragma warning disable SA1117
     // kIOATASMARTUserClientTypeID
     private static readonly IntPtr PluginTypeUuid = CFUUIDGetConstantUUIDWithBytes(
         IntPtr.Zero,
@@ -31,7 +30,6 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         byte8 = 0x8D, byte9 = 0xF6, byte10 = 0x00, byte11 = 0x03,
         byte12 = 0x93, byte13 = 0x5A, byte14 = 0x76, byte15 = 0xB2
     };
-#pragma warning restore SA1117
 #pragma warning restore IDE0055
 
     private readonly byte[] buffer = new byte[SmartDataSize];
@@ -127,7 +125,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         {
             var offset = TableOffset + (i * EntrySize);
             var id = buffer[offset];
-            if (id != 0 && id != 0xff)
+            if ((id != 0) && (id != 0xff))
             {
                 list.Add((SmartId)id);
             }

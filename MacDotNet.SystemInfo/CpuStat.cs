@@ -143,7 +143,7 @@ public sealed class CpuStat
             return coreTypes;
         }
 
-        if (IOServiceGetMatchingServices(0, matching, out var iterator) != KERN_SUCCESS || iterator == 0)
+        if ((IOServiceGetMatchingServices(0, matching, out var iterator) != KERN_SUCCESS) || (iterator == 0))
         {
             return coreTypes;
         }
@@ -153,7 +153,7 @@ public sealed class CpuStat
         while ((service = IOIteratorNext(services)) != 0)
         {
             using var serviceObject = new IOObj(service);
-            if (IORegistryEntryGetChildIterator(serviceObject, "IOService", out var childIterator) != KERN_SUCCESS || childIterator == 0)
+            if ((IORegistryEntryGetChildIterator(serviceObject, "IOService", out var childIterator) != KERN_SUCCESS) || (childIterator == 0))
             {
                 continue;
             }
@@ -164,12 +164,12 @@ public sealed class CpuStat
             {
                 using var childObject = new IOObj(child);
                 var name = GetEntryName(childObject);
-                if (String.IsNullOrEmpty(name) || !name.StartsWith("cpu", StringComparison.Ordinal) || (name.Length <= 3) || !char.IsDigit(name[3]))
+                if (String.IsNullOrEmpty(name) || !name.StartsWith("cpu", StringComparison.Ordinal) || (name.Length <= 3) || !Char.IsDigit(name[3]))
                 {
                     continue;
                 }
 
-                if (IORegistryEntryCreateCFProperties(childObject, out var properties, IntPtr.Zero, 0) != KERN_SUCCESS || properties == IntPtr.Zero)
+                if ((IORegistryEntryCreateCFProperties(childObject, out var properties, IntPtr.Zero, 0) != KERN_SUCCESS) || (properties == IntPtr.Zero))
                 {
                     continue;
                 }

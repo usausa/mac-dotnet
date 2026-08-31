@@ -155,7 +155,7 @@ public sealed class CpuFrequency
             {
                 // Update frequency
                 var stateCount = IOReportStateGetCount(item);
-                for (var j = 0; j < stateCount && j < core.CurrentResidencies.Length; j++)
+                for (var j = 0; (j < stateCount) && (j < core.CurrentResidencies.Length); j++)
                 {
                     core.CurrentResidencies[j] = IOReportStateGetResidency(item, j);
                 }

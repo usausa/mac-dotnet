@@ -66,7 +66,7 @@ public static class DisplayFormatter
             buf[pos++] = '\u2588';
         }
 
-        if (remainder > 0 && fullCells < width)
+        if ((remainder > 0) && (fullCells < width))
         {
             buf[pos++] = partials[remainder - 1];
         }

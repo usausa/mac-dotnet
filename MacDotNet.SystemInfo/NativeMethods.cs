@@ -141,7 +141,7 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal unsafe struct statfs
+    internal struct statfs
     {
         public uint f_bsize;
         public int f_iosize;
@@ -218,7 +218,7 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal unsafe struct proc_bsdinfo
+    internal struct proc_bsdinfo
     {
         public uint pbi_flags;
         public uint pbi_status;
@@ -315,7 +315,7 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Explicit, Size = 80)]
-    internal unsafe struct SMCKeyData_t
+    internal struct SMCKeyData_t
     {
         [FieldOffset(0)]
         public uint key;
@@ -362,7 +362,7 @@ internal static partial class NativeMethods
     public static partial int vm_deallocate(uint targetTask, IntPtr address, UIntPtr size);
 
     [LibraryImport("libSystem.dylib")]
-    public static unsafe partial int host_statistics64(uint host_priv, int flavor, vm_statistics64* host_info_out, ref int host_info_outCnt);
+    public static partial int host_statistics64(uint host_priv, int flavor, vm_statistics64* host_info_out, ref int host_info_outCnt);
 
     [LibraryImport("libSystem.dylib")]
     public static partial int host_page_size(uint host, out UIntPtr page_size);
@@ -375,17 +375,17 @@ internal static partial class NativeMethods
     public static partial int sysctlbyname([MarshalAs(UnmanagedType.LPStr)] string name, ref timeval oldp, ref int oldlen, IntPtr newp, int newlen);
 
     [LibraryImport("libc")]
-    public static unsafe partial int sysctlbyname([MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
+    public static partial int sysctlbyname([MarshalAs(UnmanagedType.LPUTF8Str)] string name, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
 
     [LibraryImport("libc")]
-    public static unsafe partial int getloadavg(double* loadavg, int nelem);
+    public static partial int getloadavg(double* loadavg, int nelem);
 
     [LibraryImport("libc")]
-    public static unsafe partial int getfsstat(statfs* buf, int bufsize, int mode);
+    public static partial int getfsstat(statfs* buf, int bufsize, int mode);
 
     // ReSharper disable once StringLiteralTypo
     [LibraryImport("libc", EntryPoint = "statfs")]
-    public static unsafe partial int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
+    public static partial int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
 
     [LibraryImport("libc")]
     public static partial int getifaddrs(out IntPtr ifap);
@@ -398,16 +398,16 @@ internal static partial class NativeMethods
     //------------------------------------------------------------------------
 
     [LibraryImport("libproc")]
-    public static unsafe partial int proc_listpids(uint type, uint typeinfo, int* buffer, int buffersize);
+    public static partial int proc_listpids(uint type, uint typeinfo, int* buffer, int buffersize);
 
     [LibraryImport("libproc")]
-    public static unsafe partial int proc_pidinfo(int pid, int flavor, ulong arg, void* buffer, int buffersize);
+    public static partial int proc_pidinfo(int pid, int flavor, ulong arg, void* buffer, int buffersize);
 
     [LibraryImport("libproc")]
-    public static unsafe partial int proc_pidpath(int pid, byte* buffer, uint buffersize);
+    public static partial int proc_pidpath(int pid, byte* buffer, uint buffersize);
 
     [LibraryImport("libproc")]
-    public static unsafe partial int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
+    public static partial int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -435,7 +435,7 @@ internal static partial class NativeMethods
 
     [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
-    public static unsafe partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
+    public static partial bool CFStringGetCString(IntPtr theString, byte* buffer, IntPtr bufferSize, uint encoding);
 
     [LibraryImport(CoreFoundationLib)]
     public static partial void CFDictionarySetValue(IntPtr theDict, IntPtr key, IntPtr value);
@@ -517,16 +517,16 @@ internal static partial class NativeMethods
     public static partial int IOServiceClose(uint connect);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, UIntPtr inputStructCnt, void* outputStruct, UIntPtr* outputStructCnt);
+    public static partial int IOConnectCallStructMethod(uint connection, uint selector, void* inputStruct, UIntPtr inputStructCnt, void* outputStruct, UIntPtr* outputStructCnt);
 
     [LibraryImport(IOKitLib)]
     public static partial int IORegistryEntryCreateCFProperties(uint entry, out IntPtr properties, IntPtr allocator, uint options);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IORegistryEntryGetName(uint entry, byte* name);
+    public static partial int IORegistryEntryGetName(uint entry, byte* name);
 
     [LibraryImport(IOKitLib)]
-    public static unsafe partial int IOObjectGetClass(uint @object, byte* className);
+    public static partial int IOObjectGetClass(uint @object, byte* className);
 
     [LibraryImport(IOKitLib)]
     public static partial int IORegistryEntryGetParentEntry(uint entry, [MarshalAs(UnmanagedType.LPUTF8Str)] string plane, out uint parent);

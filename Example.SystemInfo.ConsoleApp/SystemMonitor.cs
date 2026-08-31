@@ -98,7 +98,10 @@ public sealed class GpuEntry
     public ulong RendererUtilization => Device.RendererUtilization;
     public ulong TilerUtilization => Device.TilerUtilization;
 
-    internal GpuEntry(GpuDevice gpuDevice) => Device = gpuDevice;
+    internal GpuEntry(GpuDevice gpuDevice)
+    {
+        Device = gpuDevice;
+    }
 }
 
 public sealed class FanSensorEntry
@@ -110,7 +113,10 @@ public sealed class FanSensorEntry
     public double MinRpm => sensor.MinRpm;
     public double MaxRpm => sensor.MaxRpm;
 
-    internal FanSensorEntry(FanSensor fanSensor) => sensor = fanSensor;
+    internal FanSensorEntry(FanSensor fanSensor)
+    {
+        sensor = fanSensor;
+    }
 }
 
 internal sealed class SystemMonitor
