@@ -191,7 +191,6 @@ internal sealed class SystemMonitor
     private double powerPciW;
 
     // Individual sensor references (set during initialization)
-#pragma warning disable SA1214
     // ReSharper disable CommentTypo
     private readonly TemperatureSensor? sensorCpuDieAvg;      // TCMb
     private readonly TemperatureSensor? sensorNand;           // TH0x
@@ -202,7 +201,6 @@ internal sealed class SystemMonitor
     private readonly PowerSensor? sensorDcInPower;            // Pb0f
     private readonly PowerSensor? sensorTotalSystemPower;     // PDTR
     // ReSharper restore CommentTypo
-#pragma warning restore SA1214
 
     private DateTime lastUpdateTime;
 
