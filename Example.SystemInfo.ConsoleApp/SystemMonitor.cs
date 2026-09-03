@@ -486,6 +486,7 @@ internal sealed class SystemMonitor
         }
 
         var sum = 0.0;
+        // ReSharper disable once ForCanBeConvertedToForeach
         for (var i = 0; i < cores.Count; i++)
         {
             sum += cores[i].Frequency;
@@ -535,6 +536,7 @@ internal sealed class SystemMonitor
         }
 
         var added = false;
+        // ReSharper disable once ForCanBeConvertedToForeach
         for (var i = 0; i < devices.Count; i++)
         {
             var entry = default(DiskDeviceEntry);
@@ -601,6 +603,7 @@ internal sealed class SystemMonitor
         }
 
         var added = false;
+        // ReSharper disable once ForCanBeConvertedToForeach
         for (var i = 0; i < ifaces.Count; i++)
         {
             if (!ifaces[i].IsEnabled)
@@ -672,6 +675,7 @@ internal sealed class SystemMonitor
         }
 
         var added = false;
+        // ReSharper disable once ForCanBeConvertedToForeach
         for (var i = 0; i < entries.Count; i++)
         {
             var entry = default(FileSystemMonitorEntry);
