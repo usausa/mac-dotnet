@@ -285,6 +285,7 @@ public sealed class CpuFrequency
 
     private static CpuCoreFrequency? FindCore(List<CpuCoreFrequency> list, string channelName)
     {
+        // ReSharper disable ForCanBeConvertedToForeach
         for (var i = 0; i < list.Count; i++)
         {
             if (list[i].ChannelName == channelName)
