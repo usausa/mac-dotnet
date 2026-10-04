@@ -2,6 +2,14 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
+public enum MemoryPressureLevel
+{
+    Unknown = 0,
+    Normal = 1,
+    Warning = 2,
+    Critical = 3
+}
+
 public sealed class MemoryStat
 {
     public DateTime UpdateAt { get; private set; }
@@ -13,6 +21,10 @@ public sealed class MemoryStat
     // Page Size
 
     public ulong PageSize { get; }
+
+    // Pressure
+
+    public MemoryPressureLevel PressureLevel { get; private set; }
 
     // Memory Count
 
@@ -163,6 +175,15 @@ public sealed class MemoryStat
         InternalPageCount = vmStat.internal_page_count;
         TotalUncompressedPagesInCompressor = vmStat.total_uncompressed_pages_in_compressor;
         SwappedCount = vmStat.swapped_count;
+
+        // ReSharper disable once StringLiteralTypo
+        PressureLevel = GetSystemControlInt32("kern.memorystatus_vm_pressure_level") switch
+        {
+            NOTE_MEMORYSTATUS_PRESSURE_NORMAL => MemoryPressureLevel.Normal,
+            NOTE_MEMORYSTATUS_PRESSURE_WARN => MemoryPressureLevel.Warning,
+            NOTE_MEMORYSTATUS_PRESSURE_CRITICAL => MemoryPressureLevel.Critical,
+            _ => MemoryPressureLevel.Unknown
+        };
 
         UpdateAt = DateTime.Now;
 

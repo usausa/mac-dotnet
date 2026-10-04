@@ -4,6 +4,8 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class GpuDevice
 {
+    internal ulong RegistryEntryId { get; }
+
     public string Name { get; }
 
     public DateTime UpdateAt { get; private set; }
@@ -36,8 +38,9 @@ public sealed class GpuDevice
     // Constructor
     //--------------------------------------------------------------------------------
 
-    private GpuDevice(string name)
+    private GpuDevice(ulong registryEntryId, string name)
     {
+        RegistryEntryId = registryEntryId;
         Name = name;
     }
 
@@ -61,8 +64,13 @@ public sealed class GpuDevice
         {
             using var entry = new IOObj(raw);
 
+            if (IORegistryEntryGetRegistryEntryID(entry, out var entryId) != KERN_SUCCESS)
+            {
+                continue;
+            }
+
             var name = entry.GetString("IOClass") ?? "(unknown)";
-            var device = new GpuDevice(name);
+            var device = new GpuDevice(entryId, name);
             device.Update(entry);
 
             results.Add(device);
@@ -88,8 +96,7 @@ public sealed class GpuDevice
         while ((raw = IOIteratorNext(it)) != 0)
         {
             using var entry = new IOObj(raw);
-            var ioClass = entry.GetString("IOClass");
-            if (String.Equals(ioClass, Name, StringComparison.Ordinal))
+            if ((IORegistryEntryGetRegistryEntryID(entry, out var entryId) == KERN_SUCCESS) && (entryId == RegistryEntryId))
             {
                 Update(entry);
                 return true;

@@ -55,6 +55,12 @@ internal readonly ref struct CFRef(IntPtr pointer)
     // CFDictionary
     //------------------------------------------------------------------------
 
+    public bool ContainsKey(string key)
+    {
+        using var cfKey = CreateString(key);
+        return cfKey.IsValid && CFDictionaryContainsKey(Pointer, cfKey);
+    }
+
     public string? GetString(string key)
     {
         using var cfKey = CreateString(key);
@@ -108,6 +114,71 @@ internal readonly ref struct CFRef(IntPtr pointer)
         long result = 0;
         CFNumberGetValue(value, kCFNumberSInt64Type, ref result);
         return result;
+    }
+
+    public bool TryGetInt64(string key, out long result)
+    {
+        result = 0;
+
+        using var cfKey = CreateString(key);
+        if (!cfKey.IsValid)
+        {
+            return false;
+        }
+
+        var value = CFDictionaryGetValue(Pointer, cfKey);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
+        {
+            return false;
+        }
+
+        return CFNumberGetValue(value, kCFNumberSInt64Type, ref result);
+    }
+
+    public bool GetBoolean(string key)
+    {
+        using var cfKey = CreateString(key);
+        if (!cfKey.IsValid)
+        {
+            return false;
+        }
+
+        var value = CFDictionaryGetValue(Pointer, cfKey);
+        if (value == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var typeId = CFGetTypeID(value);
+        if (typeId == CFBooleanGetTypeID())
+        {
+            return CFBooleanGetValue(value);
+        }
+
+        if (typeId == CFNumberGetTypeID())
+        {
+            long result = 0;
+            return CFNumberGetValue(value, kCFNumberSInt64Type, ref result) && (result != 0);
+        }
+
+        return false;
+    }
+
+    public CFRef GetDictionary(string key)
+    {
+        using var cfKey = CreateString(key);
+        if (!cfKey.IsValid)
+        {
+            return Zero;
+        }
+
+        var value = CFDictionaryGetValue(Pointer, cfKey);
+        if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFDictionaryGetTypeID()))
+        {
+            return Zero;
+        }
+
+        return new CFRef(CFRetain(value));
     }
 }
 
@@ -229,6 +300,25 @@ internal readonly ref struct IOObj(uint handle)
         ulong result = 0;
         CFNumberGetValue(value, kCFNumberSInt64Type, ref result);
         return result;
+    }
+
+    public bool TryGetInt64(string key, out long result)
+    {
+        result = 0;
+
+        using var cfKey = CFRef.CreateString(key);
+        if (!cfKey.IsValid)
+        {
+            return false;
+        }
+
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        if (!value.IsValid || (CFGetTypeID(value) != CFNumberGetTypeID()))
+        {
+            return false;
+        }
+
+        return CFNumberGetValue(value, kCFNumberSInt64Type, ref result);
     }
 
     public uint GetDataUInt32(string key)

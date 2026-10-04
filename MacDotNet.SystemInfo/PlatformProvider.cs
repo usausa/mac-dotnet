@@ -77,6 +77,12 @@ public static class PlatformProvider
 
     public static PowerStat GetPowerStat() => new();
 
+    public static PowerManagementStat GetPowerManagementStat() => new();
+
+    public static BatteryDevice GetBatteryDevice() => new();
+
+    public static MainsDevice GetMainsDevice() => new();
+
     //--------------------------------------------------------------------------------
     // Sensor
     //--------------------------------------------------------------------------------

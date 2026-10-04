@@ -53,7 +53,20 @@ internal static partial class NativeMethods
     // Flavor arguments for proc_pidinfo (sys/proc_info.h)
     public const int PROC_PIDTBSDINFO = 3;  // BSD process info (proc_bsdinfo)
     public const int PROC_PIDTASKINFO = 4;  // Task info (proc_taskinfo)
+    public const int PROC_PIDT_SHORTBSDINFO = 13;  // Short BSD process info (proc_bsdshortinfo)
+
+    // Flavor arguments for proc_pid_rusage (sys/resource.h)
     public const int RUSAGE_INFO_V2 = 2;
+    public const int RUSAGE_INFO_V4 = 4;
+    public const int RUSAGE_INFO_V6 = 6;
+
+    // pbi_flags: process is running translated by Rosetta (sys/proc_info_private.h)
+    public const uint PROC_FLAG_TRANSLATED = 0x2000000;
+
+    // Memory pressure levels (sys/event.h)
+    public const int NOTE_MEMORYSTATUS_PRESSURE_NORMAL = 0x00000001;
+    public const int NOTE_MEMORYSTATUS_PRESSURE_WARN = 0x00000002;
+    public const int NOTE_MEMORYSTATUS_PRESSURE_CRITICAL = 0x00000004;
 
     // BSD process status values (sys/proc.h)
     public const uint SIDL = 1;
@@ -64,6 +77,18 @@ internal static partial class NativeMethods
 
     // Buffer size for proc_pidpath (sys/proc_info.h)
     public const uint PROC_PIDPATHINFO_MAXSIZE = 4096;
+
+    // IOReturn (IOKit/IOReturn.h)
+    public const int kIOReturnSuccess = 0;
+
+    // IOPSGetBatteryWarningLevel results (IOKit/ps/IOPowerSources.h)
+    public const int kIOPSLowBatteryWarningNone = 1;
+    public const int kIOPSLowBatteryWarningEarly = 2;
+    public const int kIOPSLowBatteryWarningFinal = 3;
+
+    // IOPSGetTimeRemainingEstimate results (IOKit/ps/IOPowerSources.h)
+    public const double kIOPSTimeRemainingUnknown = -1.0;
+    public const double kIOPSTimeRemainingUnlimited = -2.0;
 
     // Selector for IOConnectCallStructMethod
     public const uint KERNEL_INDEX_SMC = 2;
@@ -245,6 +270,24 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    internal struct proc_bsdshortinfo
+    {
+        public uint pbsi_pid;
+        public uint pbsi_ppid;
+        public uint pbsi_pgid;
+        public uint pbsi_status;
+        public fixed byte pbsi_comm[16];
+        public uint pbsi_flags;
+        public uint pbsi_uid;
+        public uint pbsi_gid;
+        public uint pbsi_ruid;
+        public uint pbsi_rgid;
+        public uint pbsi_svuid;
+        public uint pbsi_svgid;
+        public uint pbsi_rfu;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     internal struct proc_taskinfo
     {
         public ulong pti_virtual_size;
@@ -268,24 +311,17 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    internal struct rusage_info_v2
+    internal struct mach_timebase_info_data
     {
-        public byte ri_uuid0;
-        public byte ri_uuid1;
-        public byte ri_uuid2;
-        public byte ri_uuid3;
-        public byte ri_uuid4;
-        public byte ri_uuid5;
-        public byte ri_uuid6;
-        public byte ri_uuid7;
-        public byte ri_uuid8;
-        public byte ri_uuid9;
-        public byte ri_uuid10;
-        public byte ri_uuid11;
-        public byte ri_uuid12;
-        public byte ri_uuid13;
-        public byte ri_uuid14;
-        public byte ri_uuid15;
+        public uint numer;
+        public uint denom;
+    }
+
+    // Layout of rusage_info_v6 (sys/resource.h). Older flavors are prefixes of this struct.
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct rusage_info_v6
+    {
+        public fixed byte ri_uuid[16];
         public ulong ri_user_time;
         public ulong ri_system_time;
         public ulong ri_pkg_idle_wkups;
@@ -304,6 +340,36 @@ internal static partial class NativeMethods
         public ulong ri_child_elapsed_abstime;
         public ulong ri_diskio_bytesread;
         public ulong ri_diskio_byteswritten;
+        public ulong ri_cpu_time_qos_default;
+        public ulong ri_cpu_time_qos_maintenance;
+        public ulong ri_cpu_time_qos_background;
+        public ulong ri_cpu_time_qos_utility;
+        public ulong ri_cpu_time_qos_legacy;
+        public ulong ri_cpu_time_qos_user_initiated;
+        public ulong ri_cpu_time_qos_user_interactive;
+        public ulong ri_billed_system_time;
+        public ulong ri_serviced_system_time;
+        public ulong ri_logical_writes;
+        public ulong ri_lifetime_max_phys_footprint;
+        public ulong ri_instructions;
+        public ulong ri_cycles;
+        public ulong ri_billed_energy;
+        public ulong ri_serviced_energy;
+        public ulong ri_interval_max_phys_footprint;
+        public ulong ri_runnable_time;
+        public ulong ri_flags;
+        public ulong ri_user_ptime;
+        public ulong ri_system_ptime;
+        public ulong ri_pinstructions;
+        public ulong ri_pcycles;
+        public ulong ri_energy_nj;
+        public ulong ri_penergy_nj;
+        public ulong ri_secure_time_in_system;
+        public ulong ri_secure_ptime_in_system;
+        public ulong ri_neural_footprint;
+        public ulong ri_lifetime_max_neural_footprint;
+        public ulong ri_interval_max_neural_footprint;
+        public fixed ulong ri_reserved[9];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -367,6 +433,9 @@ internal static partial class NativeMethods
     [LibraryImport("libSystem.dylib")]
     public static partial int host_page_size(uint host, out UIntPtr page_size);
 
+    [LibraryImport("libSystem.dylib")]
+    public static partial int mach_timebase_info(out mach_timebase_info_data info);
+
     //------------------------------------------------------------------------
     // libc
     //------------------------------------------------------------------------
@@ -407,7 +476,7 @@ internal static partial class NativeMethods
     public static partial int proc_pidpath(int pid, byte* buffer, uint buffersize);
 
     [LibraryImport("libproc")]
-    public static partial int proc_pid_rusage(int pid, int flavor, rusage_info_v2* buffer);
+    public static partial int proc_pid_rusage(int pid, int flavor, rusage_info_v6* buffer);
 
     //------------------------------------------------------------------------
     // CoreFoundation
@@ -417,6 +486,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(CoreFoundationLib)]
     public static partial void CFRelease(IntPtr cf);
+
+    [LibraryImport(CoreFoundationLib)]
+    public static partial IntPtr CFRetain(IntPtr cf);
 
     [LibraryImport(CoreFoundationLib)]
     public static partial long CFArrayGetCount(IntPtr theArray);
@@ -442,6 +514,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(CoreFoundationLib)]
     public static partial IntPtr CFDictionaryGetValue(IntPtr theDict, IntPtr key);
+
+    [LibraryImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool CFDictionaryContainsKey(IntPtr theDict, IntPtr key);
 
     [LibraryImport(CoreFoundationLib)]
     [return: MarshalAs(UnmanagedType.U1)]
@@ -533,6 +609,67 @@ internal static partial class NativeMethods
 
     [LibraryImport(IOKitLib)]
     public static partial int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
+
+    //------------------------------------------------------------------------
+    // IOKit (Power sources / Power management)
+    //------------------------------------------------------------------------
+
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOPSCopyPowerSourcesInfo();
+
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOPSCopyPowerSourcesList(IntPtr blob);
+
+    // Returned dictionary is owned by the blob and must not be released
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOPSGetPowerSourceDescription(IntPtr blob, IntPtr ps);
+
+    // Returned string is a constant and must not be released
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOPSGetProvidingPowerSourceType(IntPtr snapshot);
+
+    [LibraryImport(IOKitLib)]
+    public static partial double IOPSGetTimeRemainingEstimate();
+
+    [LibraryImport(IOKitLib)]
+    public static partial int IOPSGetBatteryWarningLevel();
+
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IOPSCopyExternalPowerAdapterDetails();
+
+    [LibraryImport(IOKitLib)]
+    public static partial int IOPMGetThermalWarningLevel(out uint thermalLevel);
+
+    [LibraryImport(IOKitLib)]
+    public static partial int IOPMCopyCPUPowerStatus(out IntPtr cpuPowerStatus);
+
+    [LibraryImport(IOKitLib)]
+    public static partial int IOPMCopyAssertionsStatus(out IntPtr assertionsStatus);
+
+    //------------------------------------------------------------------------
+    // Objective-C runtime
+    //------------------------------------------------------------------------
+
+    private const string ObjCLib = "/usr/lib/libobjc.A.dylib";
+
+    public const string FoundationLib = "/System/Library/Frameworks/Foundation.framework/Foundation";
+
+    [LibraryImport(ObjCLib)]
+    public static partial IntPtr objc_getClass([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+
+    [LibraryImport(ObjCLib)]
+    public static partial IntPtr sel_registerName([MarshalAs(UnmanagedType.LPUTF8Str)] string name);
+
+    [LibraryImport(ObjCLib, EntryPoint = "objc_msgSend")]
+    public static partial IntPtr objc_msgSend(IntPtr receiver, IntPtr selector);
+
+    [LibraryImport(ObjCLib, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool objc_msgSend_bool(IntPtr receiver, IntPtr selector);
+
+    [LibraryImport(ObjCLib, EntryPoint = "objc_msgSend")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool objc_msgSend_bool(IntPtr receiver, IntPtr selector, IntPtr argument);
 
     //------------------------------------------------------------------------
     // IOReport
@@ -661,6 +798,40 @@ internal static partial class NativeMethods
         var allocatedSize = len;
         var buffer = stackalloc byte[(int)allocatedSize];
         return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
+    }
+
+    //------------------------------------------------------------------------
+    // Mach time
+    //------------------------------------------------------------------------
+
+    private static readonly Lazy<(ulong Numer, ulong Denom)> Timebase = new(ReadTimebase);
+
+    private static (ulong Numer, ulong Denom) ReadTimebase()
+    {
+        // proc_taskinfo reports host ticks even under Rosetta, where mach_timebase_info is translated to 1:1.
+        // Use the host timebase frequency in that case.
+        if (GetSystemControlInt32("sysctl.proc_translated") == 1)
+        {
+            var frequency = GetSystemControlUInt64("hw.tbfrequency");
+            if (frequency > 0)
+            {
+                return (1_000_000_000, frequency);
+            }
+        }
+
+        return (mach_timebase_info(out var info) == KERN_SUCCESS) && (info.denom != 0) ? (info.numer, info.denom) : (1, 1);
+    }
+
+    public static ulong MachAbsoluteToNanoseconds(ulong ticks)
+    {
+        var (numer, denom) = Timebase.Value;
+        if (numer == denom)
+        {
+            return ticks;
+        }
+
+        var result = (UInt128)ticks * numer / denom;
+        return result > ulong.MaxValue ? ulong.MaxValue : (ulong)result;
     }
 
     public static unsafe string? ToManagedString(IntPtr cfString)
