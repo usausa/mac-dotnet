@@ -39,6 +39,17 @@ public sealed class NetworkStatEntry
 
     public bool IsEnabled { get; internal set; }
 
+    // Link
+
+    public bool IsUp { get; internal set; }
+
+    public bool IsLoopback { get; internal set; }
+
+    public uint Mtu { get; internal set; }
+
+    // bits/s (capped at UInt32.MaxValue by the kernel)
+    public ulong Baudrate { get; internal set; }
+
     // Cumulative bytes
 
     public ulong RxBytes { get; internal set; }
@@ -93,7 +104,7 @@ public sealed class NetworkStat
 
     public unsafe bool Update()
     {
-        var mib = stackalloc int[] { CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0 };
+        var mib = stackalloc int[] { CTL_NET, PF_LINK, NETLINK_GENERIC, IFMIB_IFALLDATA, 0, IFDATA_GENERAL };
         var size = IntPtr.Zero;
         if ((sysctl(mib, 6, null, ref size, IntPtr.Zero, IntPtr.Zero) != 0) || (size == IntPtr.Zero))
         {
@@ -119,31 +130,18 @@ public sealed class NetworkStat
                 var added = false;
                 var filterAdded = false;
 
-                var offset = 0;
-                while (offset + sizeof(if_msghdr2) <= (int)size)
+                var count = (int)size / sizeof(ifmibdata);
+                for (var i = 0; i < count; i++)
                 {
-                    var message = (if_msghdr2*)(ptr + offset);
-                    var length = message->ifm_msglen;
-                    if ((length == 0) || (offset + length > (int)size))
-                    {
-                        break;
-                    }
-
-                    offset += length;
-
-                    if ((message->ifm_type != RTM_IFINFO2) || ((message->ifm_addrs & RTA_IFP) == 0))
+                    var data = (ifmibdata*)ptr + i;
+                    var name = Marshal.PtrToStringUTF8((IntPtr)data->ifmd_name);
+                    // Interface not attached
+                    if (String.IsNullOrEmpty(name))
                     {
                         continue;
                     }
 
-                    var link = (sockaddr_dl*)(message + 1);
-                    if ((link->sdl_family != AF_LINK) || (link->sdl_nlen == 0) || (link->sdl_data + link->sdl_nlen > (byte*)message + length))
-                    {
-                        continue;
-                    }
-
-                    var name = Marshal.PtrToStringUTF8((IntPtr)link->sdl_data, link->sdl_nlen);
-                    var raw = &message->ifm_data;
+                    var raw = &data->ifmd_data;
 
                     var iface = default(NetworkStatEntry);
                     foreach (var item in interfaces)
@@ -172,6 +170,10 @@ public sealed class NetworkStat
 
                     if (iface.Target)
                     {
+                        iface.IsUp = (data->ifmd_flags & IFF_UP) != 0;
+                        iface.IsLoopback = (data->ifmd_flags & IFF_LOOPBACK) != 0;
+                        iface.Mtu = raw->ifi_mtu;
+                        iface.Baudrate = raw->ifi_baudrate;
                         iface.RxBytes = raw->ifi_ibytes;
                         iface.RxPackets = raw->ifi_ipackets;
                         iface.RxErrors = raw->ifi_ierrors;

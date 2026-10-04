@@ -123,8 +123,9 @@ public sealed class MainsDevice
     private void ReadAdapterDetails()
     {
         using var adapter = new CFRef(IOPSCopyExternalPowerAdapterDetails());
-        AdapterConnected = adapter.IsValid;
-        if (!adapter.IsValid)
+        // Desktop Macs return only FamilyCode = kIOPSFamilyCodeDisconnected
+        AdapterConnected = adapter.IsValid && (!adapter.TryGetInt64("FamilyCode", out var family) || (family != kIOPSFamilyCodeDisconnected));
+        if (!AdapterConnected)
         {
             AdapterWatts = 0;
             AdapterVoltage = 0;

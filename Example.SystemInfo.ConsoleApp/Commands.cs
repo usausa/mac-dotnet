@@ -398,7 +398,7 @@ public sealed class NetworkCommand : ICommandHandler
             foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
             {
                 var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
-                Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})");
+                Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})  {(nif.IsUp ? "Up" : "Down")}  MTU: {nif.Mtu}  Link: {nif.Baudrate / 1000 / 1000} Mbps");
 
                 snapshot.TryGetValue(nif.Name, out var prev);
                 var deltaRxBytes = unchecked(nif.RxBytes - prev.RxBytes);

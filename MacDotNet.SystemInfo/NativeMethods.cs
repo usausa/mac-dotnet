@@ -44,17 +44,16 @@ internal static partial class NativeMethods
     // getfsstat mode flags (sys/mount.h)
     public const int MNT_NOWAIT = 2;  // Asynchronous: return cached values immediately
 
-    // Address family constants (sys/socket.h)
-    public const byte AF_LINK = 18;  // BSD data-link layer
-
-    // sysctl names for the interface list (sys/sysctl.h, sys/socket.h)
+    // sysctl names for the interface MIB (sys/sysctl.h, sys/socket.h, net/if_mib.h)
     public const int CTL_NET = 4;
-    public const int PF_ROUTE = 17;
-    public const int NET_RT_IFLIST2 = 6;
+    public const int PF_LINK = 18;
+    public const int NETLINK_GENERIC = 0;
+    public const int IFMIB_IFALLDATA = 3;  // All interfaces at once
+    public const int IFDATA_GENERAL = 1;   // Generic stats (ifmibdata)
 
-    // Routing message (net/route.h)
-    public const byte RTM_IFINFO2 = 0x12;
-    public const int RTA_IFP = 0x10;
+    // Interface flags (net/if.h)
+    public const uint IFF_UP = 0x1;
+    public const uint IFF_LOOPBACK = 0x8;
 
     // Type argument for proc_listpids (sys/proc_info.h)
     public const uint PROC_ALL_PIDS = 1;  // All processes
@@ -98,6 +97,9 @@ internal static partial class NativeMethods
     // IOPSGetTimeRemainingEstimate results (IOKit/ps/IOPowerSources.h)
     public const double kIOPSTimeRemainingUnknown = -1.0;
     public const double kIOPSTimeRemainingUnlimited = -2.0;
+
+    // Power adapter family code (IOKit/pwr_mgt/IOPMPrivate.h)
+    public const long kIOPSFamilyCodeDisconnected = 0;
 
     // Selector for IOConnectCallStructMethod
     public const uint KERNEL_INDEX_SMC = 2;
@@ -228,32 +230,16 @@ internal static partial class NativeMethods
     }
 
     [StructLayout(LayoutKind.Sequential, Pack = 4)]
-    public struct if_msghdr2
+    public struct ifmibdata
     {
-        public ushort ifm_msglen;
-        public byte ifm_version;
-        public byte ifm_type;
-        public int ifm_addrs;
-        public int ifm_flags;
-        public ushort ifm_index;
-        public int ifm_snd_len;
-        public int ifm_snd_maxlen;
-        public int ifm_snd_drops;
-        public int ifm_timer;
-        public if_data64 ifm_data;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct sockaddr_dl
-    {
-        public byte sdl_len;
-        public byte sdl_family;
-        public ushort sdl_index;
-        public byte sdl_type;
-        public byte sdl_nlen;
-        public byte sdl_alen;
-        public byte sdl_slen;
-        public fixed byte sdl_data[12];
+        public fixed byte ifmd_name[16];
+        public uint ifmd_pcount;
+        public uint ifmd_flags;
+        public uint ifmd_snd_len;
+        public uint ifmd_snd_maxlen;
+        public uint ifmd_snd_drops;
+        public fixed uint ifmd_filler[4];
+        public if_data64 ifmd_data;
     }
 
     [StructLayout(LayoutKind.Sequential)]

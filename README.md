@@ -335,6 +335,9 @@ foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
 {
     var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
     Console.WriteLine($"[{nif.Name}]{label} ({nif.InterfaceType})");
+    Console.WriteLine($"  IsUp:      {nif.IsUp}");
+    Console.WriteLine($"  Mtu:       {nif.Mtu}");
+    Console.WriteLine($"  Baudrate:  {nif.Baudrate / 1000 / 1000} Mbps");
     Console.WriteLine($"  RxBytes:   {nif.RxBytes / 1024 / 1024} MB");
     Console.WriteLine($"  RxPackets: {nif.RxPackets}");
     Console.WriteLine($"  RxErrors:  {nif.RxErrors}");
