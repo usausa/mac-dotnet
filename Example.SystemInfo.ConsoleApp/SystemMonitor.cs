@@ -62,9 +62,9 @@ public sealed class NetworkIfEntry
 
     internal bool Live;
 
-    internal uint PreviousRxBytes;
+    internal ulong PreviousRxBytes;
 
-    internal uint PreviousTxBytes;
+    internal ulong PreviousTxBytes;
 #pragma warning restore SA1401
 
     // Delegation properties

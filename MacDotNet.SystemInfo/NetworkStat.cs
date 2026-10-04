@@ -1,5 +1,6 @@
 namespace MacDotNet.SystemInfo;
 
+using System.Buffers;
 using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
@@ -40,19 +41,19 @@ public sealed class NetworkStatEntry
 
     // Cumulative bytes
 
-    public uint RxBytes { get; internal set; }
-    public uint RxPackets { get; internal set; }
-    public uint RxErrors { get; internal set; }
-    public uint RxDrops { get; internal set; }
-    public uint RxMulticast { get; internal set; }
+    public ulong RxBytes { get; internal set; }
+    public ulong RxPackets { get; internal set; }
+    public ulong RxErrors { get; internal set; }
+    public ulong RxDrops { get; internal set; }
+    public ulong RxMulticast { get; internal set; }
 
-    public uint TxBytes { get; internal set; }
-    public uint TxPackets { get; internal set; }
-    public uint TxErrors { get; internal set; }
-    public uint TxMulticast { get; internal set; }
+    public ulong TxBytes { get; internal set; }
+    public ulong TxPackets { get; internal set; }
+    public ulong TxErrors { get; internal set; }
+    public ulong TxMulticast { get; internal set; }
 
-    public uint Collisions { get; internal set; }
-    public uint NoProto { get; internal set; }
+    public ulong Collisions { get; internal set; }
+    public ulong NoProto { get; internal set; }
 
     internal NetworkStatEntry(string name, string? displayName, NetworkInterfaceType interfaceType, bool isRegistered, bool isHidden)
     {
@@ -92,31 +93,57 @@ public sealed class NetworkStat
 
     public unsafe bool Update()
     {
-        if (getifaddrs(out var ifap) != 0)
+        var mib = stackalloc int[] { CTL_NET, PF_ROUTE, 0, 0, NET_RT_IFLIST2, 0 };
+        var size = IntPtr.Zero;
+        if ((sysctl(mib, 6, null, ref size, IntPtr.Zero, IntPtr.Zero) != 0) || (size == IntPtr.Zero))
         {
             return false;
         }
 
-        foreach (var iface in interfaces)
-        {
-            iface.Live = false;
-        }
-
+        var buffer = ArrayPool<byte>.Shared.Rent((int)size);
         try
         {
-            var added = false;
-            var filterAdded = false;
-
-            for (var ifa = (ifaddrs*)ifap; ifa != null; ifa = (ifaddrs*)ifa->ifa_next)
+            fixed (byte* ptr = buffer)
             {
-                var name = Marshal.PtrToStringUTF8(ifa->ifa_name);
-
-                if ((name is not null) &&
-                    (ifa->ifa_addr != IntPtr.Zero) &&
-                    (((sockaddr*)ifa->ifa_addr)->sa_family == AF_LINK) &&
-                    (ifa->ifa_data != IntPtr.Zero))
+                size = buffer.Length;
+                if (sysctl(mib, 6, ptr, ref size, IntPtr.Zero, IntPtr.Zero) != 0)
                 {
-                    var raw = (if_data*)ifa->ifa_data;
+                    return false;
+                }
+
+                foreach (var iface in interfaces)
+                {
+                    iface.Live = false;
+                }
+
+                var added = false;
+                var filterAdded = false;
+
+                var offset = 0;
+                while (offset + sizeof(if_msghdr2) <= (int)size)
+                {
+                    var message = (if_msghdr2*)(ptr + offset);
+                    var length = message->ifm_msglen;
+                    if ((length == 0) || (offset + length > (int)size))
+                    {
+                        break;
+                    }
+
+                    offset += length;
+
+                    if ((message->ifm_type != RTM_IFINFO2) || ((message->ifm_addrs & RTA_IFP) == 0))
+                    {
+                        continue;
+                    }
+
+                    var link = (sockaddr_dl*)(message + 1);
+                    if ((link->sdl_family != AF_LINK) || (link->sdl_nlen == 0) || (link->sdl_data + link->sdl_nlen > (byte*)message + length))
+                    {
+                        continue;
+                    }
+
+                    var name = Marshal.PtrToStringUTF8((IntPtr)link->sdl_data, link->sdl_nlen);
+                    var raw = &message->ifm_data;
 
                     var iface = default(NetworkStatEntry);
                     foreach (var item in interfaces)
@@ -160,39 +187,39 @@ public sealed class NetworkStat
 
                     iface.Live = true;
                 }
-            }
 
-            for (var i = interfaces.Count - 1; i >= 0; i--)
-            {
-                var iface = interfaces[i];
-                if (!iface.Live)
+                for (var i = interfaces.Count - 1; i >= 0; i--)
                 {
-                    if (iface.Target)
+                    var iface = interfaces[i];
+                    if (!iface.Live)
                     {
-                        filteredInterfaces.Remove(iface);
+                        if (iface.Target)
+                        {
+                            filteredInterfaces.Remove(iface);
+                        }
+                        interfaces.RemoveAt(i);
                     }
-                    interfaces.RemoveAt(i);
                 }
-            }
 
-            if (added)
-            {
-                interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
-                if (filterAdded)
+                if (added)
                 {
-                    filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                    interfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                    if (filterAdded)
+                    {
+                        filteredInterfaces.Sort(static (a, b) => StringComparer.Ordinal.Compare(a.Name, b.Name));
+                    }
                 }
+
+                RefreshEnabledState();
+
+                UpdateAt = DateTime.Now;
+
+                return true;
             }
-
-            RefreshEnabledState();
-
-            UpdateAt = DateTime.Now;
-
-            return true;
         }
         finally
         {
-            freeifaddrs(ifap);
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

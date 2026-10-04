@@ -47,6 +47,15 @@ internal static partial class NativeMethods
     // Address family constants (sys/socket.h)
     public const byte AF_LINK = 18;  // BSD data-link layer
 
+    // sysctl names for the interface list (sys/sysctl.h, sys/socket.h)
+    public const int CTL_NET = 4;
+    public const int PF_ROUTE = 17;
+    public const int NET_RT_IFLIST2 = 6;
+
+    // Routing message (net/route.h)
+    public const byte RTM_IFINFO2 = 0x12;
+    public const int RTA_IFP = 0x10;
+
     // Type argument for proc_listpids (sys/proc_info.h)
     public const uint PROC_ALL_PIDS = 1;  // All processes
 
@@ -187,27 +196,8 @@ internal static partial class NativeMethods
         public fixed uint f_reserved[7];
     }
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct ifaddrs
-    {
-        public IntPtr ifa_next;
-        public IntPtr ifa_name;
-        public uint ifa_flags;
-        public IntPtr ifa_addr;
-        public IntPtr ifa_netmask;
-        public IntPtr ifa_dstaddr;
-        public IntPtr ifa_data;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct sockaddr
-    {
-        public byte sa_len;
-        public byte sa_family;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct if_data
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    public struct if_data64
     {
         public byte ifi_type;
         public byte ifi_typelen;
@@ -219,27 +209,51 @@ internal static partial class NativeMethods
         public byte ifi_unused1;
         public uint ifi_mtu;
         public uint ifi_metric;
-        public uint ifi_baudrate;
-        public uint ifi_ipackets;
-        public uint ifi_ierrors;
-        public uint ifi_opackets;
-        public uint ifi_oerrors;
-        public uint ifi_collisions;
-        public uint ifi_ibytes;
-        public uint ifi_obytes;
-        public uint ifi_imcasts;
-        public uint ifi_omcasts;
-        public uint ifi_iqdrops;
-        public uint ifi_noproto;
+        public ulong ifi_baudrate;
+        public ulong ifi_ipackets;
+        public ulong ifi_ierrors;
+        public ulong ifi_opackets;
+        public ulong ifi_oerrors;
+        public ulong ifi_collisions;
+        public ulong ifi_ibytes;
+        public ulong ifi_obytes;
+        public ulong ifi_imcasts;
+        public ulong ifi_omcasts;
+        public ulong ifi_iqdrops;
+        public ulong ifi_noproto;
         public uint ifi_recvtiming;
         public uint ifi_xmittiming;
-        public long ifi_lastchange_tv_sec;
+        public int ifi_lastchange_tv_sec;
         public int ifi_lastchange_tv_usec;
-        public int ifi_lastchange_pad;
-        public uint ifi_unused2;
-        public uint ifi_hwassist;
-        public uint ifi_reserved1;
-        public uint ifi_reserved2;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    public struct if_msghdr2
+    {
+        public ushort ifm_msglen;
+        public byte ifm_version;
+        public byte ifm_type;
+        public int ifm_addrs;
+        public int ifm_flags;
+        public ushort ifm_index;
+        public int ifm_snd_len;
+        public int ifm_snd_maxlen;
+        public int ifm_snd_drops;
+        public int ifm_timer;
+        public if_data64 ifm_data;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct sockaddr_dl
+    {
+        public byte sdl_len;
+        public byte sdl_family;
+        public ushort sdl_index;
+        public byte sdl_type;
+        public byte sdl_nlen;
+        public byte sdl_alen;
+        public byte sdl_slen;
+        public fixed byte sdl_data[12];
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -457,10 +471,7 @@ internal static partial class NativeMethods
     public static partial int statfs_path([MarshalAs(UnmanagedType.LPUTF8Str)] string path, statfs* buf);
 
     [LibraryImport("libc")]
-    public static partial int getifaddrs(out IntPtr ifap);
-
-    [LibraryImport("libc")]
-    public static partial void freeifaddrs(IntPtr ifa);
+    public static partial int sysctl(int* name, uint namelen, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
 
     //------------------------------------------------------------------------
     // libproc
