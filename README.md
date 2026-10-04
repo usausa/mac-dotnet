@@ -42,7 +42,7 @@ foreach (var disk in disks)
 
 static void PrintNvmeSmart(ISmartNvme smart)
 {
-    Console.WriteLine($"  SMART (NVMe): LastUpdate=[{smart.LastUpdate}]");
+    Console.WriteLine($"  SMART (NVMe): LastUpdate=[{smart.LastUpdate}] LastError=[{smart.LastError}]");
     Console.WriteLine($"    Temperature:     {smart.Temperature} C");
     Console.WriteLine($"    AvailableSpare:  {smart.AvailableSpare} %");
     Console.WriteLine($"    PercentageUsed:  {smart.PercentageUsed} %");
@@ -57,15 +57,15 @@ static void PrintNvmeSmart(ISmartNvme smart)
 
 static void PrintGenericSmart(ISmartGeneric smart)
 {
-    Console.WriteLine($"  SMART (Generic): LastUpdate=[{smart.LastUpdate}]");
-    Console.WriteLine("    ID   FLAG   CUR  WOR  RAW");
-    Console.WriteLine("    ---  ----   ---  ---  --------");
+    Console.WriteLine($"  SMART (Generic): LastUpdate=[{smart.LastUpdate}] LastError=[{smart.LastError}] Assessment=[{smart.Assessment}]");
+    Console.WriteLine("    ID   FLAG   CUR  WOR  THR  RAW");
+    Console.WriteLine("    ---  ----   ---  ---  ---  --------");
     foreach (var id in smart.GetSupportedIds())
     {
         var attr = smart.GetAttribute(id);
         if (attr.HasValue)
         {
-            Console.WriteLine($"    {(byte)id,3}  0x{attr.Value.Flags:X4}  {attr.Value.CurrentValue,3}  {attr.Value.WorstValue,3}  {attr.Value.RawValue}");
+            Console.WriteLine($"    {(byte)id,3}  0x{attr.Value.Flags:X4}  {attr.Value.CurrentValue,3}  {attr.Value.WorstValue,3}  {attr.Value.Threshold,3}  {attr.Value.RawValue}");
         }
     }
 }
@@ -85,7 +85,7 @@ Uptime:                      0.15:20:40
 System:                      Processes: 487  Threads: 2223
 Handles:                     Files: 1234  Vnodes: 5678
 Load Average:                1.24  1.37  1.39  (1/5/15 min)
-Memory Usage:                57.5 %  (Active: 38.5 %  Wired: 11.6 %  Compressor: 7.4 %)
+Memory Usage:                57.5 %  (Active: 38.5 %  Wired: 11.6 %  Compressor: 7.4 %)  Pressure: Normal
 Swap Usage:                  0.0 %
 GPU [AGXAcceleratorG14X]:    Device: 0 %  Renderer: 0 %  Tiler: 0 %
 Disk disk0 (AppleFabric):    Read: 14.6 KB/s  Write: 0.0 KB/s
@@ -104,6 +104,10 @@ Power DC-in:                 7.78 W
 Power Total System:          7.74 W
 Fan 0:                       1703 rpm  (34.1 %)  [min: 1700  max: 5000]
 Power:                       CPU: 0.61 W  GPU: 0.00 W  ANE: 0.00 W  RAM: 0.09 W  PCI: 0.00 W
+Battery:                     87 %  (Discharging)  12.31 V  -0.62 A  -7.63 W  Temp: 30.1 C
+Battery Health:              91.2 %  (Good)  Cycles: 210  Charge: 4523 / 5186 mAh  (design: 5686 mAh)
+Power Source:                Battery  Adapter: not connected  Remaining: 4:12
+Thermal:                     Nominal  Low Power Mode: Off  CPU Speed Limit: 100 %  Prevent Sleep: False
 ```
 
 ## Usage
@@ -246,6 +250,7 @@ Console.WriteLine("[Usage]");
 Console.WriteLine($"  Total:       {mem.PhysicalMemory / 1024 / 1024} MB");
 Console.WriteLine($"  Used:        {mem.UsedBytes / 1024 / 1024} MB  ({usage:F1}%)");
 Console.WriteLine($"  Free:        {mem.FreeBytes / 1024 / 1024} MB");
+Console.WriteLine($"  Pressure:    {mem.PressureLevel}");
 
 Console.WriteLine("[Breakdown]");
 Console.WriteLine($"  Active:      {mem.ActiveBytes / 1024 / 1024} MB  ({mem.ActiveCount} pages)");
@@ -351,8 +356,11 @@ var processes = PlatformProvider.GetProcesses();
 foreach (var p in processes.OrderBy(static p => p.ProcessId))
 {
     var rss = (double)p.ResidentMemorySize / 1024 / 1024;
+    var footprint = (double)p.PhysicalFootprint / 1024 / 1024;
     var cpu = (p.UserTime + p.SystemTime).TotalSeconds;
-    Console.WriteLine($"{p.ProcessId,-6} {p.Name,-20} {p.Status,-12} {p.UserId,-5} Threads={p.ThreadCount,3}  RSS={rss,8:F2} MB  CPU={cpu,8:F2}s");
+    var energy = p.Energy / 1_000_000_000.0;
+    var kind = p.IsTranslated ? "Intel" : "Native";
+    Console.WriteLine($"{p.ProcessId,-6} {p.Name,-20} {p.Status,-12} {p.UserId,-5} Threads={p.ThreadCount,3}  RSS={rss,8:F2} MB  Footprint={footprint,8:F2} MB  CPU={cpu,8:F2}s  Energy={energy,8:F3} J  WakeUps={p.InterruptWakeups}  {kind}");
 }
 
 var proc = PlatformProvider.GetProcess(Environment.ProcessId);
@@ -405,6 +413,60 @@ Console.WriteLine($"ANE:   {power.Ane - prevAne:F2} W");
 Console.WriteLine($"RAM:   {power.Ram - prevRam:F2} W");
 Console.WriteLine($"PCI:   {power.Pci - prevPci:F2} W");
 Console.WriteLine($"Total: {power.Total - prevTotal:F2} W");
+```
+
+### Battery
+
+```csharp
+var battery = PlatformProvider.GetBatteryDevice();
+if (!battery.Supported)
+{
+    Console.WriteLine("No battery found");
+    return;
+}
+
+Console.WriteLine($"Capacity:     {battery.Capacity} %  ({battery.Status})");
+Console.WriteLine($"Charge:       {battery.Charge} / {battery.ChargeFull} mAh  (design: {battery.DesignCapacity} mAh)");
+Console.WriteLine($"CycleCount:   {battery.CycleCount}");
+Console.WriteLine($"Voltage:      {battery.Voltage / 1000.0:F3} V");
+Console.WriteLine($"Current:      {battery.Current / 1000.0:F3} A");
+Console.WriteLine($"Power:        {battery.Power:F2} W");
+Console.WriteLine($"Temperature:  {battery.Temperature:F1} C");
+Console.WriteLine($"Health:       {battery.Health}  ({battery.HealthPercent:F1} %)");
+Console.WriteLine($"TimeToEmpty:  {battery.TimeToEmpty} min");
+Console.WriteLine($"TimeToFull:   {battery.TimeToFull} min");
+Console.WriteLine($"WarningLevel: {battery.WarningLevel}");
+```
+
+### Mains
+
+```csharp
+var mains = PlatformProvider.GetMainsDevice();
+Console.WriteLine($"Online:          {mains.Online}");
+Console.WriteLine($"ProvidingSource: {mains.ProvidingSource}");
+if (mains.TimeRemainingState == TimeRemainingState.Estimated)
+{
+    Console.WriteLine($"TimeRemaining:   {mains.TimeRemaining:h\\:mm}");
+}
+if (mains.AdapterConnected)
+{
+    Console.WriteLine($"Adapter:         {mains.AdapterWatts} W  {mains.AdapterName}");
+    Console.WriteLine($"AdapterVoltage:  {mains.AdapterVoltage / 1000.0:F3} V");
+    Console.WriteLine($"AdapterCurrent:  {mains.AdapterCurrent / 1000.0:F3} A");
+}
+```
+
+### Power Management
+
+```csharp
+var pm = PlatformProvider.GetPowerManagementStat();
+Console.WriteLine($"ThermalState:        {pm.ThermalState}");
+Console.WriteLine($"ThermalWarningLevel: {pm.ThermalWarningLevel}");
+Console.WriteLine($"CpuSpeedLimit:       {pm.CpuSpeedLimit} %");
+Console.WriteLine($"CpuAvailableCpus:    {pm.CpuAvailableCpus}");
+Console.WriteLine($"CpuSchedulerLimit:   {pm.CpuSchedulerLimit} %");
+Console.WriteLine($"LowPowerMode:        {pm.IsLowPowerModeEnabled}");
+Console.WriteLine($"PreventSleep:        {pm.PreventUserIdleSystemSleep}");
 ```
 
 ### SMC Sensors

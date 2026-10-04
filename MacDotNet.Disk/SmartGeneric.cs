@@ -34,13 +34,23 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
     private readonly byte[] buffer = new byte[SmartDataSize];
 
+    private readonly byte[] thresholds = new byte[SmartDataSize];
+
     private readonly SafePlugInInterface? pluginInterface;
 
     private readonly SafePlugInInterface? smartInterface;
 
+    private readonly int openError;
+
+    private bool thresholdsLoaded;
+
     private bool disposed;
 
     public bool LastUpdate { get; private set; }
+
+    public int LastError { get; private set; }
+
+    public SmartAssessment Assessment { get; private set; }
 
     internal unsafe SmartGeneric(uint service)
     {
@@ -49,6 +59,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         var kr = IOCreatePlugInInterfaceForService(service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
         if ((kr != KERN_SUCCESS) || (ppPlugin == IntPtr.Zero))
         {
+            openError = kr != KERN_SUCCESS ? kr : kIOReturnError;
             return;
         }
 
@@ -61,6 +72,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
         if ((hr != S_OK) || (pSmartInterface == IntPtr.Zero))
         {
+            openError = hr != S_OK ? hr : kIOReturnError;
             return;
         }
 
@@ -72,6 +84,7 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
         kr = enableFn(pSmartInterface, 1);
         if (kr != KERN_SUCCESS)
         {
+            openError = kr;
             smartInterface.Dispose();
             smartInterface = null;
         }
@@ -95,24 +108,55 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
 
         if (smartInterface is null)
         {
+            LastError = openError;
             LastUpdate = false;
             return false;
         }
 
-        // Enable SMART operations
         // ATA SMART interface vtable layout (64-bit):
         //   0: _reserved, 8: QI, 16: AddRef, 24: Release
         //   32: version(2) + revision(2) + pad(4)
         //   40: SMARTEnableDisableOperations
+        //   56: SMARTReturnStatus
+        //   72: SMARTReadData
+        //   88: SMARTReadDataThresholds
         var smartVtable = *(IntPtr*)smartInterface.Pointer;
         var readDataFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 72));
 
         fixed (byte* bufPtr = buffer)
         {
             var kr = readDataFn(smartInterface.Pointer, bufPtr);
-            LastUpdate = kr == KERN_SUCCESS;
-            return LastUpdate;
+            if (kr != KERN_SUCCESS)
+            {
+                LastError = kr;
+                LastUpdate = false;
+                return false;
+            }
         }
+
+        if (!thresholdsLoaded)
+        {
+            var readThresholdsFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 88));
+            fixed (byte* thresholdsPtr = thresholds)
+            {
+                thresholdsLoaded = readThresholdsFn(smartInterface.Pointer, thresholdsPtr) == KERN_SUCCESS;
+            }
+        }
+
+        var returnStatusFn = (delegate* unmanaged<IntPtr, byte*, int>)(*(IntPtr*)((byte*)smartVtable + 56));
+        byte exceeded;
+        if (returnStatusFn(smartInterface.Pointer, &exceeded) == KERN_SUCCESS)
+        {
+            Assessment = exceeded != 0 ? SmartAssessment.Failed : SmartAssessment.Passed;
+        }
+        else
+        {
+            Assessment = SmartAssessment.Unknown;
+        }
+
+        LastError = 0;
+        LastUpdate = true;
+        return true;
     }
 
     public IReadOnlyList<SmartId> GetSupportedIds()
@@ -151,12 +195,32 @@ internal sealed class SmartGeneric : ISmartGeneric, IDisposable
                     Flags = (short)(buffer[offset + 1] | (buffer[offset + 2] << 8)),
                     CurrentValue = buffer[offset + 3],
                     WorstValue = buffer[offset + 4],
+                    Threshold = FindThreshold(target),
                     RawValue = Raw48ToU64(rawOffset)
                 };
             }
         }
 
         return null;
+    }
+
+    private byte FindThreshold(byte id)
+    {
+        if (!thresholdsLoaded)
+        {
+            return 0;
+        }
+
+        for (var i = 0; i < MaxAttributes; i++)
+        {
+            var offset = TableOffset + (i * EntrySize);
+            if (thresholds[offset] == id)
+            {
+                return thresholds[offset + 1];
+            }
+        }
+
+        return 0;
     }
 
     private ulong Raw48ToU64(int offset)

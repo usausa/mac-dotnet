@@ -138,6 +138,9 @@ internal sealed class SystemMonitor
     private readonly PowerStat powerStat;
     private readonly SmcMonitor smcMonitor;
     private readonly FileSystemStat fileSystemStat;
+    private readonly BatteryDevice batteryDevice;
+    private readonly MainsDevice mainsDevice;
+    private readonly PowerManagementStat powerManagementStat;
 
     //--------------------------------------------------------------------------------
     // Field
@@ -301,6 +304,18 @@ internal sealed class SystemMonitor
     public double PowerRamW => powerRamW;
     public double PowerPciW => powerPciW;
 
+    // Battery
+
+    public BatteryDevice Battery => batteryDevice;
+
+    public MainsDevice Mains => mainsDevice;
+
+    public PowerManagementStat PowerManagement => powerManagementStat;
+
+    // Memory pressure
+
+    public MemoryPressureLevel MemoryPressure => memoryStat.PressureLevel;
+
     //--------------------------------------------------------------------------------
     // Constructor
     //--------------------------------------------------------------------------------
@@ -322,6 +337,9 @@ internal sealed class SystemMonitor
         powerStat = PlatformProvider.GetPowerStat();
         smcMonitor = PlatformProvider.GetSmcMonitor();
         fileSystemStat = PlatformProvider.GetFileSystemStat();
+        batteryDevice = PlatformProvider.GetBatteryDevice();
+        mainsDevice = PlatformProvider.GetMainsDevice();
+        powerManagementStat = PlatformProvider.GetPowerManagementStat();
 
         // CPU
 #pragma warning disable IDE0028
@@ -383,6 +401,9 @@ internal sealed class SystemMonitor
 
         powerStat.Update();
         smcMonitor.Update();
+        batteryDevice.Update();
+        mainsDevice.Update();
+        powerManagementStat.Update();
 
         CalculateCpuUsage();
         CalculateCpuFrequency();

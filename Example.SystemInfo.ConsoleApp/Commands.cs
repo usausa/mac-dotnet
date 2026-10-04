@@ -31,6 +31,9 @@ public static class CommandBuilderExtensions
         commands.AddCommand<CpuFrequencyCommand>();
         commands.AddCommand<GpuCommand>();
         commands.AddCommand<PowerCommand>();
+        commands.AddCommand<BatteryCommand>();
+        commands.AddCommand<MainsCommand>();
+        commands.AddCommand<PowerManagementCommand>();
         commands.AddCommand<SensorCommand>();
         commands.AddCommand<SummaryCommand>();
     }
@@ -247,6 +250,7 @@ public sealed class MemoryCommand : ICommandHandler
         Console.WriteLine($"  Total:         {DisplayFormatter.FormatBytes(mem.PhysicalMemory)}");
         Console.WriteLine($"  Used:          {DisplayFormatter.FormatBytes(mem.UsedBytes)} ({usage:F1}%)");
         Console.WriteLine($"  Free:          {DisplayFormatter.FormatBytes(mem.FreeBytes)}");
+        Console.WriteLine($"  Pressure:      {mem.PressureLevel}");
 
         Console.WriteLine("[Breakdown]");
         Console.WriteLine($"  Active:        {DisplayFormatter.FormatBytes(mem.ActiveBytes)}  ({mem.ActiveCount} pages)");
@@ -458,15 +462,18 @@ public sealed class ProcessesCommand : ICommandHandler
 
         var topProcesses = sorted.Take(Top).ToList();
 
-        Console.WriteLine($"{"PID",-6} {"Name",-20} {"State",-12} {"User",-5} {"Threads",7} {"RSS (MB)",10} {"CPU Time",10}");
-        Console.WriteLine(new string('-', 76));
+        Console.WriteLine($"{"PID",-6} {"Name",-20} {"State",-12} {"User",-5} {"Threads",7} {"RSS (MB)",10} {"Foot (MB)",10} {"CPU Time",10} {"Energy (J)",11} {"Kind",-6}");
+        Console.WriteLine(new string('-', 105));
 
         foreach (var p in topProcesses)
         {
             var rss = (double)p.ResidentMemorySize / 1024 / 1024;
+            var footprint = (double)p.PhysicalFootprint / 1024 / 1024;
             var cpuTime = (p.UserTime + p.SystemTime).TotalSeconds;
+            var energy = p.Energy / 1_000_000_000.0;
+            var kind = p.IsTranslated ? "Intel" : "Native";
 
-            Console.WriteLine($"{p.ProcessId,-6} {TruncateName(p.Name, 20),-20} {p.Status,-12} {p.UserId,-5} {p.ThreadCount,7} {rss,10:F2} {cpuTime,10:F2}");
+            Console.WriteLine($"{p.ProcessId,-6} {TruncateName(p.Name, 20),-20} {p.Status,-12} {p.UserId,-5} {p.ThreadCount,7} {rss,10:F2} {footprint,10:F2} {cpuTime,10:F2} {energy,11:F3} {kind,-6}");
         }
 
         Console.WriteLine($"Total processes: {processes.Count}");
@@ -745,6 +752,120 @@ public sealed class PowerCommand : ICommandHandler
 }
 
 //--------------------------------------------------------------------------------
+// Battery
+//--------------------------------------------------------------------------------
+[Command("battery", "Get battery info")]
+public sealed class BatteryCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var battery = PlatformProvider.GetBatteryDevice();
+        if (!battery.Supported)
+        {
+            Console.WriteLine("No battery found");
+            return ValueTask.CompletedTask;
+        }
+
+        Console.WriteLine("[Battery]");
+        Console.WriteLine($"  Manufacturer:     {battery.Manufacturer}");
+        Console.WriteLine($"  DeviceName:       {battery.DeviceName}");
+        Console.WriteLine($"  SerialNumber:     {battery.SerialNumber}");
+        Console.WriteLine($"  DesignCapacity:   {battery.DesignCapacity} mAh");
+        Console.WriteLine($"  DesignCycleCount: {battery.DesignCycleCount}");
+        Console.WriteLine("[State]");
+        Console.WriteLine($"  Capacity:         {battery.Capacity} %");
+        Console.WriteLine($"  Status:           {battery.Status}");
+        Console.WriteLine($"  IsCharging:       {battery.IsCharging}");
+        Console.WriteLine($"  IsCharged:        {battery.IsCharged}");
+        Console.WriteLine($"  External:         {battery.ExternalConnected} (charge capable: {battery.ExternalChargeCapable})");
+        Console.WriteLine($"  Charge:           {battery.Charge} mAh / {battery.ChargeFull} mAh");
+        Console.WriteLine($"  CycleCount:       {battery.CycleCount}");
+        Console.WriteLine($"  Voltage:          {battery.Voltage / 1000.0:F3} V");
+        Console.WriteLine($"  Current:          {battery.Current / 1000.0:F3} A");
+        Console.WriteLine($"  Power:            {battery.Power:F2} W");
+        Console.WriteLine($"  Temperature:      {battery.Temperature:F2} C");
+        Console.WriteLine($"  TimeToEmpty:      {FormatMinutes(battery.TimeToEmpty)}");
+        Console.WriteLine($"  TimeToFull:       {FormatMinutes(battery.TimeToFull)}");
+        Console.WriteLine("[Health]");
+        Console.WriteLine($"  Health:           {battery.Health} ({battery.HealthPercent:F1} %)");
+        Console.WriteLine($"  HealthCondition:  {battery.HealthCondition ?? "-"}");
+        Console.WriteLine($"  AtWarnLevel:      {battery.AtWarnLevel}");
+        Console.WriteLine($"  AtCriticalLevel:  {battery.AtCriticalLevel}");
+        Console.WriteLine($"  OptimizedCharge:  {battery.OptimizedChargingEngaged}");
+        Console.WriteLine($"  WarningLevel:     {battery.WarningLevel}");
+
+        return ValueTask.CompletedTask;
+    }
+
+    private static string FormatMinutes(int minutes) => minutes < 0 ? "-" : $"{minutes / 60}:{minutes % 60:D2}";
+}
+
+//--------------------------------------------------------------------------------
+// Mains
+//--------------------------------------------------------------------------------
+[Command("mains", "Get power source and adapter info")]
+public sealed class MainsCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var mains = PlatformProvider.GetMainsDevice();
+        if (!mains.Supported)
+        {
+            Console.WriteLine("Power source information not supported.");
+            return ValueTask.CompletedTask;
+        }
+
+        Console.WriteLine("[Power Source]");
+        Console.WriteLine($"  Online:           {mains.Online}");
+        Console.WriteLine($"  ProvidingSource:  {mains.ProvidingSource}");
+        Console.WriteLine($"  TimeRemaining:    {(mains.TimeRemainingState == TimeRemainingState.Estimated ? $"{mains.TimeRemaining:h\\:mm}" : mains.TimeRemainingState.ToString())}");
+        Console.WriteLine("[Adapter]");
+        Console.WriteLine($"  Connected:        {mains.AdapterConnected}");
+        if (mains.AdapterConnected)
+        {
+            Console.WriteLine($"  Watts:            {mains.AdapterWatts} W");
+            Console.WriteLine($"  Voltage:          {mains.AdapterVoltage / 1000.0:F3} V");
+            Console.WriteLine($"  Current:          {mains.AdapterCurrent / 1000.0:F3} A");
+            Console.WriteLine($"  Id:               {mains.AdapterId}");
+            Console.WriteLine($"  Family:           0x{mains.AdapterFamily:X}");
+            Console.WriteLine($"  Name:             {mains.AdapterName ?? "-"}");
+            Console.WriteLine($"  Description:      {mains.AdapterDescription ?? "-"}");
+            Console.WriteLine($"  Manufacturer:     {mains.AdapterManufacturer ?? "-"}");
+            Console.WriteLine($"  SerialNumber:     {mains.AdapterSerialNumber ?? "-"}");
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+//--------------------------------------------------------------------------------
+// Power management
+//--------------------------------------------------------------------------------
+[Command("pm", "Get thermal and power management state")]
+public sealed class PowerManagementCommand : ICommandHandler
+{
+    public ValueTask ExecuteAsync(CommandContext context)
+    {
+        var pm = PlatformProvider.GetPowerManagementStat();
+
+        Console.WriteLine("[Thermal]");
+        Console.WriteLine($"  ThermalState:        {(pm.ThermalStateSupported ? pm.ThermalState.ToString() : "-")}");
+        Console.WriteLine($"  ThermalWarningLevel: {(pm.ThermalWarningLevel < 0 ? "-" : $"{pm.ThermalWarningLevel}")}");
+        Console.WriteLine($"  CpuSpeedLimit:       {(pm.CpuSpeedLimit < 0 ? "-" : $"{pm.CpuSpeedLimit} %")}");
+        Console.WriteLine($"  CpuAvailableCpus:    {(pm.CpuAvailableCpus < 0 ? "-" : $"{pm.CpuAvailableCpus}")}");
+        Console.WriteLine($"  CpuSchedulerLimit:   {(pm.CpuSchedulerLimit < 0 ? "-" : $"{pm.CpuSchedulerLimit} %")}");
+        Console.WriteLine("[Power]");
+        Console.WriteLine($"  LowPowerMode:        {(pm.LowPowerModeSupported ? pm.IsLowPowerModeEnabled.ToString() : "-")}");
+        Console.WriteLine("[Sleep Assertions]");
+        Console.WriteLine($"  PreventUserIdleSystemSleep:  {pm.PreventUserIdleSystemSleep}");
+        Console.WriteLine($"  PreventUserIdleDisplaySleep: {pm.PreventUserIdleDisplaySleep}");
+        Console.WriteLine($"  PreventSystemSleep:          {pm.PreventSystemSleep}");
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+//--------------------------------------------------------------------------------
 // Sensor
 //--------------------------------------------------------------------------------
 [Command("sensor", "Get SMC sensor readings")]
@@ -932,7 +1053,7 @@ public sealed class SummaryCommand : ICommandHandler
         lines.Add(("Handles:", $"Files: {monitor.HandleOpenFiles}  Vnodes: {monitor.HandleOpenVnodes}"));
         lines.Add(("Load Average:", $"{monitor.LoadAverage1:F2}  {monitor.LoadAverage5:F2}  {monitor.LoadAverage15:F2}  (1/5/15 min)"));
         // Memory
-        lines.Add(("Memory Usage:", $"{monitor.MemoryUsagePercent:F1} %  (Active: {monitor.MemoryActivePercent:F1} %  Wired: {monitor.MemoryWiredPercent:F1} %  Compressor: {monitor.MemoryCompressorPercent:F1} %)"));
+        lines.Add(("Memory Usage:", $"{monitor.MemoryUsagePercent:F1} %  (Active: {monitor.MemoryActivePercent:F1} %  Wired: {monitor.MemoryWiredPercent:F1} %  Compressor: {monitor.MemoryCompressorPercent:F1} %)  Pressure: {monitor.MemoryPressure}"));
         lines.Add(("Swap Usage:", $"{monitor.SwapUsagePercent:F1} %"));
         // GPU
         foreach (var gpu in monitor.GpuDevices)
@@ -1000,6 +1121,27 @@ public sealed class SummaryCommand : ICommandHandler
         }
         // Power Consumption
         lines.Add(("Power:", $"CPU: {monitor.PowerCpuW:F2} W  GPU: {monitor.PowerGpuW:F2} W  ANE: {monitor.PowerAneW:F2} W  RAM: {monitor.PowerRamW:F2} W  PCI: {monitor.PowerPciW:F2} W"));
+        // Battery
+        var battery = monitor.Battery;
+        if (battery.Supported)
+        {
+            lines.Add(("Battery:", $"{battery.Capacity} %  ({battery.Status})  {battery.Voltage / 1000.0:F2} V  {battery.Current / 1000.0:F2} A  {battery.Power:F2} W  Temp: {battery.Temperature:F1} C"));
+            lines.Add(("Battery Health:", $"{battery.HealthPercent:F1} %  ({battery.Health})  Cycles: {battery.CycleCount}  Charge: {battery.Charge} / {battery.ChargeFull} mAh  (design: {battery.DesignCapacity} mAh)"));
+        }
+        // Power source
+        var mains = monitor.Mains;
+        if (mains.Supported)
+        {
+            var adapter = mains.AdapterConnected ? $"{mains.AdapterWatts} W {mains.AdapterName ?? mains.AdapterDescription ?? "adapter"}" : "not connected";
+            var remaining = mains.TimeRemainingState == TimeRemainingState.Estimated ? $"  Remaining: {mains.TimeRemaining:h\\:mm}" : string.Empty;
+            lines.Add(("Power Source:", $"{mains.ProvidingSource}  Adapter: {adapter}{remaining}"));
+        }
+        // Power management
+        var pm = monitor.PowerManagement;
+        var thermal = pm.ThermalStateSupported ? pm.ThermalState.ToString() : "-";
+        var lowPower = pm.LowPowerModeSupported ? (pm.IsLowPowerModeEnabled ? "On" : "Off") : "-";
+        var cpuLimit = pm.CpuSpeedLimit < 0 ? "-" : $"{pm.CpuSpeedLimit} %";
+        lines.Add(("Thermal:", $"{thermal}  Low Power Mode: {lowPower}  CPU Speed Limit: {cpuLimit}  Prevent Sleep: {pm.PreventUserIdleSystemSleep}"));
 
         var labelWidth = lines.Max(l => l.Label.Length);
         foreach (var (label, value) in lines)

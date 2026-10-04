@@ -36,9 +36,13 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
     private readonly SafePlugInInterface? smartInterface;
 
+    private readonly int openError;
+
     private bool disposed;
 
     public bool LastUpdate { get; private set; }
+
+    public int LastError { get; private set; }
 
     public byte CriticalWarning { get; private set; }
 
@@ -83,6 +87,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         var kr = IOCreatePlugInInterfaceForService(service, PluginTypeUuid, CfPluginUuid, &ppPlugin, &score);
         if ((kr != KERN_SUCCESS) || (ppPlugin == IntPtr.Zero))
         {
+            openError = kr != KERN_SUCCESS ? kr : kIOReturnError;
             return;
         }
 
@@ -95,6 +100,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         var hr = qiFn(ppPlugin, SmartUuid, &pSmartInterface);
         if ((hr != S_OK) || (pSmartInterface == IntPtr.Zero))
         {
+            openError = hr != S_OK ? hr : kIOReturnError;
             return;
         }
 
@@ -119,6 +125,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
 
         if (smartInterface is null)
         {
+            LastError = openError;
             LastUpdate = false;
             return false;
         }
@@ -134,6 +141,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
         var kr = readDataFn(smartInterface.Pointer, buffer);
         if (kr != KERN_SUCCESS)
         {
+            LastError = kr;
             LastUpdate = false;
             return false;
         }
@@ -161,6 +169,7 @@ internal sealed class SmartNvme : ISmartNvme, IDisposable
             TemperatureSensors[i] = KelvinToCelsius(BinaryPrimitives.ReadUInt16LittleEndian(span.Slice(200 + (i * 2), 2)));
         }
 
+        LastError = 0;
         LastUpdate = true;
         return true;
     }

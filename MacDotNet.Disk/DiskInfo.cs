@@ -108,7 +108,7 @@ public static class DiskInfo
         if (busType is BusType.Nvme or BusType.AppleFabric or BusType.PciExpress)
         {
             var session = new SmartNvme(entry);
-            if (session.Update())
+            if (session.Update() || (session.LastError is kIOReturnNotPrivileged or kIOReturnNotPermitted))
             {
                 smartType = SmartType.Nvme;
                 smart = session;
@@ -123,7 +123,7 @@ public static class DiskInfo
         else if (busType is BusType.Ata or BusType.Sata or BusType.Atapi)
         {
             var session = new SmartGeneric(entry);
-            if (session.Update())
+            if (session.Update() || (session.LastError is kIOReturnNotPrivileged or kIOReturnNotPermitted))
             {
                 smartType = SmartType.Generic;
                 smart = session;

@@ -45,7 +45,7 @@ internal static class Program
 
     private static void PrintNvmeSmart(ISmartNvme smart)
     {
-        Console.WriteLine("  SMART (NVMe):");
+        Console.WriteLine($"  SMART (NVMe): LastUpdate=[{smart.LastUpdate}] LastError=[{smart.LastError}]");
         Console.WriteLine($"    Temperature:     {smart.Temperature} C");
         Console.WriteLine($"    AvailableSpare:  {smart.AvailableSpare} %");
         Console.WriteLine($"    PercentageUsed:  {smart.PercentageUsed} %");
@@ -60,15 +60,15 @@ internal static class Program
 
     private static void PrintGenericSmart(ISmartGeneric smart)
     {
-        Console.WriteLine("  SMART (Generic):");
-        Console.WriteLine("    ID   FLAG   CUR  WOR  RAW");
-        Console.WriteLine("    ---  ----   ---  ---  --------");
+        Console.WriteLine($"  SMART (Generic): LastUpdate=[{smart.LastUpdate}] LastError=[{smart.LastError}] Assessment=[{smart.Assessment}]");
+        Console.WriteLine("    ID   FLAG   CUR  WOR  THR  RAW");
+        Console.WriteLine("    ---  ----   ---  ---  ---  --------");
         foreach (var id in smart.GetSupportedIds())
         {
             var attr = smart.GetAttribute(id);
             if (attr.HasValue)
             {
-                Console.WriteLine($"    {(byte)id,3}  0x{attr.Value.Flags:X4}  {attr.Value.CurrentValue,3}  {attr.Value.WorstValue,3}  {attr.Value.RawValue}");
+                Console.WriteLine($"    {(byte)id,3}  0x{attr.Value.Flags:X4}  {attr.Value.CurrentValue,3}  {attr.Value.WorstValue,3}  {attr.Value.Threshold,3}  {attr.Value.RawValue}");
             }
         }
     }

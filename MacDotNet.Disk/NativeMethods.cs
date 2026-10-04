@@ -21,6 +21,15 @@ internal static partial class NativeMethods
     // COM QueryInterface success HRESULT
     public const int S_OK = 0;
 
+    // IOReturn: general error (IOKit/IOReturn.h)
+    public const int kIOReturnError = unchecked((int)0xE00002BC);
+
+    // IOReturn: privilege violation (IOKit/IOReturn.h)
+    public const int kIOReturnNotPrivileged = unchecked((int)0xE00002C1);
+
+    // IOReturn: not permitted (IOKit/IOReturn.h)
+    public const int kIOReturnNotPermitted = unchecked((int)0xE00002E2);
+
     // CFStringEncoding: UTF-8 (CFString.h)
     public const uint kCFStringEncodingUTF8 = 0x08000100;
 
