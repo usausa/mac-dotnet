@@ -585,6 +585,8 @@ CFDictionaryGetValue(serial number key)            440.4          47.4       0.3
 | SmcMonitor | 108.7 ms / 0 B | 107.2 ms / 0 B | −1.3% |
 | **All** | **170.2 ms / 23,992 B** | **123.0 ms / 1,248 B** | **−27.7%（割り当ては −94.8%）** |
 
+- 最終（c0e2b84）の値は、§判定・メモ「最終のベンチマーク」に記録した（All は 105.3 ms / 0 B で、before から −38.1%）。
+
 ### リソース数（定常状態）
 
 | 項目 | before | after |
@@ -866,3 +868,44 @@ ports: start=50 end=48 returned=no
   - 15:17〜15:57 は 68,464 KB のまま変わらなかった。16:07 と 16:17 は 68,592 KB と 68,672 KB（+208 KB、0.3%）。
   - 1 回目（修正前）は、同じ時間帯に 10 分ごとに約 1 MB ずつ増え続けた。2 回目はほぼ横ばいなので、NetworkStat のリークは直った。
 - **Update の時間**: 平均 118 ms（全キーを読む SmcMonitor が大半）。1 回の割り当ては平均 99 B。最初の 60 回は Tier-0 の 2,144 B で、その後は FileSystemStat の 80 B（このバイナリは 78d607e より前）。
+
+#### 最終のベンチマーク（2026-10-07 16:34〜16:43、c0e2b84）
+
+`Document/HandleReuse/results/benchmark-final.md` と `benchmark-final-smc-filter.md`。Phase 1 と同じ条件（Mac mini、AC 電源、`caffeinate -i`、BenchmarkDotNet の既定のジョブ）。ここまでの変更（ハンドルの保持、SMC のフィルタ、NetworkStat の修正、FileSystemStat の改善、一覧の要素の扱い、`PowerStat` の `*ChangedAt`）をすべて含む。
+
+| クラス | before | 最終 | 改善率 |
+|---|---|---|---|
+| CpuStat | 5.02 µs / 0 B | 4.49 µs / 0 B | −10.6% |
+| MemoryStat | 1.98 µs / 0 B | 1.03 µs / 0 B | −48.1% |
+| SwapUsage | 618 ns / 0 B | 311 ns / 0 B | −49.7% |
+| LoadAverage | 313 ns / 0 B | 314 ns / 0 B | +0.3% |
+| Uptime | 674 ns / 0 B | 335 ns / 0 B | −50.3% |
+| FileHandleStat | 1.65 µs / 0 B | 765 ns / 0 B | −53.8% |
+| DiskStat | 333 µs / 0 B | 329 µs / 0 B | −1.3% |
+| FileSystemStat | 8.51 µs / 80 B | 8.32 µs / 0 B | −2.2%（割り当ては 80 B → 0 B） |
+| NetworkStat | 4.27 ms / 1,168 B | 87.4 µs / 0 B | −98.0% |
+| ProcessSummary | 568 µs / 0 B | 570 µs / 0 B | +0.4% |
+| CpuFrequency | 37.3 ms / 400 B | 1.03 ms / 0 B | −97.2% |
+| GpuDevices | 29.1 µs / 0 B | 21.9 µs / 0 B | −24.8% |
+| PowerStat | 39.7 ms / 22,304 B | 1.60 ms / 0 B | −96.0% |
+| PowerManagementStat | 191 µs / 0 B | 187 µs / 0 B | −2.3% |
+| BatteryDevice | 0.68 ns / 0 B（N/A） | 0.37 ns / 0 B（N/A） | N/A |
+| MainsDevice | 163 µs / 40 B | 163 µs / 0 B | +0.1%（割り当ては 40 B → 0 B） |
+| SmcMonitor（全キー） | 108.7 ms / 0 B | 107.3 ms / 0 B | −1.2% |
+| **All** | **170.2 ms / 23,992 B** | **105.3 ms / 0 B** | **−38.1%（割り当ては 23,992 B → 0 B）** |
+
+- **悪化なし（+5% 以内）**: 満たす。悪化した最大は `ProcessSummary` の +0.4%（`LoadAverage` +0.3%、`MainsDevice` +0.1%）で、誤差の範囲。
+- **割り当て**: すべてのクラスと All が 0 B になった。
+- **Phase 4 の after からの変化**: `NetworkStat` −98.0%、All −14.4%（123.0 → 105.3 ms）。ほかのクラスは ±3% 以内で、Phase 4 と同じ。
+- **SMC のフィルタ**（`SmcFilterBenchmark`）: 全キー 106.5 ms、10 キー 3.50 ms（−96.7%）。どちらも 0 B。
+- **All の内訳**: `SmcMonitor`（全キー）以外のクラスの合計は約 4.0 ms で、All はほぼ `SmcMonitor` の時間。SMC の応答時間のばらつき（標準偏差 約 6 ms）のため、All の平均が `SmcMonitor` 単体より小さく出ている。
+  - 読むキーを 10 個に絞れば、1 回の更新は約 7.5 ms（4.0 ms ＋ 3.5 ms）の見込み。
+
+#### 利用側（MacStatDisplay）の対応（2026-10-07、ユーザー指示）
+
+- ユーザーの指示で、NuGet への公開の前に、MacStatDisplay を今回の変更に合わせた（MacStatDisplay のリポジトリの `feature/systeminfo-handle-reuse` ブランチ、コミット 63ee1b2。push はしていない）。
+  - 取得したオブジェクトをすべて Dispose する（`ISystemMonitor` を `IDisposable` にした。使わない GPU も Dispose する）。
+  - `GetSmcMonitor` のフィルタで、表示に使うキーと GPU 温度の候補（26 キー）だけを読む。M2 Pro で、`SmcMonitor.Update()` は約 93 ms → 約 7 ms。
+  - CPU の電力は、`PowerStat.CpuChangedAt` で値の変化を観測したときだけ計算する。値が止まっている間は、0 W ではなく「--」を表示する（macOS 27 の CPU Energy の件。§検討事項の結論）。
+  - ネットワークのカウンタは 64 ビットになったので、値が減ったらリセットとして扱う。
+- 今は MacDotNet.SystemInfo をローカルのリポジトリから参照している（`ProjectReference`）。新しい版を NuGet に公開したら、`PackageReference` に戻す。
