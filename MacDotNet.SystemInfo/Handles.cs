@@ -393,6 +393,24 @@ internal readonly ref struct IOObj(uint handle)
     }
 }
 
+// Autorelease pool scope (objc_autoreleasePoolPush / objc_autoreleasePoolPop).
+// Frameworks such as SystemConfiguration autorelease some of the objects they create. .NET threads have no autorelease pool,
+// so without this scope those objects would be kept until the thread exits (which may never happen, e.g. the main thread).
+internal readonly ref struct AutoreleasePool(IntPtr pool)
+{
+    public IntPtr Pool { get; } = pool;
+
+    public static AutoreleasePool Push() => new(objc_autoreleasePoolPush());
+
+    public void Dispose()
+    {
+        if (Pool != IntPtr.Zero)
+        {
+            objc_autoreleasePoolPop(Pool);
+        }
+    }
+}
+
 //------------------------------------------------------------------------
 // Held handles (fields of IDisposable classes; released by Dispose, or by the finalizer when not disposed)
 //------------------------------------------------------------------------

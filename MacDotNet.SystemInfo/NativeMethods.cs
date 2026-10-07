@@ -55,6 +55,9 @@ internal static partial class NativeMethods
     public const uint IFF_UP = 0x1;
     public const uint IFF_LOOPBACK = 0x8;
 
+    // Size of an interface name including the terminating NUL (net/if.h)
+    public const int IFNAMSIZ = 16;
+
     // Type argument for proc_listpids (sys/proc_info.h)
     public const uint PROC_ALL_PIDS = 1;  // All processes
 
@@ -685,6 +688,12 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.U1)]
     public static partial bool objc_msgSend_bool(IntPtr receiver, IntPtr selector, IntPtr argument);
 
+    [LibraryImport(ObjCLib)]
+    public static partial IntPtr objc_autoreleasePoolPush();
+
+    [LibraryImport(ObjCLib)]
+    public static partial void objc_autoreleasePoolPop(IntPtr pool);
+
     //------------------------------------------------------------------------
     // IOReport
     //------------------------------------------------------------------------
@@ -748,6 +757,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(SystemConfigurationLib)]
     public static partial IntPtr SCPreferencesCreate(IntPtr allocator, IntPtr name, IntPtr prefsID);
+
+    [LibraryImport(SystemConfigurationLib)]
+    public static partial IntPtr SCPreferencesGetSignature(IntPtr prefs);
 
     [LibraryImport(SystemConfigurationLib)]
     public static partial IntPtr SCNetworkServiceCopyAll(IntPtr prefs);

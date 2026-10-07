@@ -1,7 +1,7 @@
 namespace MacDotNet.SystemInfo;
 
 using System.Buffers;
-using System.Runtime.InteropServices;
+using System.Text;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
@@ -78,6 +78,9 @@ public sealed class NetworkStatEntry
 
 public sealed class NetworkStat : IDisposable
 {
+    // Buffer for a service ID in UTF-8 with the terminating NUL (service IDs are UUID strings of 36 characters)
+    private const int ServiceIdBufferSize = 256;
+
     // SCPreferences client name (used on every Update by RefreshEnabledState)
     private static readonly IntPtr PreferencesName = CFSTR("MacDotNet.SystemInfo");
 
@@ -86,6 +89,12 @@ public sealed class NetworkStat : IDisposable
     private readonly List<NetworkStatEntry> interfaces = [];
 
     private readonly List<NetworkStatEntry> filteredInterfaces = [];
+
+    // Service ID -> BSD name of the service's interface (the interface is looked up only for a new service)
+    private readonly List<ServiceInterface> serviceInterfaces = [];
+
+    // Signature of the saved network configuration when serviceInterfaces was built (a change clears the cache)
+    private byte[] preferencesSignature = [];
 
     private bool disposed;
 
@@ -118,7 +127,17 @@ public sealed class NetworkStat : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        var mib = stackalloc int[] { CTL_NET, PF_LINK, NETLINK_GENERIC, IFMIB_IFALLDATA, 0, IFDATA_GENERAL };
+        using var pool = AutoreleasePool.Push();
+
+        // Elements are stored one by one: with an initializer, the stackalloc is filled through RuntimeHelpers.CreateSpan,
+        // which allocated 72 B per call here (the JIT did not fold it)
+        var mib = stackalloc int[6];
+        mib[0] = CTL_NET;
+        mib[1] = PF_LINK;
+        mib[2] = NETLINK_GENERIC;
+        mib[3] = IFMIB_IFALLDATA;
+        mib[4] = 0;
+        mib[5] = IFDATA_GENERAL;
         var size = IntPtr.Zero;
         if ((sysctl(mib, 6, null, ref size, IntPtr.Zero, IntPtr.Zero) != 0) || (size == IntPtr.Zero))
         {
@@ -144,13 +163,16 @@ public sealed class NetworkStat : IDisposable
                 var added = false;
                 var filterAdded = false;
 
+                // The name is decoded on the stack (a string is created only for a new interface)
+                Span<char> nameBuffer = stackalloc char[IFNAMSIZ];
+
                 var count = (int)size / sizeof(ifmibdata);
                 for (var i = 0; i < count; i++)
                 {
                     var data = (ifmibdata*)ptr + i;
-                    var name = Marshal.PtrToStringUTF8((IntPtr)data->ifmd_name);
+                    var name = DecodeInterfaceName(data->ifmd_name, nameBuffer);
                     // Interface not attached
-                    if (String.IsNullOrEmpty(name))
+                    if (name.IsEmpty)
                     {
                         continue;
                     }
@@ -160,7 +182,7 @@ public sealed class NetworkStat : IDisposable
                     var iface = default(NetworkStatEntry);
                     foreach (var item in interfaces)
                     {
-                        if (item.Name == name)
+                        if (name.SequenceEqual(item.Name))
                         {
                             iface = item;
                             break;
@@ -169,7 +191,7 @@ public sealed class NetworkStat : IDisposable
 
                     if (iface is null)
                     {
-                        iface = CreateEntry(name);
+                        iface = CreateEntry(name.ToString());
                         iface.Target = includeAll || (iface.IsRegistered && !iface.IsHidden);
 
                         interfaces.Add(iface);
@@ -239,7 +261,7 @@ public sealed class NetworkStat : IDisposable
         }
     }
 
-    private void RefreshEnabledState()
+    private unsafe void RefreshEnabledState()
     {
         var hasTarget = false;
         foreach (var iface in interfaces)
@@ -268,6 +290,26 @@ public sealed class NetworkStat : IDisposable
             return;
         }
 
+        // When the network configuration has been saved since the cache was built (for example, a service was bound
+        // to another interface), the interfaces of all services are looked up again
+        var signature = SCPreferencesGetSignature(prefs);
+        if (signature != IntPtr.Zero)
+        {
+            var signatureBytes = new ReadOnlySpan<byte>((void*)CFDataGetBytePtr(signature), (int)CFDataGetLength(signature));
+            if (!signatureBytes.SequenceEqual(preferencesSignature))
+            {
+                preferencesSignature = signatureBytes.ToArray();
+                serviceInterfaces.Clear();
+            }
+        }
+
+        foreach (var item in serviceInterfaces)
+        {
+            item.Live = false;
+        }
+
+        var idBuffer = stackalloc byte[ServiceIdBufferSize];
+
         var count = CFArrayGetCount(services);
         for (var i = 0L; i < count; i++)
         {
@@ -277,13 +319,42 @@ public sealed class NetworkStat : IDisposable
                 continue;
             }
 
-            var iface = SCNetworkServiceGetInterface(service);
-            if (iface == IntPtr.Zero)
+            // The service ID is copied to the stack, so that a known service is found without allocation
+            var serviceId = SCNetworkServiceGetServiceID(service);
+            if ((serviceId == IntPtr.Zero) || !CFStringGetCString(serviceId, idBuffer, ServiceIdBufferSize, kCFStringEncodingUTF8))
             {
                 continue;
             }
 
-            var bsdName = ToManagedString(SCNetworkInterfaceGetBSDName(iface));
+            var id = new ReadOnlySpan<byte>(idBuffer, ServiceIdBufferSize);
+            var length = id.IndexOf((byte)0);
+            if (length < 0)
+            {
+                continue;
+            }
+
+            id = id[..length];
+
+            var cached = default(ServiceInterface);
+            foreach (var item in serviceInterfaces)
+            {
+                if (id.SequenceEqual(item.ServiceId))
+                {
+                    cached = item;
+                    break;
+                }
+            }
+
+            if (cached is null)
+            {
+                // New service: SCNetworkServiceGetInterface is called only here
+                cached = new ServiceInterface(id.ToArray(), GetInterfaceBsdName(service));
+                serviceInterfaces.Add(cached);
+            }
+
+            cached.Live = true;
+
+            var bsdName = cached.BsdName;
             if (bsdName is null)
             {
                 continue;
@@ -296,6 +367,15 @@ public sealed class NetworkStat : IDisposable
                     entry.IsEnabled = SCNetworkServiceGetEnabled(service);
                     break;
                 }
+            }
+        }
+
+        // Services that no longer exist
+        for (var i = serviceInterfaces.Count - 1; i >= 0; i--)
+        {
+            if (!serviceInterfaces[i].Live)
+            {
+                serviceInterfaces.RemoveAt(i);
             }
         }
     }
@@ -381,4 +461,34 @@ public sealed class NetworkStat : IDisposable
             "VPN" => NetworkInterfaceType.Vpn,
             _ => NetworkInterfaceType.Unknown
         };
+
+    // Interface name (ifmd_name, up to the NUL) decoded into the buffer without allocation
+    private static unsafe ReadOnlySpan<char> DecodeInterfaceName(byte* name, Span<char> buffer)
+    {
+        var bytes = new ReadOnlySpan<byte>(name, IFNAMSIZ);
+        var length = bytes.IndexOf((byte)0);
+        if (length >= 0)
+        {
+            bytes = bytes[..length];
+        }
+
+        return buffer[..Encoding.UTF8.GetChars(bytes, buffer)];
+    }
+
+    // BSD name of the service's interface (null when the service has no interface or the interface has no BSD name)
+    private static string? GetInterfaceBsdName(IntPtr service)
+    {
+        var iface = SCNetworkServiceGetInterface(service);
+        return iface != IntPtr.Zero ? ToManagedString(SCNetworkInterfaceGetBSDName(iface)) : null;
+    }
+
+    // Service ID (UTF-8) and the BSD name of the service's interface
+    private sealed class ServiceInterface(byte[] serviceId, string? bsdName)
+    {
+        public byte[] ServiceId { get; } = serviceId;
+
+        public string? BsdName { get; } = bsdName;
+
+        public bool Live { get; set; }
+    }
 }
