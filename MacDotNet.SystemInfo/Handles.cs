@@ -462,5 +462,13 @@ internal sealed class SafeMachPortHandle : SafeHandle
 
     public uint Value => (uint)handle;
 
-    protected override bool ReleaseHandle() => mach_port_deallocate(mach_task_self(), (uint)handle) == KERN_SUCCESS;
+    protected override bool ReleaseHandle() => mach_port_deallocate(MachTask.Self, (uint)handle) == KERN_SUCCESS;
+}
+
+// Task port name of this process.
+// The exported mach_task_self() calls task_self_trap(), which adds a user reference to the task port on every call,
+// so it is called only once.
+internal static class MachTask
+{
+    public static readonly uint Self = mach_task_self();
 }

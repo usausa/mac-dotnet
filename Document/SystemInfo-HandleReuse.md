@@ -660,9 +660,10 @@ ports: start=50 end=48 returned=no
 - **指示書にない追加（Phase 4 の「Allocated が before より減る」のため）**
   - `CpuFrequency` と `PowerStat` は、チャネルの位置ごとの対応（コア、エネルギーの種類と単位）をキャッシュする。次のサンプルでは、チャネルの数と、名前とグループの CFString（`CFRetain` で保持）が同じかを `CFEqual` で確かめ、違えば作り直す。ふだんの `Update()` では文字列を作らない。
   - `MainsDevice` は、電源の種類を文字列にせず、`CFEqual` で比べる。
-  - `task_self_trap()` は、呼ぶたびに task port のユーザー参照が増えて戻らないので、`mach_task_self()` に置き換えた（`CpuStat` の `vm_deallocate`、`SmcConnection` の `IOServiceOpen`）。
+  - `task_self_trap()` は、呼ぶたびに task port のユーザー参照が増えて戻らない。そこで task port の名前は、プロセスで1回だけ取得して `MachTask.Self` に保持し、`CpuStat` の `vm_deallocate`、`SmcConnection` の `IOServiceOpen`、`SafeMachPortHandle` の解放で使うようにした。
+    - 最初は `mach_task_self()` に置き換えたが、Phase 3 で、エクスポートされている関数 `mach_task_self()` も内部で `task_self_trap()` を呼んでいて、1回ごとに参照が1つ増えることがわかった（1000 回で 9 → 1009）。
+    - `MachTask.Self` にしてからは、`CpuStat.Update()` を 1000 回呼んでも、参照数は 5 のまま変わらない。
 - **保持したハンドルは `IOObj` を通さない**: `new IOObj(held.Value)` を `using` なしで作ると CA2000 が出るため、`GpuDevice` は保持しているエントリに対して `IORegistryEntryCreateCFProperty` を直接呼び、戻り値の辞書だけを `using CFRef` で包んでいる。
 - **後で検討する課題**
   - `NetworkStat` は `Update()` のたびに SCPreferences を作り直している（`RefreshEnabledState`）。4.27 ms の大半はこれと思われる。指示書では保持の対象外（None）なので、今回は変えていない。
   - README の Process の例にある `summary.OpenFileCount` は、`ProcessSummary` に存在しないプロパティ（以前からの誤り）。
-  - `mach_task_self()` の P/Invoke が、内部で `task_self_trap()` を呼んで参照を増やしていないかは、Mac で確認する（Phase 3）。

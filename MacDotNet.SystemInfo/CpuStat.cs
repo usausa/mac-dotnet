@@ -146,7 +146,7 @@ public sealed class CpuStat : IDisposable
         }
         finally
         {
-            _ = vm_deallocate(mach_task_self(), info, (UIntPtr)(sizeof(int) * infoCount));
+            _ = vm_deallocate(MachTask.Self, info, (UIntPtr)(sizeof(int) * infoCount));
         }
     }
 

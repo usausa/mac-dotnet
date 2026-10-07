@@ -25,7 +25,7 @@ internal sealed class SmcConnection : IDisposable
 
         // The service object is only needed to open the connection
         using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
-        if (!service.IsValid || (IOServiceOpen(service, mach_task_self(), 0, out var connection) != KERN_SUCCESS) || (connection == 0))
+        if (!service.IsValid || (IOServiceOpen(service, MachTask.Self, 0, out var connection) != KERN_SUCCESS) || (connection == 0))
         {
             return false;
         }
