@@ -196,7 +196,7 @@ public sealed class UptimeCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var uptime = PlatformProvider.GetUptime();
+        using var uptime = PlatformProvider.GetUptime();
         var elapsed = uptime.Elapsed;
         Console.WriteLine($"Uptime: {(int)elapsed.TotalDays}d {elapsed.Hours:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}");
 
@@ -222,7 +222,7 @@ public sealed class LoadCommand : ICommandHandler
 
         while (!cts.Token.IsCancellationRequested)
         {
-            var load = PlatformProvider.GetLoadAverage();
+            using var load = PlatformProvider.GetLoadAverage();
 
             Console.Clear();
             Console.WriteLine($"Load Average (CPUs: {cpuCount})");
@@ -243,7 +243,7 @@ public sealed class MemoryCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var mem = PlatformProvider.GetMemoryStat();
+        using var mem = PlatformProvider.GetMemoryStat();
         var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
 
         Console.WriteLine("[Usage]");
@@ -277,7 +277,7 @@ public sealed class SwapCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var swap = PlatformProvider.GetSwapUsage();
+        using var swap = PlatformProvider.GetSwapUsage();
         var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
         Console.WriteLine($"Total:     {DisplayFormatter.FormatBytes(swap.TotalBytes)}");
         Console.WriteLine($"Used:      {DisplayFormatter.FormatBytes(swap.UsedBytes)} ({usage:F1}%)");
@@ -299,7 +299,7 @@ public sealed class DiskCommand : ICommandHandler
 
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var diskStats = PlatformProvider.GetDiskStat();
+        using var diskStats = PlatformProvider.GetDiskStat();
         foreach (var d in diskStats.Devices.Where(x => All || x.IsPhysical))
         {
             var deviceLabel = d.MediaName is not null ? $"{d.BsdName} [{d.MediaName}]" : d.BsdName;
@@ -341,7 +341,7 @@ public sealed class FileSystemCommand : ICommandHandler
 
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var fsStat = PlatformProvider.GetFileSystemStat(All);
+        using var fsStat = PlatformProvider.GetFileSystemStat(All);
         foreach (var fs in fsStat.Entries)
         {
             var usedSize = fs.TotalSize > fs.AvailableSize ? fs.TotalSize - fs.AvailableSize : 0;
@@ -374,7 +374,7 @@ public sealed class NetworkCommand : ICommandHandler
 
     public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var network = PlatformProvider.GetNetworkStat(All);
+        using var network = PlatformProvider.GetNetworkStat(All);
 
         using var cts = new CancellationTokenSource();
 #pragma warning disable SA1107
@@ -426,7 +426,7 @@ public sealed class ProcessCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var ps = PlatformProvider.GetProcessSummary();
+        using var ps = PlatformProvider.GetProcessSummary();
         Console.WriteLine($"Process Count: {ps.ProcessCount}");
         Console.WriteLine($"Thread Count:  {ps.ThreadCount}");
 
@@ -495,7 +495,7 @@ public sealed class HandleCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var hs = PlatformProvider.GetFileHandleStat();
+        using var hs = PlatformProvider.GetFileHandleStat();
         Console.WriteLine($"Open Files:   {hs.OpenFiles}");
         Console.WriteLine($"Open Vnodes:  {hs.OpenVnodes}");
 
@@ -511,7 +511,7 @@ public sealed class CpuCommand : ICommandHandler
 {
     public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var stat = PlatformProvider.GetCpuStat();
+        using var stat = PlatformProvider.GetCpuStat();
         var header = $"Cores: {stat.CpuCores.Count} total  P-Core: {stat.PerformanceCores.Count}  E-Core: {stat.EfficiencyCores.Count}";
 
         using var cts = new CancellationTokenSource();
@@ -612,7 +612,7 @@ public sealed class CpuFrequencyCommand : ICommandHandler
 {
     public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var cpuFreq = PlatformProvider.GetCpuFrequency();
+        using var cpuFreq = PlatformProvider.GetCpuFrequency();
         var header1 = $"Max E-Core: {cpuFreq.MaxEfficiencyCoreFrequency} MHz  |  Max P-Core: {cpuFreq.MaxPerformanceCoreFrequency} MHz";
         var header2 = $"Cores: {cpuFreq.Cores.Count}  (E-Core: {cpuFreq.EfficiencyCores.Count}, P-Core: {cpuFreq.PerformanceCores.Count})";
 
@@ -670,23 +670,32 @@ public sealed class GpuCommand : ICommandHandler
         while (!cts.Token.IsCancellationRequested)
         {
             var devices = PlatformProvider.GetGpuDevices();
-
-            Console.Clear();
-            if (devices.Count == 0)
+            try
             {
-                Console.WriteLine("No GPU found.");
+                Console.Clear();
+                if (devices.Count == 0)
+                {
+                    Console.WriteLine("No GPU found.");
+                }
+                else
+                {
+                    foreach (var device in devices)
+                    {
+                        Console.WriteLine($"[Name] {device.Name}");
+                        Console.WriteLine($"  DeviceUtilization:   {DisplayFormatter.MakeBar(device.DeviceUtilization, 100)} {device.DeviceUtilization,3}%");
+                        Console.WriteLine($"  RendererUtilization: {DisplayFormatter.MakeBar(device.RendererUtilization, 100)} {device.RendererUtilization,3}%");
+                        Console.WriteLine($"  TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization,3}%");
+                        Console.WriteLine($"  AllocSystemMemory:   {DisplayFormatter.FormatBytes(device.AllocSystemMemory)}");
+                        Console.WriteLine($"  InUseSystemMemory:   {DisplayFormatter.FormatBytes(device.InUseSystemMemory)}");
+                        Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
+                    }
+                }
             }
-            else
+            finally
             {
                 foreach (var device in devices)
                 {
-                    Console.WriteLine($"[Name] {device.Name}");
-                    Console.WriteLine($"  DeviceUtilization:   {DisplayFormatter.MakeBar(device.DeviceUtilization, 100)} {device.DeviceUtilization,3}%");
-                    Console.WriteLine($"  RendererUtilization: {DisplayFormatter.MakeBar(device.RendererUtilization, 100)} {device.RendererUtilization,3}%");
-                    Console.WriteLine($"  TilerUtilization:    {DisplayFormatter.MakeBar(device.TilerUtilization, 100)} {device.TilerUtilization,3}%");
-                    Console.WriteLine($"  AllocSystemMemory:   {DisplayFormatter.FormatBytes(device.AllocSystemMemory)}");
-                    Console.WriteLine($"  InUseSystemMemory:   {DisplayFormatter.FormatBytes(device.InUseSystemMemory)}");
-                    Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
+                    device.Dispose();
                 }
             }
 
@@ -703,7 +712,7 @@ public sealed class PowerCommand : ICommandHandler
 {
     public async ValueTask ExecuteAsync(CommandContext context)
     {
-        var power = PlatformProvider.GetPowerStat();
+        using var power = PlatformProvider.GetPowerStat();
         if (!power.Supported)
         {
             Console.WriteLine("Power reporting not supported.");
@@ -759,7 +768,7 @@ public sealed class BatteryCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var battery = PlatformProvider.GetBatteryDevice();
+        using var battery = PlatformProvider.GetBatteryDevice();
         if (!battery.Supported)
         {
             Console.WriteLine("No battery found");
@@ -808,7 +817,7 @@ public sealed class MainsCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var mains = PlatformProvider.GetMainsDevice();
+        using var mains = PlatformProvider.GetMainsDevice();
         if (!mains.Supported)
         {
             Console.WriteLine("Power source information not supported.");
@@ -846,7 +855,7 @@ public sealed class PowerManagementCommand : ICommandHandler
 {
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var pm = PlatformProvider.GetPowerManagementStat();
+        using var pm = PlatformProvider.GetPowerManagementStat();
 
         Console.WriteLine("[Thermal]");
         Console.WriteLine($"  ThermalState:        {(pm.ThermalStateSupported ? pm.ThermalState.ToString() : "-")}");
@@ -891,7 +900,7 @@ public sealed class SensorCommand : ICommandHandler
 
     public ValueTask ExecuteAsync(CommandContext context)
     {
-        var monitor = PlatformProvider.GetSmcMonitor();
+        using var monitor = PlatformProvider.GetSmcMonitor();
 
         if (All || Temp)
         {
@@ -1038,7 +1047,7 @@ public sealed class SummaryCommand : ICommandHandler
     {
         var lines = new List<(string Label, string Value)>();
 
-        var monitor = new SystemMonitor();
+        using var monitor = new SystemMonitor();
 
         await Task.Delay(1000);
         monitor.Update();

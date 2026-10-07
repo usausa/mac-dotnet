@@ -76,13 +76,18 @@ public sealed class NetworkStatEntry
     }
 }
 
-public sealed class NetworkStat
+public sealed class NetworkStat : IDisposable
 {
+    // SCPreferences client name (used on every Update by RefreshEnabledState)
+    private static readonly IntPtr PreferencesName = CFSTR("MacDotNet.SystemInfo");
+
     private readonly bool includeAll;
 
     private readonly List<NetworkStatEntry> interfaces = [];
 
     private readonly List<NetworkStatEntry> filteredInterfaces = [];
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -92,10 +97,17 @@ public sealed class NetworkStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal NetworkStat(bool includeAll = false)
+    private NetworkStat(bool includeAll)
     {
         this.includeAll = includeAll;
         Update();
+    }
+
+    internal static NetworkStat Create(bool includeAll = false) => new(includeAll);
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
@@ -104,6 +116,8 @@ public sealed class NetworkStat
 
     public unsafe bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var mib = stackalloc int[] { CTL_NET, PF_LINK, NETLINK_GENERIC, IFMIB_IFALLDATA, 0, IFDATA_GENERAL };
         var size = IntPtr.Zero;
         if ((sysctl(mib, 6, null, ref size, IntPtr.Zero, IntPtr.Zero) != 0) || (size == IntPtr.Zero))
@@ -242,8 +256,7 @@ public sealed class NetworkStat
             return;
         }
 
-        using var appNameRef = CFRef.CreateString("MacDotNet.SystemInfo");
-        using var prefs = new CFRef(SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero));
+        using var prefs = new CFRef(SCPreferencesCreate(IntPtr.Zero, PreferencesName, IntPtr.Zero));
         if (!prefs.IsValid)
         {
             return;
@@ -293,8 +306,7 @@ public sealed class NetworkStat
 
     private static NetworkStatEntry CreateEntry(string bsdName)
     {
-        using var appNameRef = CFRef.CreateString("MacDotNet.SystemInfo");
-        using var prefs = new CFRef(SCPreferencesCreate(IntPtr.Zero, appNameRef, IntPtr.Zero));
+        using var prefs = new CFRef(SCPreferencesCreate(IntPtr.Zero, PreferencesName, IntPtr.Zero));
         if (!prefs.IsValid)
         {
             return new NetworkStatEntry(bsdName, null, NetworkInterfaceType.Unknown, false, false);

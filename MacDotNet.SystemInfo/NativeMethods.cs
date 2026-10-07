@@ -89,6 +89,15 @@ internal static partial class NativeMethods
     // IOReturn (IOKit/IOReturn.h)
     public const int kIOReturnSuccess = 0;
 
+    // Errors treated as a lost SMC connection (reopen).
+    // Candidates; to be confirmed by the sleep/wake test (M0-3).
+    public const int MACH_SEND_INVALID_DEST = 0x10000003;            // mach/message.h
+    public const int kIOReturnNotOpen = unchecked((int)0xE00002CD);  // IOKit/IOReturn.h
+    public const int kIOReturnNoDevice = unchecked((int)0xE00002C0); // IOKit/IOReturn.h
+
+    // Maximum number of components in a sysctl MIB (sys/sysctl.h)
+    public const int CTL_MAXNAME = 12;
+
     // IOPSGetBatteryWarningLevel results (IOKit/ps/IOPowerSources.h)
     public const int kIOPSLowBatteryWarningNone = 1;
     public const int kIOPSLowBatteryWarningEarly = 2;
@@ -419,9 +428,6 @@ internal static partial class NativeMethods
     public static partial int mach_port_deallocate(uint task, uint name);
 
     [LibraryImport("libSystem.dylib")]
-    public static partial uint task_self_trap();
-
-    [LibraryImport("libSystem.dylib")]
     public static partial int host_processor_info(uint host, int flavor, out int processorCount, out IntPtr processorInfo, out int processorInfoCnt);
 
     [LibraryImport("libSystem.dylib")]
@@ -459,6 +465,9 @@ internal static partial class NativeMethods
     [LibraryImport("libc")]
     public static partial int sysctl(int* name, uint namelen, void* oldp, ref IntPtr oldlenp, IntPtr newp, IntPtr newlen);
 
+    [LibraryImport("libc")]
+    public static partial int sysctlnametomib([MarshalAs(UnmanagedType.LPUTF8Str)] string name, int* mibp, ref IntPtr sizep);
+
     //------------------------------------------------------------------------
     // libproc
     //------------------------------------------------------------------------
@@ -486,6 +495,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(CoreFoundationLib)]
     public static partial IntPtr CFRetain(IntPtr cf);
+
+    [LibraryImport(CoreFoundationLib)]
+    [return: MarshalAs(UnmanagedType.U1)]
+    public static partial bool CFEqual(IntPtr cf1, IntPtr cf2);
 
     [LibraryImport(CoreFoundationLib)]
     public static partial long CFArrayGetCount(IntPtr theArray);
@@ -606,6 +619,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(IOKitLib)]
     public static partial int IORegistryEntryGetRegistryEntryID(uint entry, out ulong entryID);
+
+    // Returned dictionary is consumed by IOServiceGetMatchingService
+    [LibraryImport(IOKitLib)]
+    public static partial IntPtr IORegistryEntryIDMatching(ulong entryID);
 
     //------------------------------------------------------------------------
     // IOKit (Power sources / Power management)
@@ -796,6 +813,42 @@ internal static partial class NativeMethods
         var buffer = stackalloc byte[(int)allocatedSize];
         return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
+
+    // MIB of a sysctl name, resolved once and used with sysctl (empty when it cannot be resolved)
+    public static unsafe int[] GetSystemControlMib(string name)
+    {
+        var mib = stackalloc int[CTL_MAXNAME];
+        var size = (IntPtr)CTL_MAXNAME;
+        if ((sysctlnametomib(name, mib, ref size) != 0) || (size <= 0))
+        {
+            return [];
+        }
+
+        return new ReadOnlySpan<int>(mib, (int)size).ToArray();
+    }
+
+    // Same as GetSystemControlInt32(string) by a resolved MIB
+    public static unsafe int GetSystemControlInt32(int[] mib)
+    {
+        if (mib.Length == 0)
+        {
+            return 0;
+        }
+
+        int value;
+        var len = (IntPtr)sizeof(int);
+        fixed (int* name = mib)
+        {
+            return sysctl(name, (uint)mib.Length, &value, ref len, IntPtr.Zero, IntPtr.Zero) == 0 ? value : 0;
+        }
+    }
+
+    //------------------------------------------------------------------------
+    // CFString constant
+    //------------------------------------------------------------------------
+
+    // Creates a CFString that is never released (same as CFSTR); only for static readonly key fields
+    public static IntPtr CFSTR(string value) => CFStringCreateWithCString(IntPtr.Zero, value, kCFStringEncodingUTF8);
 
     //------------------------------------------------------------------------
     // Mach time

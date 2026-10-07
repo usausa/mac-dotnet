@@ -19,8 +19,30 @@ public enum TimeRemainingState
     Estimated
 }
 
-public sealed class MainsDevice
+public sealed class MainsDevice : IDisposable
 {
+    // ReSharper disable StringLiteralTypo
+    // Providing power source types (compared with CFEqual)
+    private static readonly IntPtr AcPowerValue = CFSTR("AC Power");
+    private static readonly IntPtr BatteryPowerValue = CFSTR("Battery Power");
+    private static readonly IntPtr UpsPowerValue = CFSTR("UPS Power");
+
+    // External power adapter details
+    private static readonly IntPtr FamilyCodeKey = CFSTR("FamilyCode");
+    private static readonly IntPtr WattsKey = CFSTR("Watts");
+    private static readonly IntPtr VoltageKey = CFSTR("Voltage");
+    private static readonly IntPtr AdapterVoltageKey = CFSTR("AdapterVoltage");
+    private static readonly IntPtr CurrentKey = CFSTR("Current");
+    private static readonly IntPtr AdapterIdKey = CFSTR("AdapterID");
+    private static readonly IntPtr NameKey = CFSTR("Name");
+    private static readonly IntPtr DescriptionKey = CFSTR("Description");
+    private static readonly IntPtr ManufacturerKey = CFSTR("Manufacturer");
+    private static readonly IntPtr SerialStringKey = CFSTR("SerialString");
+    private static readonly IntPtr SerialNumberKey = CFSTR("SerialNumber");
+    // ReSharper restore StringLiteralTypo
+
+    private bool disposed;
+
     public DateTime UpdateAt { get; private set; }
 
     public bool Supported { get; }
@@ -65,12 +87,19 @@ public sealed class MainsDevice
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal MainsDevice()
+    private MainsDevice()
     {
         using var blob = new CFRef(IOPSCopyPowerSourcesInfo());
         Supported = blob.IsValid;
 
         Update();
+    }
+
+    internal static MainsDevice Create() => new();
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
@@ -79,6 +108,8 @@ public sealed class MainsDevice
 
     public bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         if (!Supported)
         {
             return false;
@@ -91,13 +122,7 @@ public sealed class MainsDevice
         }
 
         // Returned string is a constant and must not be released
-        ProvidingSource = ToManagedString(IOPSGetProvidingPowerSourceType(blob)) switch
-        {
-            "AC Power" => PowerSourceType.Ac,
-            "Battery Power" => PowerSourceType.Battery,
-            "UPS Power" => PowerSourceType.Ups,
-            _ => PowerSourceType.Unknown
-        };
+        ProvidingSource = ToPowerSourceType(IOPSGetProvidingPowerSourceType(blob));
         Online = ProvidingSource == PowerSourceType.Ac;
 
         var estimate = IOPSGetTimeRemainingEstimate();
@@ -119,12 +144,11 @@ public sealed class MainsDevice
         return true;
     }
 
-    // ReSharper disable StringLiteralTypo
     private void ReadAdapterDetails()
     {
         using var adapter = new CFRef(IOPSCopyExternalPowerAdapterDetails());
         // Desktop Macs return only FamilyCode = kIOPSFamilyCodeDisconnected
-        AdapterConnected = adapter.IsValid && (!adapter.TryGetInt64("FamilyCode", out var family) || (family != kIOPSFamilyCodeDisconnected));
+        AdapterConnected = adapter.IsValid && (!adapter.TryGetInt64(FamilyCodeKey, out var family) || (family != kIOPSFamilyCodeDisconnected));
         if (!AdapterConnected)
         {
             AdapterWatts = 0;
@@ -139,16 +163,43 @@ public sealed class MainsDevice
             return;
         }
 
-        AdapterWatts = (int)adapter.GetInt64("Watts");
-        AdapterVoltage = adapter.TryGetInt64("Voltage", out var voltage) || adapter.TryGetInt64("AdapterVoltage", out voltage) ? (int)voltage : 0;
-        AdapterCurrent = (int)adapter.GetInt64("Current");
-        AdapterId = (int)adapter.GetInt64("AdapterID");
-        AdapterFamily = (int)adapter.GetInt64("FamilyCode");
-        AdapterName = adapter.GetString("Name");
-        AdapterDescription = adapter.GetString("Description");
-        AdapterManufacturer = adapter.GetString("Manufacturer");
-        AdapterSerialNumber = adapter.GetString("SerialString") ??
-                              (adapter.TryGetInt64("SerialNumber", out var serialNumber) ? serialNumber.ToString(CultureInfo.InvariantCulture) : null);
+        AdapterWatts = (int)adapter.GetInt64(WattsKey);
+        AdapterVoltage = adapter.TryGetInt64(VoltageKey, out var voltage) || adapter.TryGetInt64(AdapterVoltageKey, out voltage) ? (int)voltage : 0;
+        AdapterCurrent = (int)adapter.GetInt64(CurrentKey);
+        AdapterId = (int)adapter.GetInt64(AdapterIdKey);
+        AdapterFamily = (int)adapter.GetInt64(FamilyCodeKey);
+        AdapterName = adapter.GetString(NameKey);
+        AdapterDescription = adapter.GetString(DescriptionKey);
+        AdapterManufacturer = adapter.GetString(ManufacturerKey);
+        AdapterSerialNumber = adapter.GetString(SerialStringKey) ??
+                              (adapter.TryGetInt64(SerialNumberKey, out var serialNumber) ? serialNumber.ToString(CultureInfo.InvariantCulture) : null);
     }
-    // ReSharper restore StringLiteralTypo
+
+    //--------------------------------------------------------------------------------
+    // Helper
+    //--------------------------------------------------------------------------------
+
+    // Compared as CFString (no managed string conversion); CFEqual does not accept NULL
+    private static PowerSourceType ToPowerSourceType(IntPtr type)
+    {
+        if (type == IntPtr.Zero)
+        {
+            return PowerSourceType.Unknown;
+        }
+
+        if (CFEqual(type, AcPowerValue))
+        {
+            return PowerSourceType.Ac;
+        }
+        if (CFEqual(type, BatteryPowerValue))
+        {
+            return PowerSourceType.Battery;
+        }
+        if (CFEqual(type, UpsPowerValue))
+        {
+            return PowerSourceType.Ups;
+        }
+
+        return PowerSourceType.Unknown;
+    }
 }

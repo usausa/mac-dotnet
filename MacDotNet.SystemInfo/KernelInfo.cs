@@ -42,7 +42,7 @@ public sealed class KernelInfo
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal KernelInfo()
+    private KernelInfo()
     {
         // ReSharper disable StringLiteralTypo
         OsType = GetSystemControlString("kern.ostype") ?? string.Empty;
@@ -68,4 +68,6 @@ public sealed class KernelInfo
             : DateTimeOffset.MinValue;
         // ReSharper restore StringLiteralTypo
     }
+
+    internal static KernelInfo Create() => new();
 }

@@ -341,31 +341,31 @@ ioreg -r -c AppleSMCClient | grep -c AppleSMCClient
 
 ### 2-1. 基盤
 
-- [ ] I-1 `Handles.cs` に SafeHandle 型を追加した（§4.2）
-- [ ] I-2 `IOReportSampler` を追加した（§4.3）
-- [ ] I-3 CFString キーのキャッシュ方式を追加した（`IntPtr` キーのオーバーロード）
-- [ ] I-4 `NativeMethods.cs` に `IORegistryEntryIDMatching` を追加した（`sysctlnametomib` は M0-4 で採用した場合だけ）
+- [x] I-1 `Handles.cs` に SafeHandle 型を追加した（§4.2）
+- [x] I-2 `IOReportSampler` を追加した（§4.3）
+- [x] I-3 CFString キーのキャッシュ方式を追加した（`IntPtr` キーのオーバーロード）
+- [x] I-4 `NativeMethods.cs` に `IORegistryEntryIDMatching` を追加した（`sysctlnametomib` は M0-4 で採用した場合だけ）
 
 ### 2-2. ◎
 
 - [ ] I-5 `SmcMonitor` と `SmcConnection`（M0-3 で確定したエラーコードで再オープンする）
-- [ ] I-6 `CpuFrequency`（`IOReportSampler` を使う。再オープンしたら差分の基準をリセットする）
-- [ ] I-7 `PowerStat`（`IOReportSampler` を使う。`Supported` の判定は維持する）
+- [x] I-6 `CpuFrequency`（`IOReportSampler` を使う。再オープンしたら差分の基準をリセットする）
+- [x] I-7 `PowerStat`（`IOReportSampler` を使う。`Supported` の判定は維持する）
 
 ### 2-3. ○
 
-- [ ] I-8 `BatteryDevice`
-- [ ] I-9 `GpuDevice`（`internal static GetDevices()` は維持し、各要素を IDisposable にする）
+- [x] I-8 `BatteryDevice`
+- [x] I-9 `GpuDevice`（`internal static GetDevices()` は維持し、各要素を IDisposable にする）
 
 ### 2-4. △ / None
 
-- [ ] I-10 `CpuStat`、`MemoryStat`（M0-4 の結論に従い、Hold か None にする）
-- [ ] I-11 `FileHandleStat`、`SwapUsage`、`Uptime`（M0-4 の結論に従い、Cache か None にする）
-- [ ] I-12 `MainsDevice`、`PowerManagementStat`、`DiskStat`（キーのキャッシュと、None の IDisposable 化）
-- [ ] I-13 `LoadAverage`、`FileSystemStat`、`NetworkStat`、`ProcessSummary`（None の IDisposable 化）
-- [ ] I-14 スナップショット型のファクトリ化: `HardwareInfo`、`KernelInfo`（`internal static Create()`）。`ProcessInfo` は既存の static メソッドのままでよい
-- [ ] I-15 `PlatformProvider` を全部ファクトリ呼び出しに変えた
-- [ ] I-16 `Update()` の経路に、毎回のサービス検索、`IOServiceOpen`、subscription の生成、キー用の `CFRef.CreateString` が残っていないことを grep で確認した
+- [x] I-10 `CpuStat`、`MemoryStat`（M0-4 の結論に従い、Hold か None にする）
+- [x] I-11 `FileHandleStat`、`SwapUsage`、`Uptime`（M0-4 の結論に従い、Cache か None にする）
+- [x] I-12 `MainsDevice`、`PowerManagementStat`、`DiskStat`（キーのキャッシュと、None の IDisposable 化）
+- [x] I-13 `LoadAverage`、`FileSystemStat`、`NetworkStat`、`ProcessSummary`（None の IDisposable 化）
+- [x] I-14 スナップショット型のファクトリ化: `HardwareInfo`、`KernelInfo`（`internal static Create()`）。`ProcessInfo` は既存の static メソッドのままでよい
+- [x] I-15 `PlatformProvider` を全部ファクトリ呼び出しに変えた
+- [x] I-16 `Update()` の経路に、毎回のサービス検索、`IOServiceOpen`、subscription の生成、キー用の `CFRef.CreateString` が残っていないことを grep で確認した
 
 ```bash
 grep -n -E "IOServiceGetMatchingService|IOServiceOpen|IOReportCreateSubscription|CFRef.CreateString|CFStringCreateWithCString" MacDotNet.SystemInfo/*.cs
@@ -373,10 +373,10 @@ grep -n -E "IOServiceGetMatchingService|IOServiceOpen|IOReportCreateSubscription
 
 ### 2-5. サンプルとドキュメント
 
-- [ ] I-17 `Example.SystemInfo.ConsoleApp`（`Commands.cs`、`SystemMonitor.cs`）を Dispose する形に直した
-- [ ] I-18 `README.md` に使用例があれば、Dispose する形に直した
-- [ ] I-19 ソリューション全体のビルド（net8.0 と net10.0）が警告ゼロで通った
-- [ ] I-20 コミットした
+- [x] I-17 `Example.SystemInfo.ConsoleApp`（`Commands.cs`、`SystemMonitor.cs`）を Dispose する形に直した
+- [x] I-18 `README.md` に使用例があれば、Dispose する形に直した
+- [x] I-19 ソリューション全体のビルド（net8.0 と net10.0）が警告ゼロで通った
+- [x] I-20 コミットした
 
 ---
 
@@ -494,7 +494,7 @@ nohup caffeinate -i dotnet ~/handle-reuse/after/monitor/WorkSystemInfoMonitor.dl
 | M0-2 IOReport の累積値の基準は一致したか | 一致した（判定 SAME）。residency と GPU Energy は、保持と作り直しで同じ基準（差は2つのサンプルの間の約 130 ms 分だけ）。subscription の作り直しには毎回約 120 ms かかる。周波数は powermetrics とだいたい合っている（E クラスタはどちらも約 1 GHz）。CPU Energy は値が止まることがある（§判定・メモ） |
 | M0-3 スリープ復帰後の挙動とエラーコード | 保留（ユーザーの指示で後で実施） |
 | M0-4 sysctl の MIB / host port / キーのキャッシュの効果 | 3つとも採用の目安を満たす。MIB 1,259→343 ns（73%）、host port 1,384→509 ns（63%）、CFString キー 440→47 ns（89%）。net8.0 でも同じ傾向 |
-| 採用方式の決定（△ 項目を含む） | （暫定）SMC 接続の保持、`IOReportSampler`、△ の3項目（MIB、host port、キーのキャッシュ）はすべて採用する。再オープンの条件にするエラーコードは、M0-3 の結果で決める |
+| 採用方式の決定（△ 項目を含む） | SMC 接続の保持と `IOReportSampler` を採用する。△ の3項目（MIB、host port、キーのキャッシュ）もすべて採用する（2026-10-07 ユーザー確認済み）。再オープンの条件にするエラーコードは、候補の3つ（`0x10000003`、`0xE00002CD`、`0xE00002C0`）で実装を進め、M0-3 の結果で確定する（2026-10-07 ユーザー指示） |
 
 #### Phase 0 の出力
 
@@ -645,3 +645,24 @@ ports: start=50 end=48 returned=no
   - つまり値そのものは正しいが、更新は何かがきっかけで反映されたときだけになる。subscription を毎回作り直しても同じなので、保持したせいではない。
   - 今の `PowerStat.Cpu`、`Ane`、`Ram` も、ふだんは古い値のままになっている可能性が高い。今回の範囲外として、後で検討する。
 - **SMC のキーの読み込みを改善できるかは、後で検討する**（2026-10-07 ユーザー指示）。
+
+#### Phase 2 の実装メモ（2026-10-07）
+
+- **I-5 は候補のエラーコードで実装した**: 再オープンの条件は `0x10000003`、`0xE00002CD`、`0xE00002C0` の3つ（`NativeMethods` の定数に、M0-3 で確定する候補だとコメントしてある）。M0-3 の結果で確定したら、I-5 にチェックを付ける。
+- **I-16 の grep の結果**: ヒットは次の場所だけで、ふだんの `Update()` の経路にはない。
+  - 作成と再オープンの経路: `SmcConnection.Open`、`IOReportSampler.Open`、`BatteryDevice.FindService`（作成時と、失敗したときの探し直し）、`GpuDevice` の ID での探し直し
+  - 作成: `GpuDevice.GetDevices` と、そのコンストラクタ（IOClass の取得）
+  - static の `Lazy` の初期化: `CpuFrequency`（周波数テーブル）、`CpuStat`（コアの種類）
+  - 新しいエントリを見つけたとき: `FileSystemStat`、`NetworkStat`
+  - スナップショット型: `HardwareInfo`
+  - 意図的に毎回行うもの: `DiskStat` の IOMedia の列挙（ディスクの追加と削除を検知するため）
+  - そのほか: 宣言、コメント、`CFSTR` の定義、`IOObj` の string キー版のオーバーロード
+- **指示書にない追加（Phase 4 の「Allocated が before より減る」のため）**
+  - `CpuFrequency` と `PowerStat` は、チャネルの位置ごとの対応（コア、エネルギーの種類と単位）をキャッシュする。次のサンプルでは、チャネルの数と、名前とグループの CFString（`CFRetain` で保持）が同じかを `CFEqual` で確かめ、違えば作り直す。ふだんの `Update()` では文字列を作らない。
+  - `MainsDevice` は、電源の種類を文字列にせず、`CFEqual` で比べる。
+  - `task_self_trap()` は、呼ぶたびに task port のユーザー参照が増えて戻らないので、`mach_task_self()` に置き換えた（`CpuStat` の `vm_deallocate`、`SmcConnection` の `IOServiceOpen`）。
+- **保持したハンドルは `IOObj` を通さない**: `new IOObj(held.Value)` を `using` なしで作ると CA2000 が出るため、`GpuDevice` は保持しているエントリに対して `IORegistryEntryCreateCFProperty` を直接呼び、戻り値の辞書だけを `using CFRef` で包んでいる。
+- **後で検討する課題**
+  - `NetworkStat` は `Update()` のたびに SCPreferences を作り直している（`RefreshEnabledState`）。4.27 ms の大半はこれと思われる。指示書では保持の対象外（None）なので、今回は変えていない。
+  - README の Process の例にある `summary.OpenFileCount` は、`ProcessSummary` に存在しないプロパティ（以前からの誤り）。
+  - `mach_task_self()` の P/Invoke が、内部で `task_self_trap()` を呼んで参照を増やしていないかは、Mac で確認する（Phase 3）。

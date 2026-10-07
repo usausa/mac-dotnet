@@ -195,14 +195,14 @@ Console.WriteLine($"BootTime:            {kernel.BootTime:yyyy-MM-dd HH:mm:ss zz
 ### Uptime
 
 ```csharp
-var uptime = PlatformProvider.GetUptime();
+using var uptime = PlatformProvider.GetUptime();
 Console.WriteLine($"Uptime: {(int)uptime.Elapsed.TotalDays}d {uptime.Elapsed.Hours:D2}:{uptime.Elapsed.Minutes:D2}:{uptime.Elapsed.Seconds:D2}");
 ```
 
 ### LoadAverage
 
 ```csharp
-var load = PlatformProvider.GetLoadAverage();
+using var load = PlatformProvider.GetLoadAverage();
 Console.WriteLine($"Average1:  {load.Average1:F2}");
 Console.WriteLine($"Average5:  {load.Average5:F2}");
 Console.WriteLine($"Average15: {load.Average15:F2}");
@@ -211,7 +211,7 @@ Console.WriteLine($"Average15: {load.Average15:F2}");
 ### CPU Stat
 
 ```csharp
-var stat = PlatformProvider.GetCpuStat();
+using var stat = PlatformProvider.GetCpuStat();
 // Cores grouped by type
 foreach (var core in stat.PerformanceCores)
 {
@@ -226,7 +226,7 @@ foreach (var core in stat.EfficiencyCores)
 ### CPU Frequency
 
 ```csharp
-var cpuFreq = PlatformProvider.GetCpuFrequency();
+using var cpuFreq = PlatformProvider.GetCpuFrequency();
 Console.WriteLine($"Max E-Core: {cpuFreq.MaxEfficiencyCoreFrequency} MHz");
 Console.WriteLine($"Max P-Core: {cpuFreq.MaxPerformanceCoreFrequency} MHz");
 
@@ -243,7 +243,7 @@ foreach (var core in cpuFreq.PerformanceCores)
 ### Memory
 
 ```csharp
-var mem = PlatformProvider.GetMemoryStat();
+using var mem = PlatformProvider.GetMemoryStat();
 var usage = mem.PhysicalMemory > 0 ? (double)mem.UsedBytes / mem.PhysicalMemory * 100 : 0;
 
 Console.WriteLine("[Usage]");
@@ -267,7 +267,7 @@ Console.WriteLine($"  Decompression: {mem.Decompression}");
 ### Swap
 
 ```csharp
-var swap = PlatformProvider.GetSwapUsage();
+using var swap = PlatformProvider.GetSwapUsage();
 var usage = swap.TotalBytes > 0 ? (double)swap.UsedBytes / swap.TotalBytes * 100 : 0;
 Console.WriteLine($"Total:     {swap.TotalBytes / 1024 / 1024} MB");
 Console.WriteLine($"Used:      {swap.UsedBytes / 1024 / 1024} MB  ({usage:F1}%)");
@@ -278,7 +278,7 @@ Console.WriteLine($"Encrypted: {swap.IsEncrypted}");
 ### Disk Stat
 
 ```csharp
-var diskStat = PlatformProvider.GetDiskStat();
+using var diskStat = PlatformProvider.GetDiskStat();
 foreach (var d in diskStat.Devices.Where(static d => d.IsPhysical))
 {
     var label = d.MediaName is not null ? $"{d.BsdName} [{d.MediaName}]" : d.BsdName;
@@ -309,7 +309,7 @@ foreach (var d in diskStat.Devices.Where(static d => d.IsPhysical))
 ### File System
 
 ```csharp
-var fsStat = PlatformProvider.GetFileSystemStat();
+using var fsStat = PlatformProvider.GetFileSystemStat();
 foreach (var fs in fsStat.Entries)
 {
     var usedSize = fs.TotalSize > fs.AvailableSize ? fs.TotalSize - fs.AvailableSize : 0;
@@ -330,7 +330,7 @@ foreach (var fs in fsStat.Entries)
 ### Network Stat
 
 ```csharp
-var network = PlatformProvider.GetNetworkStat();
+using var network = PlatformProvider.GetNetworkStat();
 foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
 {
     var label = nif.DisplayName is not null ? $" {nif.DisplayName}" : string.Empty;
@@ -350,7 +350,7 @@ foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
 ### Process
 
 ```csharp
-var summary = PlatformProvider.GetProcessSummary();
+using var summary = PlatformProvider.GetProcessSummary();
 Console.WriteLine($"Process Count:   {summary.ProcessCount}");
 Console.WriteLine($"Thread Count:    {summary.ThreadCount}");
 Console.WriteLine($"Open File Count: {summary.OpenFileCount}");
@@ -387,12 +387,18 @@ foreach (var device in devices)
     Console.WriteLine($"  InUseSystemMemory:   {device.InUseSystemMemory / 1024 / 1024} MB");
     Console.WriteLine($"  PowerState:          {(device.PowerState ? "Active" : "Powered Off")}");
 }
+
+// Each device must be disposed
+foreach (var device in devices)
+{
+    device.Dispose();
+}
 ```
 
 ### Power Consumption
 
 ```csharp
-var power = PlatformProvider.GetPowerStat();
+using var power = PlatformProvider.GetPowerStat();
 if (!power.Supported)
 {
     Console.WriteLine("Power reporting not supported.");
@@ -421,7 +427,7 @@ Console.WriteLine($"Total: {power.Total - prevTotal:F2} W");
 ### Battery
 
 ```csharp
-var battery = PlatformProvider.GetBatteryDevice();
+using var battery = PlatformProvider.GetBatteryDevice();
 if (!battery.Supported)
 {
     Console.WriteLine("No battery found");
@@ -444,7 +450,7 @@ Console.WriteLine($"WarningLevel: {battery.WarningLevel}");
 ### Mains
 
 ```csharp
-var mains = PlatformProvider.GetMainsDevice();
+using var mains = PlatformProvider.GetMainsDevice();
 Console.WriteLine($"Online:          {mains.Online}");
 Console.WriteLine($"ProvidingSource: {mains.ProvidingSource}");
 if (mains.TimeRemainingState == TimeRemainingState.Estimated)
@@ -462,7 +468,7 @@ if (mains.AdapterConnected)
 ### Power Management
 
 ```csharp
-var pm = PlatformProvider.GetPowerManagementStat();
+using var pm = PlatformProvider.GetPowerManagementStat();
 Console.WriteLine($"ThermalState:        {pm.ThermalState}");
 Console.WriteLine($"ThermalWarningLevel: {pm.ThermalWarningLevel}");
 Console.WriteLine($"CpuSpeedLimit:       {pm.CpuSpeedLimit} %");
@@ -475,7 +481,7 @@ Console.WriteLine($"PreventSleep:        {pm.PreventUserIdleSystemSleep}");
 ### SMC Sensors
 
 ```csharp
-var monitor = PlatformProvider.GetSmcMonitor();
+using var monitor = PlatformProvider.GetSmcMonitor();
 
 // Temperature
 foreach (var s in monitor.Temperatures)

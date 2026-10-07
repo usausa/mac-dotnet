@@ -29,7 +29,7 @@ public sealed class CpuCoreStat
     }
 }
 
-public sealed class CpuStat
+public sealed class CpuStat : IDisposable
 {
     private static readonly Lazy<IReadOnlyDictionary<int, CpuCoreType>> CoreTypes = new(ReadCoreTypes);
 
@@ -38,6 +38,11 @@ public sealed class CpuStat
     private readonly List<CpuCoreStat> efficiencyCores = [];
 
     private readonly List<CpuCoreStat> performanceCores = [];
+
+    // Host port (mach_host_self), held instead of being obtained and released on every Update
+    private readonly SafeMachPortHandle host;
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -51,9 +56,23 @@ public sealed class CpuStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal CpuStat()
+    private CpuStat()
     {
+        host = new SafeMachPortHandle(mach_host_self());
         Update();
+    }
+
+    internal static CpuStat Create() => new();
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        host.Dispose();
     }
 
     //--------------------------------------------------------------------------------
@@ -62,8 +81,9 @@ public sealed class CpuStat
 
     public unsafe bool Update()
     {
-        using var host = new MachPortRef(mach_host_self());
-        var result = host_processor_info(host, PROCESSOR_CPU_LOAD_INFO, out var processorCount, out var info, out var infoCount);
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        var result = host_processor_info(host.Value, PROCESSOR_CPU_LOAD_INFO, out var processorCount, out var info, out var infoCount);
         if (result != KERN_SUCCESS)
         {
             return false;
@@ -126,7 +146,7 @@ public sealed class CpuStat
         }
         finally
         {
-            _ = vm_deallocate(task_self_trap(), info, (UIntPtr)(sizeof(int) * infoCount));
+            _ = vm_deallocate(mach_task_self(), info, (UIntPtr)(sizeof(int) * infoCount));
         }
     }
 

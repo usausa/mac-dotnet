@@ -4,8 +4,20 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public sealed class PowerStat
+public sealed class PowerStat : IDisposable
 {
+    private readonly IOReportSampler? sampler;
+
+    // Channels of the sample the classification below was built from
+    private readonly IOReportChannelLayout layout = new();
+
+    // Per channel index: energy kind and the divisor that converts the value to joules
+    private EnergyChannel[] channelKinds = [];
+
+    private double[] channelDivisors = [];
+
+    private bool disposed;
+
     public bool Supported { get; }
 
     // Cumulative CPU energy consumption (J)
@@ -29,10 +41,29 @@ public sealed class PowerStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal PowerStat()
+    private PowerStat()
     {
         Supported = RuntimeInformation.ProcessArchitecture == Architecture.Arm64;
+        if (Supported)
+        {
+            sampler = IOReportSampler.Create("Energy Model", null);
+        }
+
         Update();
+    }
+
+    internal static PowerStat Create() => new();
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        layout.Dispose();
+        sampler?.Dispose();
     }
 
     //--------------------------------------------------------------------------------
@@ -41,71 +72,39 @@ public sealed class PowerStat
 
     public bool Update()
     {
-        if (!Supported)
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        if (!Supported || (sampler is null))
         {
             return false;
         }
 
-        var channels = GetEnergyModelChannels();
-        if (channels == IntPtr.Zero)
+        using var sample = new CFRef(sampler.CreateSample());
+        if (!sample.IsValid)
         {
             return false;
         }
 
-        try
-        {
-            var subscription = IOReportCreateSubscription(IntPtr.Zero, channels, out var subDict, 0, IntPtr.Zero);
-            if (subDict != IntPtr.Zero)
-            {
-                CFRelease(subDict);
-            }
-
-            if (subscription == IntPtr.Zero)
-            {
-                return false;
-            }
-
-            try
-            {
-                var samples = IOReportCreateSamples(subscription, channels, IntPtr.Zero);
-                if (samples == IntPtr.Zero)
-                {
-                    return false;
-                }
-
-                try
-                {
-                    return ParseSamples(samples);
-                }
-                finally
-                {
-                    CFRelease(samples);
-                }
-            }
-            finally
-            {
-                CFRelease(subscription);
-            }
-        }
-        finally
-        {
-            CFRelease(channels);
-        }
+        return ParseSamples(sample, sampler.Reopened);
     }
 
     //--------------------------------------------------------------------------------
     // Parse
     //--------------------------------------------------------------------------------
 
-    private bool ParseSamples(IntPtr samples)
+    private bool ParseSamples(IntPtr samples, bool reopened)
     {
-        var channelsKey = CFStringCreateWithCString(IntPtr.Zero, "IOReportChannels", kCFStringEncodingUTF8);
-        var channelsArray = CFDictionaryGetValue(samples, channelsKey);
-        CFRelease(channelsKey);
-
+        var channelsArray = CFDictionaryGetValue(samples, IOReportSampler.ChannelsKey);
         if ((channelsArray == IntPtr.Zero) || (CFGetTypeID(channelsArray) != CFArrayGetTypeID()))
         {
             return false;
+        }
+
+        var count = CFArrayGetCount(channelsArray);
+        if (reopened || !layout.Matches(channelsArray, count))
+        {
+            // First sample, new subscription or changed channels: classify the channels again
+            ClassifyChannels(channelsArray, count);
         }
 
         var cpuEnergy = 0d;
@@ -114,7 +113,51 @@ public sealed class PowerStat
         var ramEnergy = 0d;
         var pciEnergy = 0d;
 
-        var count = CFArrayGetCount(channelsArray);
+        for (var i = 0; i < channelKinds.Length; i++)
+        {
+            var kind = channelKinds[i];
+            if (kind == EnergyChannel.None)
+            {
+                continue;
+            }
+
+            var value = (double)IOReportSimpleGetIntegerValue(CFArrayGetValueAtIndex(channelsArray, i), 0);
+            var joules = value / channelDivisors[i];
+
+            switch (kind)
+            {
+                case EnergyChannel.Cpu:
+                    cpuEnergy = joules;
+                    break;
+                case EnergyChannel.Gpu:
+                    gpuEnergy = joules;
+                    break;
+                case EnergyChannel.Ane:
+                    aneEnergy = joules;
+                    break;
+                case EnergyChannel.Ram:
+                    ramEnergy = joules;
+                    break;
+                case EnergyChannel.Pci:
+                    pciEnergy = joules;
+                    break;
+            }
+        }
+
+        Cpu = cpuEnergy;
+        Gpu = gpuEnergy;
+        Ane = aneEnergy;
+        Ram = ramEnergy;
+        Pci = pciEnergy;
+
+        return true;
+    }
+
+    // Same channel matching as before; the result is kept per channel index
+    private void ClassifyChannels(IntPtr channelsArray, long count)
+    {
+        var kinds = new EnergyChannel[count];
+        var divisors = new double[count];
         for (var i = 0L; i < count; i++)
         {
             var item = CFArrayGetValueAtIndex(channelsArray, i);
@@ -140,89 +183,63 @@ public sealed class PowerStat
             var unitPtr = IOReportChannelGetUnitLabel(item);
             var unit = unitPtr != IntPtr.Zero ? ToManagedString(unitPtr) : null;
 
-            var value = (double)IOReportSimpleGetIntegerValue(item, 0);
-            var joules = ConvertToJoules(value, unit);
-
-            if (channelName.EndsWith("CPU Energy", StringComparison.Ordinal))
-            {
-                cpuEnergy = joules;
-            }
-            else if (channelName.EndsWith("GPU Energy", StringComparison.Ordinal))
-            {
-                gpuEnergy = joules;
-            }
-            else if (channelName.StartsWith("ANE", StringComparison.Ordinal))
-            {
-                aneEnergy = joules;
-            }
-            else if (channelName.StartsWith("DRAM", StringComparison.Ordinal))
-            {
-                ramEnergy = joules;
-            }
-            else if (channelName.StartsWith("PCI", StringComparison.Ordinal) && channelName.EndsWith("Energy", StringComparison.Ordinal))
-            {
-                pciEnergy = joules;
-            }
+            kinds[i] = ToEnergyChannel(channelName);
+            divisors[i] = GetJouleDivisor(unit);
         }
 
-        Cpu = cpuEnergy;
-        Gpu = gpuEnergy;
-        Ane = aneEnergy;
-        Ram = ramEnergy;
-        Pci = pciEnergy;
-
-        return true;
+        channelKinds = kinds;
+        channelDivisors = divisors;
+        layout.Record(channelsArray, count);
     }
 
     //--------------------------------------------------------------------------------
     // Helper
     //--------------------------------------------------------------------------------
 
-    private static IntPtr GetEnergyModelChannels()
+    private static EnergyChannel ToEnergyChannel(string channelName)
     {
-        try
+        if (channelName.EndsWith("CPU Energy", StringComparison.Ordinal))
         {
-            var groupStr = CFStringCreateWithCString(IntPtr.Zero, "Energy Model", kCFStringEncodingUTF8);
-            if (groupStr == IntPtr.Zero)
-            {
-                return IntPtr.Zero;
-            }
-
-            try
-            {
-                var channel = IOReportCopyChannelsInGroup(groupStr, IntPtr.Zero, 0, 0, 0);
-                if (channel == IntPtr.Zero)
-                {
-                    return IntPtr.Zero;
-                }
-
-                try
-                {
-                    return CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
-                }
-                finally
-                {
-                    CFRelease(channel);
-                }
-            }
-            finally
-            {
-                CFRelease(groupStr);
-            }
+            return EnergyChannel.Cpu;
         }
-        catch (EntryPointNotFoundException)
+        if (channelName.EndsWith("GPU Energy", StringComparison.Ordinal))
         {
-            return IntPtr.Zero;
+            return EnergyChannel.Gpu;
         }
+        if (channelName.StartsWith("ANE", StringComparison.Ordinal))
+        {
+            return EnergyChannel.Ane;
+        }
+        if (channelName.StartsWith("DRAM", StringComparison.Ordinal))
+        {
+            return EnergyChannel.Ram;
+        }
+        if (channelName.StartsWith("PCI", StringComparison.Ordinal) && channelName.EndsWith("Energy", StringComparison.Ordinal))
+        {
+            return EnergyChannel.Pci;
+        }
+
+        return EnergyChannel.None;
     }
 
-    private static double ConvertToJoules(double value, string? unit)
+    // Value / divisor = joules (same conversion as the former ConvertToJoules)
+    private static double GetJouleDivisor(string? unit)
     {
         return unit switch
         {
-            "mJ" => value / 1000.0,
-            "uJ" => value / 1_000_000.0,
-            _ => value / 1_000_000_000.0
+            "mJ" => 1000.0,
+            "uJ" => 1_000_000.0,
+            _ => 1_000_000_000.0
         };
+    }
+
+    private enum EnergyChannel
+    {
+        None = 0,
+        Cpu,
+        Gpu,
+        Ane,
+        Ram,
+        Pci
     }
 }

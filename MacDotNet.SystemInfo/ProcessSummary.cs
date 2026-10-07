@@ -4,8 +4,10 @@ using System.Buffers;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public sealed class ProcessSummary
+public sealed class ProcessSummary : IDisposable
 {
+    private bool disposed;
+
     public DateTime UpdateAt { get; private set; }
 
     public int ProcessCount { get; private set; }
@@ -16,9 +18,16 @@ public sealed class ProcessSummary
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal ProcessSummary()
+    private ProcessSummary()
     {
         Update();
+    }
+
+    internal static ProcessSummary Create() => new();
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
@@ -27,6 +36,8 @@ public sealed class ProcessSummary
 
     public unsafe bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var bufferSize = proc_listpids(PROC_ALL_PIDS, 0, null, 0);
         if (bufferSize <= 0)
         {

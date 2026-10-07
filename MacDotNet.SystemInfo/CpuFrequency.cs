@@ -32,7 +32,7 @@ public sealed class CpuCoreFrequency
     }
 }
 
-public sealed class CpuFrequency
+public sealed class CpuFrequency : IDisposable
 {
     private static readonly Lazy<(int[] ECore, int[] PCore)> FrequencyTables = new(ReadFrequencyTables);
 
@@ -41,6 +41,16 @@ public sealed class CpuFrequency
     private readonly List<CpuCoreFrequency> efficiencyCores = [];
 
     private readonly List<CpuCoreFrequency> performanceCores = [];
+
+    private readonly IOReportSampler sampler;
+
+    // Channels of the sample the mapping below was built from
+    private readonly IOReportChannelLayout layout = new();
+
+    // Channel index -> core (null for the other channels)
+    private CpuCoreFrequency?[] channelCores = [];
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -60,46 +70,75 @@ public sealed class CpuFrequency
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal CpuFrequency()
+    private CpuFrequency()
     {
+        sampler = IOReportSampler.Create("CPU Stats", "CPU Core Performance States");
         Update();
+    }
+
+    internal static CpuFrequency Create() => new();
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        layout.Dispose();
+        sampler.Dispose();
     }
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
-    // ReSharper disable StringLiteralTypo
     public bool Update()
     {
-        using var channels = new CFRef(GetChannels());
-        if (!channels.IsValid)
-        {
-            return false;
-        }
+        ObjectDisposedException.ThrowIf(disposed, this);
 
-        using var subscription = new CFRef(IOReportCreateSubscription(IntPtr.Zero, channels, out var dict, 0, IntPtr.Zero));
-        using var subDict = new CFRef(dict);
-        if (!subscription.IsValid)
-        {
-            return false;
-        }
-
-        using var sample = new CFRef(IOReportCreateSamples(subscription, channels, IntPtr.Zero));
+        using var sample = new CFRef(sampler.CreateSample());
         if (!sample.IsValid)
         {
             return false;
         }
 
-        using var key = CFRef.CreateString("IOReportChannels");
-        var items = CFDictionaryGetValue(sample, key);
+        var items = CFDictionaryGetValue(sample, IOReportSampler.ChannelsKey);
         if (items == IntPtr.Zero)
         {
             return false;
         }
 
-        var coreAdded = false;
+        var reopened = sampler.Reopened;
         var count = CFArrayGetCount(items);
+        if (reopened || !layout.Matches(items, count))
+        {
+            // First sample, new subscription or changed channels: build the mapping again
+            BuildMapping(items, count, reopened);
+        }
+        else
+        {
+            for (var i = 0; i < channelCores.Length; i++)
+            {
+                var core = channelCores[i];
+                if (core is not null)
+                {
+                    UpdateFrequency(core, CFArrayGetValueAtIndex(items, i));
+                }
+            }
+        }
+
+        UpdateAt = DateTime.Now;
+
+        return true;
+    }
+
+    // ReSharper disable StringLiteralTypo
+    private void BuildMapping(IntPtr items, long count, bool reopened)
+    {
+        var mapping = new CpuCoreFrequency?[count];
+        var coreAdded = false;
         for (var i = 0L; i < count; i++)
         {
             var item = CFArrayGetValueAtIndex(items, i);
@@ -151,22 +190,21 @@ public sealed class CpuFrequency
                 cores.Add(core);
                 coreAdded = true;
             }
+            else if (reopened)
+            {
+                // New subscription: this sample is the base like the first time (Frequency keeps the previous value)
+                var stateCount = IOReportStateGetCount(item);
+                for (var j = 0; (j < stateCount) && (j < core.PreviousResidencies.Length); j++)
+                {
+                    core.PreviousResidencies[j] = IOReportStateGetResidency(item, j);
+                }
+            }
             else
             {
-                // Update frequency
-                var stateCount = IOReportStateGetCount(item);
-                for (var j = 0; (j < stateCount) && (j < core.CurrentResidencies.Length); j++)
-                {
-                    core.CurrentResidencies[j] = IOReportStateGetResidency(item, j);
-                }
-
-                var freq = CalculateFrequencies(core.CurrentResidencies, core.PreviousResidencies, core.FrequencyTable, core.ResidencyOffset);
-                var minFreq = core.FrequencyTable.Length > 0 ? core.FrequencyTable[0] : 0;
-                core.Frequency = Math.Max(freq, minFreq);
-
-                // Swap current to previous for the next round
-                (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
+                UpdateFrequency(core, item);
             }
+
+            mapping[i] = core;
         }
 
         if (coreAdded)
@@ -178,11 +216,26 @@ public sealed class CpuFrequency
             });
         }
 
-        UpdateAt = DateTime.Now;
-
-        return true;
+        channelCores = mapping;
+        layout.Record(items, count);
     }
     // ReSharper restore StringLiteralTypo
+
+    private static void UpdateFrequency(CpuCoreFrequency core, IntPtr item)
+    {
+        var stateCount = IOReportStateGetCount(item);
+        for (var j = 0; (j < stateCount) && (j < core.CurrentResidencies.Length); j++)
+        {
+            core.CurrentResidencies[j] = IOReportStateGetResidency(item, j);
+        }
+
+        var freq = CalculateFrequencies(core.CurrentResidencies, core.PreviousResidencies, core.FrequencyTable, core.ResidencyOffset);
+        var minFreq = core.FrequencyTable.Length > 0 ? core.FrequencyTable[0] : 0;
+        core.Frequency = Math.Max(freq, minFreq);
+
+        // Swap current to previous for the next round
+        (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
+    }
 
     //--------------------------------------------------------------------------------
     // Helper
@@ -254,33 +307,6 @@ public sealed class CpuFrequency
         }
 
         return result;
-    }
-
-    private static IntPtr GetChannels()
-    {
-        using var group = CFRef.CreateString("CPU Stats");
-        using var subGroup = CFRef.CreateString("CPU Core Performance States");
-        using var channel = new CFRef(IOReportCopyChannelsInGroup(group, subGroup, 0, 0, 0));
-        if (!channel.IsValid)
-        {
-            return IntPtr.Zero;
-        }
-
-        // IOReportCreateSubscription requires a mutable dictionary
-        var mutableCopy = CFDictionaryCreateMutableCopy(IntPtr.Zero, 0, channel);
-        if (mutableCopy == IntPtr.Zero)
-        {
-            return IntPtr.Zero;
-        }
-
-        using var key = CFRef.CreateString("IOReportChannels");
-        if (CFDictionaryGetValue(mutableCopy, key) == IntPtr.Zero)
-        {
-            CFRelease(mutableCopy);
-            return IntPtr.Zero;
-        }
-
-        return mutableCopy;
     }
 
     private static CpuCoreFrequency? FindCore(List<CpuCoreFrequency> list, string channelName)

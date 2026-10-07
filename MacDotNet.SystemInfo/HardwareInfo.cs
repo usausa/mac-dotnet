@@ -105,7 +105,7 @@ public sealed class HardwareInfo
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal HardwareInfo()
+    private HardwareInfo()
     {
         Model = GetSystemControlString("hw.model") ?? string.Empty;
         Machine = GetSystemControlString("hw.machine") ?? string.Empty;
@@ -137,6 +137,8 @@ public sealed class HardwareInfo
 
         Gpus = ReadGpus();
     }
+
+    internal static HardwareInfo Create() => new();
 
     //--------------------------------------------------------------------------------
     // Helper

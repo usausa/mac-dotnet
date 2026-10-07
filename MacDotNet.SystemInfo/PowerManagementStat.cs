@@ -14,9 +14,21 @@ public enum ThermalState
     Critical = 3
 }
 
-public sealed class PowerManagementStat
+public sealed class PowerManagementStat : IDisposable
 {
     private static readonly Lazy<ProcessInfoContext> Context = new(CreateContext);
+
+    // CPU power status
+    private static readonly IntPtr CpuSpeedLimitKey = CFSTR("CPU_Speed_Limit");
+    private static readonly IntPtr CpuAvailableCpusKey = CFSTR("CPU_Available_CPUs");
+    private static readonly IntPtr CpuSchedulerLimitKey = CFSTR("CPU_Scheduler_Limit");
+
+    // Assertions status
+    private static readonly IntPtr PreventUserIdleSystemSleepKey = CFSTR("PreventUserIdleSystemSleep");
+    private static readonly IntPtr PreventUserIdleDisplaySleepKey = CFSTR("PreventUserIdleDisplaySleep");
+    private static readonly IntPtr PreventSystemSleepKey = CFSTR("PreventSystemSleep");
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -57,7 +69,7 @@ public sealed class PowerManagementStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal PowerManagementStat()
+    private PowerManagementStat()
     {
         var context = Context.Value;
         ThermalStateSupported = context.ThermalStateSelector != IntPtr.Zero;
@@ -66,12 +78,21 @@ public sealed class PowerManagementStat
         Update();
     }
 
+    internal static PowerManagementStat Create() => new();
+
+    public void Dispose()
+    {
+        disposed = true;
+    }
+
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
     public bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var context = Context.Value;
 
         ThermalState = ThermalStateSupported
@@ -100,9 +121,9 @@ public sealed class PowerManagementStat
         }
 
         using var status = new CFRef(statusRef);
-        CpuSpeedLimit = status.TryGetInt64("CPU_Speed_Limit", out var speedLimit) ? (int)speedLimit : -1;
-        CpuAvailableCpus = status.TryGetInt64("CPU_Available_CPUs", out var availableCpus) ? (int)availableCpus : -1;
-        CpuSchedulerLimit = status.TryGetInt64("CPU_Scheduler_Limit", out var schedulerLimit) ? (int)schedulerLimit : -1;
+        CpuSpeedLimit = status.TryGetInt64(CpuSpeedLimitKey, out var speedLimit) ? (int)speedLimit : -1;
+        CpuAvailableCpus = status.TryGetInt64(CpuAvailableCpusKey, out var availableCpus) ? (int)availableCpus : -1;
+        CpuSchedulerLimit = status.TryGetInt64(CpuSchedulerLimitKey, out var schedulerLimit) ? (int)schedulerLimit : -1;
     }
 
     private void ReadAssertionsStatus()
@@ -116,9 +137,9 @@ public sealed class PowerManagementStat
         }
 
         using var assertions = new CFRef(assertionsRef);
-        PreventUserIdleSystemSleep = assertions.GetInt64("PreventUserIdleSystemSleep") != 0;
-        PreventUserIdleDisplaySleep = assertions.GetInt64("PreventUserIdleDisplaySleep") != 0;
-        PreventSystemSleep = assertions.GetInt64("PreventSystemSleep") != 0;
+        PreventUserIdleSystemSleep = assertions.GetInt64(PreventUserIdleSystemSleepKey) != 0;
+        PreventUserIdleDisplaySleep = assertions.GetInt64(PreventUserIdleDisplaySleepKey) != 0;
+        PreventSystemSleep = assertions.GetInt64(PreventSystemSleepKey) != 0;
     }
 
     //--------------------------------------------------------------------------------

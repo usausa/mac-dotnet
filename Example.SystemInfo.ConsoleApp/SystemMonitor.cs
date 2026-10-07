@@ -119,7 +119,7 @@ public sealed class FanSensorEntry
     }
 }
 
-internal sealed class SystemMonitor
+internal sealed class SystemMonitor : IDisposable
 {
     //--------------------------------------------------------------------------------
     // System info providers
@@ -370,6 +370,31 @@ internal sealed class SystemMonitor
         CalculateNetworkEntries(0);
 
         SavePowerCounters();
+    }
+
+    public void Dispose()
+    {
+        uptime.Dispose();
+        cpuStat.Dispose();
+        cpuFrequency.Dispose();
+        loadAverage.Dispose();
+        memoryStat.Dispose();
+        swapUsage.Dispose();
+        diskStat.Dispose();
+        networkStat.Dispose();
+        processSummary.Dispose();
+        fileHandleStat.Dispose();
+        powerStat.Dispose();
+        smcMonitor.Dispose();
+        fileSystemStat.Dispose();
+        batteryDevice.Dispose();
+        mainsDevice.Dispose();
+        powerManagementStat.Dispose();
+
+        foreach (var gpu in gpuEntries)
+        {
+            gpu.Device.Dispose();
+        }
     }
 
     //--------------------------------------------------------------------------------

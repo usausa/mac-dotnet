@@ -2,8 +2,13 @@ namespace MacDotNet.SystemInfo;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-public sealed class SwapUsage
+public sealed class SwapUsage : IDisposable
 {
+    // MIB of vm.swapusage
+    private readonly int[] swapUsageMib;
+
+    private bool disposed;
+
     public DateTime UpdateAt { get; private set; }
 
     public ulong TotalBytes { get; private set; }
@@ -20,23 +25,41 @@ public sealed class SwapUsage
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal SwapUsage()
+    private SwapUsage()
     {
+        // ReSharper disable once StringLiteralTypo
+        swapUsageMib = GetSystemControlMib("vm.swapusage");
         Update();
+    }
+
+    internal static SwapUsage Create() => new();
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
-    // ReSharper disable StringLiteralTypo
     public unsafe bool Update()
     {
-        var size = (IntPtr)sizeof(xsw_usage);
-        xsw_usage swap;
-        if (sysctlbyname("vm.swapusage", &swap, ref size, IntPtr.Zero, 0) != 0)
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        if (swapUsageMib.Length == 0)
         {
             return false;
+        }
+
+        var size = (IntPtr)sizeof(xsw_usage);
+        xsw_usage swap;
+        fixed (int* mib = swapUsageMib)
+        {
+            if (sysctl(mib, (uint)swapUsageMib.Length, &swap, ref size, IntPtr.Zero, IntPtr.Zero) != 0)
+            {
+                return false;
+            }
         }
 
         TotalBytes = swap.xsu_total;
@@ -49,5 +72,4 @@ public sealed class SwapUsage
 
         return true;
     }
-    // ReSharper restore StringLiteralTypo
 }

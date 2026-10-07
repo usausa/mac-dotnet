@@ -89,11 +89,13 @@ public sealed class FileSystemEntry
     }
 }
 
-public sealed class FileSystemStat
+public sealed class FileSystemStat : IDisposable
 {
     private readonly bool includeAll;
 
     private readonly List<FileSystemEntry> entries = [];
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -103,10 +105,17 @@ public sealed class FileSystemStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal FileSystemStat(bool includeAll = false)
+    private FileSystemStat(bool includeAll)
     {
         this.includeAll = includeAll;
         Update();
+    }
+
+    internal static FileSystemStat Create(bool includeAll = false) => new(includeAll);
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
@@ -115,6 +124,8 @@ public sealed class FileSystemStat
 
     public unsafe bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         var count = getfsstat(null, 0, MNT_NOWAIT);
         if (count <= 0)
         {

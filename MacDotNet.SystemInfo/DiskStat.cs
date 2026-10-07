@@ -88,13 +88,33 @@ public sealed class DiskDeviceStat
     }
 }
 
-public sealed class DiskStat
+public sealed class DiskStat : IDisposable
 {
+    // IOMedia
+    private static readonly IntPtr WholeKey = CFSTR("Whole");
+
+    // Statistics of the parent (IOBlockStorageDriver)
+    private static readonly IntPtr StatisticsKey = CFSTR("Statistics");
+    private static readonly IntPtr BytesReadKey = CFSTR("Bytes (Read)");
+    private static readonly IntPtr BytesWriteKey = CFSTR("Bytes (Write)");
+    private static readonly IntPtr OperationsReadKey = CFSTR("Operations (Read)");
+    private static readonly IntPtr OperationsWriteKey = CFSTR("Operations (Write)");
+    private static readonly IntPtr TotalTimeReadKey = CFSTR("Total Time (Read)");
+    private static readonly IntPtr TotalTimeWriteKey = CFSTR("Total Time (Write)");
+    private static readonly IntPtr RetriesReadKey = CFSTR("Retries (Read)");
+    private static readonly IntPtr RetriesWriteKey = CFSTR("Retries (Write)");
+    private static readonly IntPtr ErrorsReadKey = CFSTR("Errors (Read)");
+    private static readonly IntPtr ErrorsWriteKey = CFSTR("Errors (Write)");
+    private static readonly IntPtr LatencyTimeReadKey = CFSTR("Latency Time (Read)");
+    private static readonly IntPtr LatencyTimeWriteKey = CFSTR("Latency Time (Write)");
+
     private readonly bool includeAll;
 
     private readonly List<DiskDeviceStat> devices = [];
 
     private readonly List<DiskDeviceStat> filteredDevices = [];
+
+    private bool disposed;
 
     public DateTime UpdateAt { get; private set; }
 
@@ -104,18 +124,28 @@ public sealed class DiskStat
     // Constructor
     //--------------------------------------------------------------------------------
 
-    internal DiskStat(bool includeAll = false)
+    private DiskStat(bool includeAll)
     {
         this.includeAll = includeAll;
         Update();
+    }
+
+    internal static DiskStat Create(bool includeAll = false) => new(includeAll);
+
+    public void Dispose()
+    {
+        disposed = true;
     }
 
     //--------------------------------------------------------------------------------
     // Update
     //--------------------------------------------------------------------------------
 
+    // IOMedia is enumerated on every call to detect added and removed disks
     public bool Update()
     {
+        ObjectDisposedException.ThrowIf(disposed, this);
+
         foreach (var device in devices)
         {
             device.Live = false;
@@ -135,7 +165,7 @@ public sealed class DiskStat
         while ((rawEntry = IOIteratorNext(it)) != 0)
         {
             using var entry = new IOObj(rawEntry);
-            if (!entry.GetBoolean("Whole"))
+            if (!entry.GetBoolean(WholeKey))
             {
                 continue;
             }
@@ -213,24 +243,24 @@ public sealed class DiskStat
 
     private static void ReadStatistics(IOObj parentEntry, DiskDeviceStat device)
     {
-        using var statistics = parentEntry.GetDictionary("Statistics");
+        using var statistics = parentEntry.GetDictionary(StatisticsKey);
         if (!statistics.IsValid)
         {
             return;
         }
 
-        device.BytesRead = statistics.GetUInt64("Bytes (Read)");
-        device.BytesWrite = statistics.GetUInt64("Bytes (Write)");
-        device.ReadsCompleted = statistics.GetUInt64("Operations (Read)");
-        device.WritesCompleted = statistics.GetUInt64("Operations (Write)");
-        device.TotalTimeRead = statistics.GetUInt64("Total Time (Read)");
-        device.TotalTimeWrite = statistics.GetUInt64("Total Time (Write)");
-        device.RetriesRead = statistics.GetUInt64("Retries (Read)");
-        device.RetriesWrite = statistics.GetUInt64("Retries (Write)");
-        device.ErrorsRead = statistics.GetUInt64("Errors (Read)");
-        device.ErrorsWrite = statistics.GetUInt64("Errors (Write)");
-        device.LatencyTimeRead = statistics.GetUInt64("Latency Time (Read)");
-        device.LatencyTimeWrite = statistics.GetUInt64("Latency Time (Write)");
+        device.BytesRead = statistics.GetUInt64(BytesReadKey);
+        device.BytesWrite = statistics.GetUInt64(BytesWriteKey);
+        device.ReadsCompleted = statistics.GetUInt64(OperationsReadKey);
+        device.WritesCompleted = statistics.GetUInt64(OperationsWriteKey);
+        device.TotalTimeRead = statistics.GetUInt64(TotalTimeReadKey);
+        device.TotalTimeWrite = statistics.GetUInt64(TotalTimeWriteKey);
+        device.RetriesRead = statistics.GetUInt64(RetriesReadKey);
+        device.RetriesWrite = statistics.GetUInt64(RetriesWriteKey);
+        device.ErrorsRead = statistics.GetUInt64(ErrorsReadKey);
+        device.ErrorsWrite = statistics.GetUInt64(ErrorsWriteKey);
+        device.LatencyTimeRead = statistics.GetUInt64(LatencyTimeReadKey);
+        device.LatencyTimeWrite = statistics.GetUInt64(LatencyTimeWriteKey);
     }
 
     //--------------------------------------------------------------------------------

@@ -4,25 +4,6 @@ using System.Runtime.InteropServices;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
-internal readonly ref struct MachPortRef(uint port)
-{
-    public static MachPortRef Zero => default;
-
-    public uint Port { get; } = port;
-
-    public bool IsValid => Port != 0;
-
-    public static implicit operator uint(MachPortRef r) => r.Port;
-
-    public void Dispose()
-    {
-        if (IsValid)
-        {
-            _ = mach_port_deallocate(mach_task_self(), Port);
-        }
-    }
-}
-
 internal readonly ref struct CFRef(IntPtr pointer)
 {
     public static CFRef Zero => default;
@@ -55,21 +36,30 @@ internal readonly ref struct CFRef(IntPtr pointer)
     // CFDictionary
     //------------------------------------------------------------------------
 
+    // The string key overloads create the key on every call; hot paths use the IntPtr overloads with cached keys
+
     public bool ContainsKey(string key)
     {
         using var cfKey = CreateString(key);
-        return cfKey.IsValid && CFDictionaryContainsKey(Pointer, cfKey);
+        return ContainsKey(cfKey.Pointer);
     }
+
+    public bool ContainsKey(IntPtr key) => (key != IntPtr.Zero) && CFDictionaryContainsKey(Pointer, key);
 
     public string? GetString(string key)
     {
         using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        return GetString(cfKey.Pointer);
+    }
+
+    public string? GetString(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return null;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFStringGetTypeID()))
         {
             return null;
@@ -81,12 +71,17 @@ internal readonly ref struct CFRef(IntPtr pointer)
     public ulong GetUInt64(string key)
     {
         using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        return GetUInt64(cfKey.Pointer);
+    }
+
+    public ulong GetUInt64(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return 0;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return 0;
@@ -100,12 +95,17 @@ internal readonly ref struct CFRef(IntPtr pointer)
     public long GetInt64(string key)
     {
         using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        return GetInt64(cfKey.Pointer);
+    }
+
+    public long GetInt64(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return 0;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return 0;
@@ -118,15 +118,20 @@ internal readonly ref struct CFRef(IntPtr pointer)
 
     public bool TryGetInt64(string key, out long result)
     {
+        using var cfKey = CreateString(key);
+        return TryGetInt64(cfKey.Pointer, out result);
+    }
+
+    public bool TryGetInt64(IntPtr key, out long result)
+    {
         result = 0;
 
-        using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        if (key == IntPtr.Zero)
         {
             return false;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return false;
@@ -138,12 +143,17 @@ internal readonly ref struct CFRef(IntPtr pointer)
     public bool GetBoolean(string key)
     {
         using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        return GetBoolean(cfKey.Pointer);
+    }
+
+    public bool GetBoolean(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return false;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if (value == IntPtr.Zero)
         {
             return false;
@@ -167,12 +177,17 @@ internal readonly ref struct CFRef(IntPtr pointer)
     public CFRef GetDictionary(string key)
     {
         using var cfKey = CreateString(key);
-        if (!cfKey.IsValid)
+        return GetDictionary(cfKey.Pointer);
+    }
+
+    public CFRef GetDictionary(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return Zero;
         }
 
-        var value = CFDictionaryGetValue(Pointer, cfKey);
+        var value = CFDictionaryGetValue(Pointer, key);
         if ((value == IntPtr.Zero) || (CFGetTypeID(value) != CFDictionaryGetTypeID()))
         {
             return Zero;
@@ -197,25 +212,6 @@ internal readonly ref struct IORef(uint handle)
         if (IsValid)
         {
             _ = IOObjectRelease(Handle);
-        }
-    }
-}
-
-internal readonly ref struct IOService(uint handle)
-{
-    public static IOService Zero => default;
-
-    public uint Handle { get; } = handle;
-
-    public bool IsValid => Handle != 0;
-
-    public static implicit operator uint(IOService c) => c.Handle;
-
-    public void Dispose()
-    {
-        if (IsValid)
-        {
-            _ = IOServiceClose(Handle);
         }
     }
 }
@@ -249,15 +245,22 @@ internal readonly ref struct IOObj(uint handle)
         return IOObjectGetClass(Handle, buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
+    // The string key overloads create the key on every call; hot paths use the IntPtr overloads with cached keys
+
     public string? GetString(string key)
     {
         using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
+        return GetString(cfKey.Pointer);
+    }
+
+    public string? GetString(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return null;
         }
 
-        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0));
         if (!value.IsValid || (CFGetTypeID(value) != CFStringGetTypeID()))
         {
             return null;
@@ -269,12 +272,17 @@ internal readonly ref struct IOObj(uint handle)
     public bool GetBoolean(string key)
     {
         using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
+        return GetBoolean(cfKey.Pointer);
+    }
+
+    public bool GetBoolean(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return false;
         }
 
-        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0));
         if (!value.IsValid || (CFGetTypeID(value) != CFBooleanGetTypeID()))
         {
             return false;
@@ -286,12 +294,17 @@ internal readonly ref struct IOObj(uint handle)
     public ulong GetUInt64(string key)
     {
         using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
+        return GetUInt64(cfKey.Pointer);
+    }
+
+    public ulong GetUInt64(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return 0;
         }
 
-        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0));
         if (!value.IsValid || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return 0;
@@ -304,15 +317,20 @@ internal readonly ref struct IOObj(uint handle)
 
     public bool TryGetInt64(string key, out long result)
     {
+        using var cfKey = CFRef.CreateString(key);
+        return TryGetInt64(cfKey.Pointer, out result);
+    }
+
+    public bool TryGetInt64(IntPtr key, out long result)
+    {
         result = 0;
 
-        using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
+        if (key == IntPtr.Zero)
         {
             return false;
         }
 
-        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0));
         if (!value.IsValid || (CFGetTypeID(value) != CFNumberGetTypeID()))
         {
             return false;
@@ -324,12 +342,17 @@ internal readonly ref struct IOObj(uint handle)
     public uint GetDataUInt32(string key)
     {
         using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
+        return GetDataUInt32(cfKey.Pointer);
+    }
+
+    public uint GetDataUInt32(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
         {
             return 0;
         }
 
-        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
+        using var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0));
         if (!value.IsValid || (CFGetTypeID(value) != CFDataGetTypeID()))
         {
             return 0;
@@ -348,26 +371,96 @@ internal readonly ref struct IOObj(uint handle)
     public CFRef GetDictionary(string key)
     {
         using var cfKey = CFRef.CreateString(key);
-        if (!cfKey.IsValid)
-        {
-            return CFRef.Zero;
-        }
-
-#pragma warning disable CA2000
-        // ownership transferred to caller
-        var value = new CFRef(IORegistryEntryCreateCFProperty(Handle, cfKey, IntPtr.Zero, 0));
-#pragma warning restore CA2000
-        if (!value.IsValid)
-        {
-            return CFRef.Zero;
-        }
-
-        if (CFGetTypeID(value) != CFDictionaryGetTypeID())
-        {
-            value.Dispose();
-            return CFRef.Zero;
-        }
-
-        return value;
+        return GetDictionary(cfKey.Pointer);
     }
+
+    public CFRef GetDictionary(IntPtr key)
+    {
+        if (key == IntPtr.Zero)
+        {
+            return CFRef.Zero;
+        }
+
+        // Ownership of the returned dictionary is transferred to the caller
+        var value = IORegistryEntryCreateCFProperty(Handle, key, IntPtr.Zero, 0);
+        if ((value != IntPtr.Zero) && (CFGetTypeID(value) != CFDictionaryGetTypeID()))
+        {
+            CFRelease(value);
+            return CFRef.Zero;
+        }
+
+        return new CFRef(value);
+    }
+}
+
+//------------------------------------------------------------------------
+// Held handles (fields of IDisposable classes; released by Dispose, or by the finalizer when not disposed)
+//------------------------------------------------------------------------
+
+// io_object_t (io_service_t, io_registry_entry_t)
+internal sealed class SafeIOObjectHandle : SafeHandle
+{
+    public SafeIOObjectHandle(uint value)
+        : base(IntPtr.Zero, true)
+    {
+        SetHandle((IntPtr)value);
+    }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    public uint Value => (uint)handle;
+
+    protected override bool ReleaseHandle() => IOObjectRelease((uint)handle) == KERN_SUCCESS;
+}
+
+// io_connect_t
+internal sealed class SafeIOConnectHandle : SafeHandle
+{
+    public SafeIOConnectHandle(uint value)
+        : base(IntPtr.Zero, true)
+    {
+        SetHandle((IntPtr)value);
+    }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    public uint Value => (uint)handle;
+
+    protected override bool ReleaseHandle() => IOServiceClose((uint)handle) == KERN_SUCCESS;
+}
+
+// CFTypeRef (owned reference)
+internal sealed class SafeCFTypeHandle : SafeHandle
+{
+    public SafeCFTypeHandle(IntPtr value)
+        : base(IntPtr.Zero, true)
+    {
+        SetHandle(value);
+    }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    public IntPtr Value => handle;
+
+    protected override bool ReleaseHandle()
+    {
+        CFRelease(handle);
+        return true;
+    }
+}
+
+// Mach port send right (e.g. the host port from mach_host_self)
+internal sealed class SafeMachPortHandle : SafeHandle
+{
+    public SafeMachPortHandle(uint value)
+        : base(IntPtr.Zero, true)
+    {
+        SetHandle((IntPtr)value);
+    }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    public uint Value => (uint)handle;
+
+    protected override bool ReleaseHandle() => mach_port_deallocate(mach_task_self(), (uint)handle) == KERN_SUCCESS;
 }

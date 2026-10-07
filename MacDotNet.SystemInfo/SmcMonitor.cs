@@ -134,7 +134,7 @@ public sealed class FanSensor
 
 // Monitor
 
-public sealed class SmcMonitor
+public sealed class SmcMonitor : IDisposable
 {
     public const uint KeyNum = 0x234B4559u; // "#KEY"
     public const uint FNum = 0x464E756Du; // "FNum"
@@ -145,17 +145,31 @@ public sealed class SmcMonitor
     public const uint FanSuffixMx = 0x4D78u;
     public const uint FanSuffixTg = 0x5467u;
 
+    private readonly SmcConnection connection = new();
+
+    private readonly List<TemperatureSensor> temperatures = [];
+
+    private readonly List<VoltageSensor> voltages = [];
+
+    private readonly List<PowerSensor> powers = [];
+
+    private readonly List<CurrentSensor> currents = [];
+
+    private readonly List<FanSensor> fans = [];
+
+    private bool disposed;
+
     public DateTime UpdateAt { get; private set; }
 
-    public IReadOnlyList<TemperatureSensor> Temperatures { get; }
+    public IReadOnlyList<TemperatureSensor> Temperatures => temperatures;
 
-    public IReadOnlyList<VoltageSensor> Voltages { get; }
+    public IReadOnlyList<VoltageSensor> Voltages => voltages;
 
-    public IReadOnlyList<PowerSensor> Powers { get; }
+    public IReadOnlyList<PowerSensor> Powers => powers;
 
-    public IReadOnlyList<CurrentSensor> Currents { get; }
+    public IReadOnlyList<CurrentSensor> Currents => currents;
 
-    public IReadOnlyList<FanSensor> Fans { get; }
+    public IReadOnlyList<FanSensor> Fans => fans;
 
     //--------------------------------------------------------------------------------
     // Helper
@@ -169,23 +183,17 @@ public sealed class SmcMonitor
     // Constructor
     //--------------------------------------------------------------------------------
 
-    public SmcMonitor()
+    private SmcMonitor()
     {
-        var temperatures = new List<TemperatureSensor>();
-        var voltages = new List<VoltageSensor>();
-        var powers = new List<PowerSensor>();
-        var currents = new List<CurrentSensor>();
-        var fans = new List<FanSensor>();
-
-        using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
-        if (service.IsValid && (IOServiceOpen(service, task_self_trap(), 0, out var connHandle) == KERN_SUCCESS))
+        // When the connection cannot be opened, the sensor lists stay empty (Update tries to open it)
+        if (connection.Open())
         {
-            using var conn = new IOService(connHandle);
+            var conn = connection.Handle;
 
-            var keyCount = ReadSmcInt(conn, KeyNum);
+            _ = ReadSmcInt(conn, KeyNum, out var keyCount);
             for (var i = 0; i < keyCount; i++)
             {
-                var key = SmcReadIndex(conn, i);
+                _ = SmcReadIndex(conn, i, out var key);
                 if (key == 0)
                 {
                     continue;
@@ -197,14 +205,14 @@ public sealed class SmcMonitor
                     continue;
                 }
 
-                if (!SmcReadKeyInfo(conn, key, out var dataSize, out var dataType) || (dataSize == 0))
+                if ((SmcReadKeyInfo(conn, key, out var dataSize, out var dataType) != KERN_SUCCESS) || (dataSize == 0))
                 {
                     continue;
                 }
 
                 var keyStr = ToKeyString(key);
                 var dataTypeStr = ToKeyString(dataType);
-                var value = ReadSensorValue(conn, key, dataType, dataSize);
+                _ = ReadSensorValue(conn, key, dataType, dataSize, out var value);
                 switch (firstChar)
                 {
                     case 'T':
@@ -258,49 +266,61 @@ public sealed class SmcMonitor
                 }
             }
 
-            var fanCount = ReadSmcInt(conn, FNum);
+            _ = ReadSmcInt(conn, FNum, out var fanCount);
             for (var i = 0; i < fanCount; i++)
             {
                 var ac = FanKey(i, FanSuffixAc);
-                if (!SmcReadKeyInfo(conn, ac, out var acSize, out var acType) || (acSize == 0))
+                if ((SmcReadKeyInfo(conn, ac, out var acSize, out var acType) != KERN_SUCCESS) || (acSize == 0))
                 {
                     continue;
                 }
                 var mn = FanKey(i, FanSuffixMn);
-                if (!SmcReadKeyInfo(conn, mn, out var mnSize, out var mnType) || (mnSize == 0))
+                if ((SmcReadKeyInfo(conn, mn, out var mnSize, out var mnType) != KERN_SUCCESS) || (mnSize == 0))
                 {
                     continue;
                 }
                 var mx = FanKey(i, FanSuffixMx);
-                if (!SmcReadKeyInfo(conn, mx, out var mxSize, out var mxType) || (mxSize == 0))
+                if ((SmcReadKeyInfo(conn, mx, out var mxSize, out var mxType) != KERN_SUCCESS) || (mxSize == 0))
                 {
                     continue;
                 }
                 var tg = FanKey(i, FanSuffixTg);
-                if (!SmcReadKeyInfo(conn, tg, out var tgSize, out var tgType) || (tgSize == 0))
+                if ((SmcReadKeyInfo(conn, tg, out var tgSize, out var tgType) != KERN_SUCCESS) || (tgSize == 0))
                 {
                     continue;
                 }
 
+                _ = ReadSensorValue(conn, ac, acType, acSize, out var actualRpm);
+                _ = ReadSensorValue(conn, mn, mnType, mnSize, out var minRpm);
+                _ = ReadSensorValue(conn, mx, mxType, mxSize, out var maxRpm);
+                _ = ReadSensorValue(conn, tg, tgType, tgSize, out var targetRpm);
+
                 var fan = new FanSensor(i, ac, acType, acSize, mn, mnType, mnSize, mx, mxType, mxSize, tg, tgType, tgSize)
                 {
-                    ActualRpm = ReadSensorValue(conn, ac, acType, acSize),
-                    MinRpm = ReadSensorValue(conn, mn, mnType, mnSize),
-                    MaxRpm = ReadSensorValue(conn, mx, mxType, mxSize),
-                    TargetRpm = ReadSensorValue(conn, tg, tgType, tgSize)
+                    ActualRpm = actualRpm,
+                    MinRpm = minRpm,
+                    MaxRpm = maxRpm,
+                    TargetRpm = targetRpm
                 };
 
                 fans.Add(fan);
             }
         }
 
-        Temperatures = temperatures;
-        Voltages = voltages;
-        Powers = powers;
-        Currents = currents;
-        Fans = fans;
-
         UpdateAt = DateTime.Now;
+    }
+
+    internal static SmcMonitor Create() => new();
+
+    public void Dispose()
+    {
+        if (disposed)
+        {
+            return;
+        }
+
+        disposed = true;
+        connection.Dispose();
     }
 
     //--------------------------------------------------------------------------------
@@ -309,39 +329,91 @@ public sealed class SmcMonitor
 
     public bool Update()
     {
-        using var service = new IOObj(IOServiceGetMatchingService(0, IOServiceMatching("AppleSMC")));
-        if (!service.IsValid || (IOServiceOpen(service, task_self_trap(), 0, out var connHandle) != KERN_SUCCESS))
+        ObjectDisposedException.ThrowIf(disposed, this);
+
+        // Not open (open failure at creation or after a failed retry): open once per call
+        var opened = false;
+        if (!connection.IsOpen)
         {
-            return false;
+            if (!connection.Open())
+            {
+                return false;
+            }
+
+            opened = true;
         }
 
-        using var conn = new IOService(connHandle);
-
-        foreach (var sensor in Temperatures)
+        if (!ReadSensors())
         {
-            sensor.Value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
-        }
-        foreach (var sensor in Voltages)
-        {
-            sensor.Value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
-        }
-        foreach (var sensor in Powers)
-        {
-            sensor.Value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
-        }
-        foreach (var sensor in Currents)
-        {
-            sensor.Value = ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize);
-        }
-        foreach (var fan in Fans)
-        {
-            fan.ActualRpm = ReadSensorValue(conn, fan.KeyActual, fan.DataTypeActual, fan.DataSizeActual);
-            fan.MinRpm = ReadSensorValue(conn, fan.KeyMin, fan.DataTypeMin, fan.DataSizeMin);
-            fan.MaxRpm = ReadSensorValue(conn, fan.KeyMax, fan.DataTypeMax, fan.DataSizeMax);
-            fan.TargetRpm = ReadSensorValue(conn, fan.KeyTarget, fan.DataTypeTarget, fan.DataSizeTarget);
+            // Connection-level error (e.g. after sleep/wake): reopen and read all sensors again once
+            if (opened || !connection.Open() || !ReadSensors())
+            {
+                connection.Close();
+                return false;
+            }
         }
 
         UpdateAt = DateTime.Now;
+
+        return true;
+    }
+
+    // Returns false on a connection-level error; other errors set the value to 0 as before
+    private bool ReadSensors()
+    {
+        var conn = connection.Handle;
+
+        foreach (var sensor in temperatures)
+        {
+            if (IsConnectionError(ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize, out var value)))
+            {
+                return false;
+            }
+
+            sensor.Value = value;
+        }
+        foreach (var sensor in voltages)
+        {
+            if (IsConnectionError(ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize, out var value)))
+            {
+                return false;
+            }
+
+            sensor.Value = value;
+        }
+        foreach (var sensor in powers)
+        {
+            if (IsConnectionError(ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize, out var value)))
+            {
+                return false;
+            }
+
+            sensor.Value = value;
+        }
+        foreach (var sensor in currents)
+        {
+            if (IsConnectionError(ReadSensorValue(conn, sensor.RawKey, sensor.DataType, sensor.DataSize, out var value)))
+            {
+                return false;
+            }
+
+            sensor.Value = value;
+        }
+        foreach (var fan in fans)
+        {
+            if (IsConnectionError(ReadSensorValue(conn, fan.KeyActual, fan.DataTypeActual, fan.DataSizeActual, out var actualRpm)) ||
+                IsConnectionError(ReadSensorValue(conn, fan.KeyMin, fan.DataTypeMin, fan.DataSizeMin, out var minRpm)) ||
+                IsConnectionError(ReadSensorValue(conn, fan.KeyMax, fan.DataTypeMax, fan.DataSizeMax, out var maxRpm)) ||
+                IsConnectionError(ReadSensorValue(conn, fan.KeyTarget, fan.DataTypeTarget, fan.DataSizeTarget, out var targetRpm)))
+            {
+                return false;
+            }
+
+            fan.ActualRpm = actualRpm;
+            fan.MinRpm = minRpm;
+            fan.MaxRpm = maxRpm;
+            fan.TargetRpm = targetRpm;
+        }
 
         return true;
     }
@@ -350,21 +422,32 @@ public sealed class SmcMonitor
     // Helper
     //--------------------------------------------------------------------------------
 
-    private static unsafe uint SmcReadIndex(uint conn, int index)
+    // Errors that mean the connection itself is no longer usable.
+    // Candidates; to be confirmed by the sleep/wake test (M0-3).
+    private static bool IsConnectionError(int kr) => kr is MACH_SEND_INVALID_DEST or kIOReturnNotOpen or kIOReturnNoDevice;
+
+    // The SMC helpers return the kern_return of the call (output values are 0 on failure)
+
+    private static unsafe int SmcReadIndex(uint conn, int index, out uint key)
     {
         var input = default(SMCKeyData_t);
         var output = default(SMCKeyData_t);
         input.data8 = SMC_CMD_READ_INDEX;
         input.data32 = (uint)index;
 
-        return SmcCall(conn, &input, &output) == KERN_SUCCESS ? output.key : 0;
+        var kr = SmcCall(conn, &input, &output);
+        key = kr == KERN_SUCCESS ? output.key : 0;
+        return kr;
     }
 
-    private static unsafe int ReadSmcInt(uint conn, uint key)
+    private static unsafe int ReadSmcInt(uint conn, uint key, out int value)
     {
-        if (!SmcReadKeyInfo(conn, key, out var dataSize, out _) || (dataSize == 0))
+        value = 0;
+
+        var kr = SmcReadKeyInfo(conn, key, out var dataSize, out _);
+        if ((kr != KERN_SUCCESS) || (dataSize == 0))
         {
-            return 0;
+            return kr;
         }
 
         var input = default(SMCKeyData_t);
@@ -373,40 +456,45 @@ public sealed class SmcMonitor
         input.keyInfo.dataSize = dataSize;
         input.data8 = SMC_CMD_READ_BYTES;
 
-        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
+        kr = SmcCall(conn, &input, &output);
+        if (kr != KERN_SUCCESS)
         {
-            return 0;
+            return kr;
         }
 
-        return dataSize switch
+        value = dataSize switch
         {
             1 => output.bytes[0],
             2 => BinaryPrimitives.ReadUInt16BigEndian(new ReadOnlySpan<byte>(output.bytes, 2)),
             4 => (int)BinaryPrimitives.ReadUInt32BigEndian(new ReadOnlySpan<byte>(output.bytes, 4)),
             _ => 0
         };
+        return kr;
     }
 
-    private static unsafe bool SmcReadKeyInfo(uint conn, uint key, out uint dataSize, out uint dataType)
+    private static unsafe int SmcReadKeyInfo(uint conn, uint key, out uint dataSize, out uint dataType)
     {
         var input = default(SMCKeyData_t);
         var output = default(SMCKeyData_t);
         input.key = key;
         input.data8 = SMC_CMD_READ_KEYINFO;
 
-        if (SmcCall(conn, &input, &output) == KERN_SUCCESS)
+        var kr = SmcCall(conn, &input, &output);
+        if (kr == KERN_SUCCESS)
         {
             dataSize = output.keyInfo.dataSize;
             dataType = output.keyInfo.dataType;
-            return true;
+        }
+        else
+        {
+            dataSize = 0;
+            dataType = 0;
         }
 
-        dataSize = 0;
-        dataType = 0;
-        return false;
+        return kr;
     }
 
-    private static unsafe double ReadSensorValue(uint conn, uint rawKey, uint dataType, uint dataSize)
+    private static unsafe int ReadSensorValue(uint conn, uint rawKey, uint dataType, uint dataSize, out double value)
     {
         var input = default(SMCKeyData_t);
         var output = default(SMCKeyData_t);
@@ -414,12 +502,13 @@ public sealed class SmcMonitor
         input.keyInfo.dataSize = dataSize;
         input.data8 = SMC_CMD_READ_BYTES;
 
-        if (SmcCall(conn, &input, &output) != KERN_SUCCESS)
-        {
-            return 0;
-        }
+        var kr = SmcCall(conn, &input, &output);
+        value = kr == KERN_SUCCESS ? DecodeValue(output.bytes, dataType, dataSize) : 0;
+        return kr;
+    }
 
-        var bytes = output.bytes;
+    private static unsafe double DecodeValue(byte* bytes, uint dataType, uint dataSize)
+    {
         if ((dataType == DATA_TYPE_FLT) && (dataSize == 4))
         {
             return BinaryPrimitives.ReadSingleLittleEndian(new ReadOnlySpan<byte>(bytes, 4));
