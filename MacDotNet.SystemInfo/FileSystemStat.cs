@@ -1,6 +1,7 @@
 namespace MacDotNet.SystemInfo;
 
 using System.Runtime.InteropServices;
+using System.Text;
 
 using static MacDotNet.SystemInfo.NativeMethods;
 
@@ -37,6 +38,9 @@ public enum MountOption
 public sealed class FileSystemEntry
 {
     internal bool Live { get; set; }
+
+    // UTF-8 bytes of MountPoint without the NUL (an entry is found by them without creating a string)
+    internal byte[] MountPointBytes { get; }
 
     // Identity
 
@@ -80,9 +84,10 @@ public sealed class FileSystemEntry
 
     public uint OwnerUid { get; internal set; }
 
-    internal FileSystemEntry(string mountPoint, string fileSystem, string deviceName, string? diskBsdName)
+    internal FileSystemEntry(ReadOnlySpan<byte> mountPoint, string fileSystem, string deviceName, string? diskBsdName)
     {
-        MountPoint = mountPoint;
+        MountPointBytes = mountPoint.ToArray();
+        MountPoint = Encoding.UTF8.GetString(mountPoint);
         FileSystem = fileSystem;
         DeviceName = deviceName;
         DiskBsdName = diskBsdName;
@@ -94,6 +99,9 @@ public sealed class FileSystemStat : IDisposable
     private readonly bool includeAll;
 
     private readonly List<FileSystemEntry> entries = [];
+
+    // Buffer for getfsstat (reused, grown when there are more file systems)
+    private byte[] buffer = [];
 
     private bool disposed;
 
@@ -132,10 +140,16 @@ public sealed class FileSystemStat : IDisposable
             return false;
         }
 
-        var buf = (statfs*)NativeMemory.Alloc((UIntPtr)count, (UIntPtr)sizeof(statfs));
-        try
+        var size = count * sizeof(statfs);
+        if (buffer.Length < size)
         {
-            var actual = getfsstat(buf, count * sizeof(statfs), MNT_NOWAIT);
+            buffer = new byte[size];
+        }
+
+        fixed (byte* ptr = buffer)
+        {
+            var buf = (statfs*)ptr;
+            var actual = getfsstat(buf, size, MNT_NOWAIT);
             if (actual <= 0)
             {
                 return false;
@@ -150,18 +164,20 @@ public sealed class FileSystemStat : IDisposable
             count = Math.Min(actual, count);
             for (var i = 0; i < count; i++)
             {
+                // Unless includeAll, only Local and not DontBrowse (bitwise operations: HasFlag boxes in unoptimized code)
                 var option = (MountOption)buf[i].f_flags;
-                if (!includeAll && !(option.HasFlag(MountOption.Local) && !option.HasFlag(MountOption.DontBrowse)))
+                if (!includeAll && (((option & MountOption.Local) == 0) || ((option & MountOption.DontBrowse) != 0)))
                 {
                     continue;
                 }
 
-                var mountPoint = Marshal.PtrToStringUTF8((IntPtr)buf[i].f_mntonname) ?? string.Empty;
+                // Compared as bytes (the strings are created only for a new entry)
+                var mountPoint = GetMountPoint(buf + i);
 
                 var entry = default(FileSystemEntry);
                 foreach (var item in entries)
                 {
-                    if (item.MountPoint == mountPoint)
+                    if (mountPoint.SequenceEqual(item.MountPointBytes))
                     {
                         entry = item;
                         break;
@@ -211,15 +227,19 @@ public sealed class FileSystemStat : IDisposable
 
             return true;
         }
-        finally
-        {
-            NativeMemory.Free(buf);
-        }
     }
 
     //--------------------------------------------------------------------------------
     // Helpers
     //--------------------------------------------------------------------------------
+
+    // f_mntonname up to the NUL (the whole field when there is no NUL)
+    private static unsafe ReadOnlySpan<byte> GetMountPoint(statfs* fs)
+    {
+        var name = new ReadOnlySpan<byte>(fs->f_mntonname, MAXPATHLEN);
+        var length = name.IndexOf((byte)0);
+        return length >= 0 ? name[..length] : name;
+    }
 
     private static string? FindPhysicalDiskBsdName(string devName)
     {

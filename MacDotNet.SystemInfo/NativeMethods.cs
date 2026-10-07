@@ -44,6 +44,9 @@ internal static partial class NativeMethods
     // getfsstat mode flags (sys/mount.h)
     public const int MNT_NOWAIT = 2;  // Asynchronous: return cached values immediately
 
+    // Size of statfs.f_mntonname and f_mntfromname including the terminating NUL (sys/param.h)
+    public const int MAXPATHLEN = 1024;
+
     // sysctl names for the interface MIB (sys/sysctl.h, sys/socket.h, net/if_mib.h)
     public const int CTL_NET = 4;
     public const int PF_LINK = 18;
