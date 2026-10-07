@@ -96,7 +96,7 @@ internal static partial class NativeMethods
     public const int kIOReturnSuccess = 0;
 
     // Errors treated as a lost SMC connection (reopen).
-    // Candidates; to be confirmed by the sleep/wake test (M0-3).
+    // The connection survives sleep and wake (M0-3); these cover a connection lost in other ways, such as a driver restart.
     public const int MACH_SEND_INVALID_DEST = 0x10000003;            // mach/message.h
     public const int kIOReturnNotOpen = unchecked((int)0xE00002CD);  // IOKit/IOReturn.h
     public const int kIOReturnNoDevice = unchecked((int)0xE00002C0); // IOKit/IOReturn.h

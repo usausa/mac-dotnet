@@ -438,7 +438,7 @@ public sealed class SmcMonitor : IDisposable
     //--------------------------------------------------------------------------------
 
     // Errors that mean the connection itself is no longer usable.
-    // Candidates; to be confirmed by the sleep/wake test (M0-3).
+    // The connection survives sleep and wake (M0-3); these cover a connection lost in other ways, such as a driver restart.
     private static bool IsConnectionError(int kr) => kr is MACH_SEND_INVALID_DEST or kIOReturnNotOpen or kIOReturnNoDevice;
 
     // The SMC helpers return the kern_return of the call (output values are 0 on failure)
