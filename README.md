@@ -353,7 +353,6 @@ foreach (var nif in network.Interfaces.Where(static x => x.IsEnabled))
 using var summary = PlatformProvider.GetProcessSummary();
 Console.WriteLine($"Process Count:   {summary.ProcessCount}");
 Console.WriteLine($"Thread Count:    {summary.ThreadCount}");
-Console.WriteLine($"Open File Count: {summary.OpenFileCount}");
 
 var processes = PlatformProvider.GetProcesses();
 foreach (var p in processes.OrderBy(static p => p.ProcessId))
