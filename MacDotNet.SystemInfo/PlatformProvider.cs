@@ -69,7 +69,7 @@ public static class PlatformProvider
     // GPU
     //--------------------------------------------------------------------------------
 
-    // Each element must be disposed
+    // Each element must be disposed. A device whose first update fails is not included (get the devices again to see it later)
     public static IReadOnlyList<GpuDevice> GetGpuDevices() => GpuDevice.GetDevices();
 
     //--------------------------------------------------------------------------------

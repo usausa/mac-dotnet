@@ -394,6 +394,8 @@ foreach (var device in devices)
 }
 ```
 
+A device whose performance statistics cannot be read at creation is not listed (get the devices again to see it later).
+
 ### Power Consumption
 
 ```csharp
@@ -514,6 +516,7 @@ foreach (var fan in monitor.Fans)
 
 Update reads every sensor key (several hundred keys, about 0.1-0.2 ms each), so it can take around 100 ms.
 When only some sensors are needed, pass a filter of the sensor keys. Keys not selected are not read by Update (fans are always read).
+A sensor or a fan whose first read fails is not listed.
 
 ```csharp
 using var monitor = PlatformProvider.GetSmcMonitor(static key => key is "TCMb" or "TPSD" or "PDTR");

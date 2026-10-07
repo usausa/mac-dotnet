@@ -217,8 +217,13 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
+                // A sensor whose first read fails is not added (create the monitor again to see it later)
+                if (ReadSensorValue(conn, key, dataType, dataSize, out var value) != KERN_SUCCESS)
+                {
+                    continue;
+                }
+
                 var dataTypeStr = ToKeyString(dataType);
-                _ = ReadSensorValue(conn, key, dataType, dataSize, out var value);
                 switch (firstChar)
                 {
                     case 'T':
@@ -296,10 +301,14 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
-                _ = ReadSensorValue(conn, ac, acType, acSize, out var actualRpm);
-                _ = ReadSensorValue(conn, mn, mnType, mnSize, out var minRpm);
-                _ = ReadSensorValue(conn, mx, mxType, mxSize, out var maxRpm);
-                _ = ReadSensorValue(conn, tg, tgType, tgSize, out var targetRpm);
+                // A fan is not added when the first read of any of its keys fails
+                if ((ReadSensorValue(conn, ac, acType, acSize, out var actualRpm) != KERN_SUCCESS) ||
+                    (ReadSensorValue(conn, mn, mnType, mnSize, out var minRpm) != KERN_SUCCESS) ||
+                    (ReadSensorValue(conn, mx, mxType, mxSize, out var maxRpm) != KERN_SUCCESS) ||
+                    (ReadSensorValue(conn, tg, tgType, tgSize, out var targetRpm) != KERN_SUCCESS))
+                {
+                    continue;
+                }
 
                 var fan = new FanSensor(i, ac, acType, acSize, mn, mnType, mnSize, mx, mxType, mxSize, tg, tgType, tgSize)
                 {
