@@ -622,7 +622,7 @@ ports: start=50 end=48 returned=no
 | H-2 AC アダプタ | N/A | Mac mini（デスクトップ）で、バッテリーも AC アダプタもないため |
 | H-3 USB ストレージ | 実施しない | 任意の項目で、ユーザーの指示で不要とした（2026-10-07） |
 | H-4 外部ディスプレイ | 実施しない | 任意の項目で、ユーザーの指示で不要とした（2026-10-07） |
-| H-5 24時間（fd / port / RSS / 失敗数） | 実行中（2026-10-07 11:16 開始、pid 8974）。ユーザーの指示で約 3 時間に短縮し、14:16 に SIGTERM で止める | `longrun.csv` に 1 回ごとの fd 数と port 数、`longrun-rss.log` に 10 分ごとの RSS を記録している。`BatteryDevice` はバッテリーがないため毎回 false になる（N/A） |
+| H-5 24時間（fd / port / RSS / 失敗数） | 1 回目（2026-10-07 11:16〜14:16、9,450 回）: fd、port、失敗数は満たす。**RSS は 57.1 → 85.2 MB で増え続けた**。原因は以前からある NetworkStat のリークで、ef59ee7 で直した。修正後のバイナリで 2 回目を行う | ユーザーの指示で、24 時間ではなく約 3 時間にした。1 回目の詳細は §判定・メモ「H-5 の 1 回目の結果」 |
 
 ### 判定・メモ
 
@@ -676,7 +676,7 @@ ports: start=50 end=48 returned=no
 - **保持したハンドルは `IOObj` を通さない**: `new IOObj(held.Value)` を `using` なしで作ると CA2000 が出るため、`GpuDevice` は保持しているエントリに対して `IORegistryEntryCreateCFProperty` を直接呼び、戻り値の辞書だけを `using CFRef` で包んでいる。
 - **後で検討する課題**
   - `NetworkStat` は `Update()` のたびに SCPreferences を作り直している（`RefreshEnabledState`）。4.27 ms の大半はこれと思われる。指示書では保持の対象外（None）なので、今回は変えていない。
-  - README の Process の例にある `summary.OpenFileCount` は、`ProcessSummary` に存在しないプロパティ（以前からの誤り）。
+  - README の Process の例にある `summary.OpenFileCount` は、`ProcessSummary` に存在しないプロパティ（以前からの誤り）。→ 2026-10-07 ユーザーの指示で削除した（コミット 74b68ff）。SystemInfo の使用例をすべてコンパイルして調べ、ほかに誤りはなかった。
 
 #### Phase 3 の結果（2026-10-07）
 
@@ -763,4 +763,53 @@ ports: start=50 end=48 returned=no
   - 何も選ばない: センサーは空で、`Update()` は true を返す（ファンの 4 キーだけを読む）。
   - `Update()` を 20 回: 全キーは平均 87.6 ms（最小 66.1 ms）、10 キーは平均 3.06 ms（最小 1.41 ms）、ファンだけは平均 1.10 ms。失敗は 0。
   - 作成時間: 10 キーで 8.6 ms、`T` だけで 52.2 ms。index からキーを得る呼び出し（1,355 回）は速く、時間がかかるのはキー情報と値の読み込み。
-- ベンチマーク（`SmcFilterBenchmark`）は、H-5 が終わった後に計測する。
+- **ベンチマーク**（`SmcFilterBenchmark`、H-5 の後に計測。`Document/HandleReuse/results/benchmark-smc-filter.md`）: 全キーは 106.96 ms、MacStatDisplay の 10 キーだけなら 3.47 ms（−96.8%）。どちらも割り当ては 0 B。
+
+#### NetworkStat のリークの修正（2026-10-07、H-5 で見つけた以前からの不具合。ユーザーの指示で案 B を実装）
+
+- **見つけた経緯**: H-5（約 1.1 秒間隔の連続稼働）で、fd と port は一定なのに、RSS が 2 時間で 57 MB → 80 MB に増えた。
+- **原因の切り分け**: scratch のツール（リポジトリの外。コミットしない）で調べた。
+  - クラスごとに `Update()` を数千回呼び、`malloc_zone_statistics` で使用中のブロック数を数えた。回数に比例して増え続けたのは `NetworkStat` だけで、1 回あたり約 45〜49 ブロック（約 2 KB）だった。変更前のライブラリ（main）でも同じだった。
+  - `DiskStat` と `MainsDevice` も最初は増えたが、合計で 2,400〜2,800 ブロックほどで止まる。初回だけのキャッシュで、リークではない。
+  - `Update()` を `objc_autoreleasePoolPush` と `objc_autoreleasePoolPop` で囲むと、増加は 1.1 ブロックに下がった。SystemConfiguration が autorelease したオブジェクトが、.NET のスレッドには autorelease pool がないため、スレッドが終わるまで解放されずに残っていた。
+  - 関数ごとに分けて測ると（サービス 8 個）、原因は `SCNetworkServiceGetInterface` だった（48 ブロック、4.4 ms）。`Update()` の 4.3 ms のほぼすべても、この呼び出しだった。`SCPreferencesCreate` は 7 µs、`SCNetworkServiceCopyAll` は 81 µs、`GetServiceID` と `GetEnabled` だけなら 91 µs。SCPreferences を保持して `SCPreferencesSynchronize` しても、時間もリークも変わらなかった。
+- **修正（コミット ef59ee7。実装は Opus のサブエージェントが行い、監査した）**
+  - `Update()` 全体を autorelease pool で囲む（`AutoreleasePool` を `Handles.cs` に追加）。
+  - `RefreshEnabledState()` は、サービス ID ごとにインターフェースの BSD 名をキャッシュする。`SCNetworkServiceGetInterface` を呼ぶのは、初めて見るサービス ID のときだけにした。
+    - 有効・無効（`SCNetworkServiceGetEnabled`）は、今までどおり毎回読む。
+    - 消えたサービスは、キャッシュから外す。
+    - 保存されたネットワーク設定のシグネチャ（`SCPreferencesGetSignature`）が変わったら、キャッシュを作り直す。サービスが別のインターフェースに結び付け直された場合も、以前と同じ結果になる。
+  - インターフェース名は、毎回 string を作らずに、スタック上でデコードして比べる。string を作るのは、新しいインターフェースのときだけ。
+  - MIB を `stackalloc int[] { ... }` の初期化子で作ると、`RuntimeHelpers.CreateSpan` 経由になり、呼ぶたびに 72 B が割り当てられていた（JIT がこの呼び出しを畳み込んでいなかった）。要素を 1 つずつ代入する形にした。
+- **Mac での確認（修正後）**
+  - malloc のブロックは、5,000 回でも 40,000 回でも合計約 8,000 個（約 350 KB）で止まった。初回だけのキャッシュで、リークではない。
+  - `Update()` は約 0.094 ms（修正前は約 4.3 ms）。マネージドの割り当ては 0 B（修正前は 1,168 B）。
+  - 修正前のバイナリと dump を比べると、NetworkStat の静的な値 31 項目（名前、表示名、種類、`IsEnabled`、`IsHidden`、`IsRegistered`、`IsUp` など）は完全に一致した。dump 全体の 2,217 項目の構成も同じ。
+  - 1 回目の `Update()`（キャッシュが空）と 2〜5 回目（キャッシュを使う）で、`IsEnabled` は同じ値だった。`networksetup -listallnetworkservices` で無効になっている Thunderbolt Bridge は off、Ethernet と Wi-Fi は on で、OS の設定とも一致した。
+  - 同じ書き方（初期化子付きの stackalloc）は、MacDotNet と LinuxDotNet のほかの箇所にはない。
+- **ツールの修正**: `GetSmcMonitor` が省略可能な引数（filter）を持つようになったため、メソッドグループとして `Func<T>` に渡せなくなった。そのため、モニターの `dump` コマンドをラムダの形に直した（ツールなのでコミットしない）。
+
+#### H-5 の 1 回目の結果（2026-10-07 11:16〜14:16、Phase 4 の変更後のバイナリ）
+
+- 9,450 回（約 1.14 秒間隔）。14:16:12 に SIGTERM で止め、loop は Dispose まで正常に終わった。
+- **fd 数**: 9,450 回すべて 50。終了時は 50 → 50 で、開始時に戻った。
+- **Mach port 数**: 9,380 回は 51。開始直後の 4 回が 54、そのあとと途中の数回（3,813 回目付近）が 53。スレッドの増減によるもので、増え続けてはいない。終了時は 50 → 50。
+- **失敗数**: `BatteryDevice` だけ（バッテリーがないため毎回 false。N/A）。ほかは 0。
+- **Update の時間**: 平均 134 ms、最小 80 ms、最大 1,285 ms（1 回だけ）。1 回の割り当ては平均 1,261 B。
+- **RSS**: 57.1 MB で始まり、12:00 以降は 10 分ごとに約 1.04 MB ずつ一定に増えた。14:06 の時点で 85.2 MB。
+  - NetworkStat のリークは 1 回あたり約 2.1 KB で、10 分（約 545 回）なら約 1.1 MB になり、RSS の増え方とほぼ一致する（§「NetworkStat のリークの修正」）。
+
+#### NetworkStat の修正の後のベンチマーク（2026-10-07 14:17〜14:27、ef59ee7）
+
+`Document/HandleReuse/results/benchmark-after-networkstat-fix.md`。Phase 1 と Phase 4 と同じ条件（Mac mini、AC 電源、`caffeinate -i`、BenchmarkDotNet の既定のジョブ）。
+
+| クラス | Phase 4 の after（61081e1） | NetworkStat の修正の後（ef59ee7） |
+|---|---|---|
+| NetworkStat | 4.32 ms / 1,168 B | **87.3 µs / 0 B（−98.0%）** |
+| **All** | 123.0 ms / 1,248 B | **105.3 ms / 80 B**（before の 170.2 ms / 23,992 B から −38.1%） |
+
+- ほかのクラスは、Phase 4 と誤差の範囲で同じ（SmcMonitor 107.3 ms、PowerStat 1.60 ms、CpuFrequency 1.03 ms など）。
+- 残っている割り当ては、`FileSystemStat` の 80 B だけ。マウントポイントごとに、毎回 string を作っている（None のクラス。以前から）。
+- **最適化前のコードによる割り当て**: loop の 1 回あたりの割り当ては、最初の 60 回だけ 2,144 B で、61 回目から 80 B になる。
+  - `FileSystemStat` の `Enum.HasFlag` は、最適化前（Tier-0）の JIT コードではボックス化する（マウント 22 個 × 2 回）。Tier-1 になると、JIT がボックス化をなくす。
+  - 短い計測（0.1 秒未満で終わるもの）では 2,144 B と出るが、定常状態の問題ではない。
