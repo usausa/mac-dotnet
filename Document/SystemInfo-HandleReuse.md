@@ -394,16 +394,16 @@ dotnet ~/handle-reuse/before/monitor/WorkSystemInfoMonitor.dll dump > ~/handle-r
 diff ~/handle-reuse/dump-before2.txt ~/handle-reuse/dump-after.txt
 ```
 
-- [ ] C-1 `dump` の diff を確認した
+- [x] C-1 `dump` の diff を確認した
   - 静的な値（センサーの一覧と件数、GPU 名、バッテリーの設計容量など）は **完全に一致** すること
   - 変動する値は妥当な範囲であること
-- [ ] C-2 OS のツールの値と突き合わせた
+- [x] C-2 OS のツールの値と突き合わせた
   - `vm_stat`、`sysctl vm.swapusage`、`pmset -g batt`
   - `ioreg -rn AppleSmartBattery`
   - `sudo powermetrics --samplers cpu_power,gpu_power -i 1000 -n 3`
-- [ ] C-3 `loop --iterations 10 --interval 1000 --verbose` で、`CpuFrequency`、`PowerStat`、`SmcMonitor`、`GpuDevice` の値が更新され続けることを確認した
-- [ ] C-4 Dispose の挙動を確認した（2回呼んでも例外にならない。Dispose 後の Update で `ObjectDisposedException` になる。終了時に fd 数と port 数が開始時に戻る）
-- [ ] C-5 net8.0 でも C-1 と C-3 を実施した
+- [x] C-3 `loop --iterations 10 --interval 1000 --verbose` で、`CpuFrequency`、`PowerStat`、`SmcMonitor`、`GpuDevice` の値が更新され続けることを確認した
+- [x] C-4 Dispose の挙動を確認した（2回呼んでも例外にならない。Dispose 後の Update で `ObjectDisposedException` になる。終了時に fd 数と port 数が開始時に戻る）
+- [x] C-5 net8.0 でも C-1 と C-3 を実施した
 
 ---
 
@@ -588,9 +588,9 @@ CFDictionaryGetValue(serial number key)            440.4          47.4       0.3
 
 | 項目 | before | after |
 |---|---|---|
-| fd 数（lsof） | 76（5 回とも同じ） | |
-| Mach port 数（lsmp） | 107〜109 | |
-| AppleSMCClient の数 | 7〜8（システム全体の数。変更前は、自プロセスの接続が `Update()` の間だけある） | |
+| fd 数（lsof） | 76（5 回とも同じ） | 76（4 回とも同じ） |
+| Mach port 数（lsmp） | 107〜109 | 111（4 回とも同じ。SMC の接続、GPU のエントリ、host port などを保持する分が増えるが、実行中に増え続けることはない） |
+| AppleSMCClient の数 | 7〜8（システム全体の数。変更前は、自プロセスの接続が `Update()` の間だけある） | 8（4 回とも同じ。接続を保持し続けるため） |
 
 B-3 の loop の集計（`loop --iterations 100 --interval 0`、変更前）:
 
@@ -603,6 +603,16 @@ ports: start=50 end=48 returned=no
 ```
 
 - ports が 50→48 と減ったのは、スレッドの増減によるもの（スレッドごとに port がある）。増えたわけではないので、リークではない。
+
+同じ条件での loop の集計（変更後、`after-sudo-checks.sh` の中で実行）:
+
+```text
+update_us: avg=108494.2 min=83679.5 max=155428.0
+alloc_bytes: avg=2486.4 per iteration
+false count per target: total=100 （BatteryDevice=100。ほかは 0）
+fd: start=49 end=49 returned=yes
+ports: start=50 end=48 returned=no
+```
 
 ### スリープ・抜き差し・長時間稼働
 
@@ -667,3 +677,24 @@ ports: start=50 end=48 returned=no
 - **後で検討する課題**
   - `NetworkStat` は `Update()` のたびに SCPreferences を作り直している（`RefreshEnabledState`）。4.27 ms の大半はこれと思われる。指示書では保持の対象外（None）なので、今回は変えていない。
   - README の Process の例にある `summary.OpenFileCount` は、`ProcessSummary` に存在しないプロパティ（以前からの誤り）。
+
+#### Phase 3 の結果（2026-10-07）
+
+- **C-1 / C-5（dump の diff）**: net10.0 と net8.0 のどちらも、変更前と変更後の dump は同じ 2,217 行で、片方にしかない項目はない。
+  - 違いは、値が変わって当然の項目だけ（センサーの値、CPU の tick、メモリ・ネットワーク・ディスクのカウンタ、空き容量、時刻、周波数）。
+  - 名前、件数、キー、説明、データ型、GPU 名などは完全に一致した。
+  - 累積カウンタ 77 個は、すべて「後 ≥ 前」だった（net10.0）。
+- **C-2（OS のツールとの突き合わせ）**
+  - `vm_stat` とほぼ一致した（差は取った時刻のずれの分）。`vm_stat` の「Pages free」は free から speculative を引いた値なので、`FreeCount` から `SpeculativeCount` を引いて比べると一致する（以前からの定義の違い）。
+  - `sysctl vm.swapusage`（swap は 0）、`pmset -g batt`（AC Power）とも一致した。
+  - AppleSmartBattery のサービスはあるが、`BatteryInstalled = No` なので `BatteryDevice.Supported=False` で正しい。
+  - powermetrics（`after-sudo-checks.sh` で、変更後の loop を動かしながら 3 秒取得）とも、だいたい合っている。
+    - E クラスタの周波数は、こちらが 1,078〜1,322 MHz（E コア4つの平均）、powermetrics が 1,013〜1,084 MHz。P もほぼ同じ範囲。
+    - `PowerStat.Cpu` は M0-2 と同じ動きだった。止まっていた値が、powermetrics を始めたときにまとめて増え（+383 J）、そのあと1秒ごとの増え方は powermetrics の CPU Power とほぼ一致した（264 mJ と 270 mW、49 mJ と 48 mW）。powermetrics が終わると、また止まった。
+    - GPU のエネルギーは毎回増えていて、増え方（約 0.4〜1.8 mW）は powermetrics の GPU Power（0〜1 mW）と合っている。
+- **C-3 / C-5（loop --verbose、10 回）**: net10.0 と net8.0 のどちらも、`CpuFrequency`（E コアの周波数）、`SmcMonitor`（温度）、`PowerStat`（GPU のエネルギー）、`GpuDevice` の値が毎回更新された。
+  - subscription を作った直後に subscribed channels を解放しても、値は更新される。
+  - 1回の割り当ては 3,312 B（変更前の loop は約 25,353 B）。失敗は `BatteryDevice`（バッテリーなし）だけ。
+- **C-4（Dispose）**: 17 個のオブジェクトすべてで、`Dispose()` を2回呼んでも例外にならず、Dispose 後の `Update()` は `ObjectDisposedException` になった。
+  - loop の終了時、fd 数は開始時と同じ（49 → 49）。
+  - port 数は 50 → 49 と1つ減った（スレッドの増減によるもので、増えてはいない）。
