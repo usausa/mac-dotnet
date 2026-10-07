@@ -133,12 +133,12 @@ public sealed class SmcMonitor : IDisposable
 
 規則:
 
-- [ ] コンストラクタは `private` にする。`PlatformProvider.GetXxx()` からは `Xxx.Create()` を呼ぶ
-- [ ] **ファクトリはオープン失敗で例外を投げない**。常に null でないインスタンスを返し、失敗は `Update()` の戻り値 `false`（または既存の `Supported`）で表す
-- [ ] `Dispose()` は何度呼んでもよい（冪等）。Dispose 後に `Update()` を呼んだら `ObjectDisposedException` を投げる
-- [ ] 保持するネイティブリソースは **SafeHandle の派生クラス** で持つ（§4.2）。これで Dispose 漏れはファイナライザが回収する。クラス自身にはファイナライザを実装しない
-- [ ] 保持するリソースがないクラスも同じ形にする。`Dispose()` では `disposed = true` だけを行う
-- [ ] スナップショット型は `IDisposable` にしない。ファクトリ化だけ行う
+- [x] コンストラクタは `private` にする。`PlatformProvider.GetXxx()` からは `Xxx.Create()` を呼ぶ
+- [x] **ファクトリはオープン失敗で例外を投げない**。常に null でないインスタンスを返し、失敗は `Update()` の戻り値 `false`（または既存の `Supported`）で表す
+- [x] `Dispose()` は何度呼んでもよい（冪等）。Dispose 後に `Update()` を呼んだら `ObjectDisposedException` を投げる
+- [x] 保持するネイティブリソースは **SafeHandle の派生クラス** で持つ（§4.2）。これで Dispose 漏れはファイナライザが回収する。クラス自身にはファイナライザを実装しない
+- [x] 保持するリソースがないクラスも同じ形にする。`Dispose()` では `disposed = true` だけを行う
+- [x] スナップショット型は `IDisposable` にしない。ファクトリ化だけ行う
 
 ### 4.2 SafeHandle 型（`Handles.cs` に追加）
 
@@ -431,8 +431,8 @@ after のモニターを `loop --interval 1000 --verbose --log` で動かしな�
   - 例外が出ないこと
   - `AppleSMCClient` の数が増え続けないこと
 - [x] H-2 （MacBook のみ）**AC アダプタの抜き差し**で、`MainsDevice` と `BatteryDevice` の値が切り替わる
-- [ ] H-3 （任意）**USB ストレージの抜き差し**で、`DiskStat` と `FileSystemStat` にデバイスが追加・削除される（回帰確認）
-- [ ] H-4 （任意）**外部ディスプレイの抜き差し** の前後で、`GpuDevice` が例外を出さずに値を取れる
+- [ ] H-3 （任意）**USB ストレージの抜き差し**で、`DiskStat` と `FileSystemStat` にデバイスが追加・削除される（回帰確認） → 実施しない（2026-10-07 ユーザー指示）
+- [ ] H-4 （任意）**外部ディスプレイの抜き差し** の前後で、`GpuDevice` が例外を出さずに値を取れる → 実施しない（2026-10-07 ユーザー指示）
 - [ ] H-5 **24時間連続稼働**（アイドルスリープを防ぐため `caffeinate -i` を付ける）
 
 ```bash
