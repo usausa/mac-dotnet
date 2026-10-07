@@ -88,5 +88,6 @@ public static class PlatformProvider
     // Sensor
     //--------------------------------------------------------------------------------
 
-    public static SmcMonitor GetSmcMonitor() => SmcMonitor.Create();
+    // filter selects the sensor keys (T/V/P/I, such as "TCMb") to read; null reads all keys. Fans are always read
+    public static SmcMonitor GetSmcMonitor(Func<string, bool>? filter = null) => SmcMonitor.Create(filter);
 }

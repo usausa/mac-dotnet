@@ -510,6 +510,17 @@ foreach (var fan in monitor.Fans)
 }
 ```
 
+Update reads every sensor key (several hundred keys, about 0.1-0.2 ms each), so it can take around 100 ms.
+When only some sensors are needed, pass a filter of the sensor keys. Keys not selected are not read by Update (fans are always read).
+
+```csharp
+using var monitor = PlatformProvider.GetSmcMonitor(static key => key is "TCMb" or "TPSD" or "PDTR");
+foreach (var s in monitor.Temperatures)
+{
+    Console.WriteLine($"{s.Key} ({s.Description}): {s.Value:F1} C");
+}
+```
+
 # 🌐Link
 
 - [LinuxDotNet](https://github.com/usausa/linux-dotnet)

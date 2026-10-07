@@ -183,7 +183,7 @@ public sealed class SmcMonitor : IDisposable
     // Constructor
     //--------------------------------------------------------------------------------
 
-    private SmcMonitor()
+    private SmcMonitor(Func<string, bool>? filter)
     {
         // When the connection cannot be opened, the sensor lists stay empty (Update tries to open it)
         if (connection.Open())
@@ -205,12 +205,18 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
+                // Keys not selected by the filter are neither added nor read
+                var keyStr = ToKeyString(key);
+                if ((filter is not null) && !filter(keyStr))
+                {
+                    continue;
+                }
+
                 if ((SmcReadKeyInfo(conn, key, out var dataSize, out var dataType) != KERN_SUCCESS) || (dataSize == 0))
                 {
                     continue;
                 }
 
-                var keyStr = ToKeyString(key);
                 var dataTypeStr = ToKeyString(dataType);
                 _ = ReadSensorValue(conn, key, dataType, dataSize, out var value);
                 switch (firstChar)
@@ -310,7 +316,7 @@ public sealed class SmcMonitor : IDisposable
         UpdateAt = DateTime.Now;
     }
 
-    internal static SmcMonitor Create() => new();
+    internal static SmcMonitor Create(Func<string, bool>? filter) => new(filter);
 
     public void Dispose()
     {
