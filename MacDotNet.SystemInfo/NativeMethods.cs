@@ -850,10 +850,10 @@ internal static partial class NativeMethods
             return 0;
         }
 
-        int value;
-        var len = (IntPtr)sizeof(int);
         fixed (int* name = mib)
         {
+            int value;
+            var len = (IntPtr)sizeof(int);
             return sysctl(name, (uint)mib.Length, &value, ref len, IntPtr.Zero, IntPtr.Zero) == 0 ? value : 0;
         }
     }
