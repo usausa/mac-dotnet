@@ -433,7 +433,7 @@ after のモニターを `loop --interval 1000 --verbose --log` で動かしな�
 - [x] H-2 （MacBook のみ）**AC アダプタの抜き差し**で、`MainsDevice` と `BatteryDevice` の値が切り替わる
 - [ ] H-3 （任意）**USB ストレージの抜き差し**で、`DiskStat` と `FileSystemStat` にデバイスが追加・削除される（回帰確認） → 実施しない（2026-10-07 ユーザー指示）
 - [ ] H-4 （任意）**外部ディスプレイの抜き差し** の前後で、`GpuDevice` が例外を出さずに値を取れる → 実施しない（2026-10-07 ユーザー指示）
-- [ ] H-5 **24時間連続稼働**（アイドルスリープを防ぐため `caffeinate -i` を付ける）
+- [x] H-5 **24時間連続稼働**（アイドルスリープを防ぐため `caffeinate -i` を付ける）
 
 ```bash
 nohup caffeinate -i dotnet ~/handle-reuse/after/monitor/WorkSystemInfoMonitor.dll loop --iterations 86400 --interval 1000 --log ~/handle-reuse/longrun.csv > ~/handle-reuse/longrun.out 2>&1 &
@@ -623,7 +623,7 @@ ports: start=50 end=48 returned=no
 | H-2 AC アダプタ | N/A | Mac mini（デスクトップ）で、バッテリーも AC アダプタもないため |
 | H-3 USB ストレージ | 実施しない | 任意の項目で、ユーザーの指示で不要とした（2026-10-07） |
 | H-4 外部ディスプレイ | 実施しない | 任意の項目で、ユーザーの指示で不要とした（2026-10-07） |
-| H-5 24時間（fd / port / RSS / 失敗数） | 1 回目（2026-10-07 11:16〜14:16、9,450 回）: fd、port、失敗数は満たす。**RSS は 57.1 → 85.2 MB で増え続けた**。原因は以前からある NetworkStat のリークで、ef59ee7 で直した。修正後のバイナリで 2 回目を行う | ユーザーの指示で、24 時間ではなく約 3 時間にした。1 回目の詳細は §判定・メモ「H-5 の 1 回目の結果」 |
+| H-5 24時間（fd / port / RSS / 失敗数） | 満たす（2 回目、NetworkStat の修正後）。1 回目（修正前）は RSS が増え続けた | ユーザーの指示で、24 時間ではなく 2 時間で十分とした。2 回目（14:27〜16:27、6,394 回）は fd 50、port 51 で一定、失敗は BatteryDevice（N/A）だけ。RSS は 50 分で 68.5 MB になった後ほぼ横ばい。詳細は §判定・メモ「H-5 の 2 回目の結果」 |
 
 ### 判定・メモ
 
@@ -853,3 +853,16 @@ ports: start=50 end=48 returned=no
 - `SmcMonitor` は、最初の値の読み込みに失敗したセンサー（T/V/P/I）と、4 つのキーのどれかで失敗したファンを、一覧に入れない。
 - `PlatformProvider.GetGpuDevices()` のコメントと README に追記した。
 - Mac での確認: GPU は 1 台（AGXAcceleratorG14X）、SMC は T 218、V 52、P 74、I 75、ファン 1 で、変更前と同じ。
+
+#### H-5 の 2 回目の結果（2026-10-07 14:27〜16:27、NetworkStat の修正後のバイナリ）
+
+- ef59ee7 の時点のライブラリで publish したモニター（`after2`）で行った。ユーザーの指示で、2 時間で SIGTERM により止めた（loop は Dispose まで正常に終わった）。
+- 6,394 回（約 1.13 秒間隔）。
+- **fd 数**: すべて 50。終了時は 50 → 50。
+- **Mach port 数**: 6,319 回は 51。開始直後の 4 回が 54、途中の 71 回が 53（スレッドの増減）。増え続けてはいない。終了時は 50 → 50。
+- **失敗数**: `BatteryDevice` だけ（バッテリーがないため。N/A）。ほかは 0。
+- **RSS**
+  - 最初の 50 分で 56.6 → 68.5 MB（JIT とヒープの初期化）。
+  - 15:17〜15:57 は 68,464 KB のまま変わらなかった。16:07 と 16:17 は 68,592 KB と 68,672 KB（+208 KB、0.3%）。
+  - 1 回目（修正前）は、同じ時間帯に 10 分ごとに約 1 MB ずつ増え続けた。2 回目はほぼ横ばいなので、NetworkStat のリークは直った。
+- **Update の時間**: 平均 118 ms（全キーを読む SmcMonitor が大半）。1 回の割り当ては平均 99 B。最初の 60 回は Tier-0 の 2,144 B で、その後は FileSystemStat の 80 B（このバイナリは 78d607e より前）。
