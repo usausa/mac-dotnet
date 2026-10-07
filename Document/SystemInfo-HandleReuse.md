@@ -409,9 +409,9 @@ diff ~/handle-reuse/dump-before2.txt ~/handle-reuse/dump-after.txt
 
 ## 📊 Phase 4: 性能比較（変更後）
 
-- [ ] P-1 Phase 1 と同じ条件でベンチマークを実行し、`Document/HandleReuse/results/benchmark-after.md` に保存した
-- [ ] P-2 結果記録の「性能比較」表に記入した
-- [ ] P-3 判定基準（下記）を確認し、満たさない項目があれば原因を調べて記録した
+- [x] P-1 Phase 1 と同じ条件でベンチマークを実行し、`Document/HandleReuse/results/benchmark-after.md` に保存した
+- [x] P-2 結果記録の「性能比較」表に記入した
+- [x] P-3 判定基準（下記）を確認し、満たさない項目があれば原因を調べて記録した
 
 | 判定基準 | 内容 |
 |---|---|
@@ -565,24 +565,24 @@ CFDictionaryGetValue(serial number key)            440.4          47.4       0.3
 
 | クラス | before | after | 改善率 |
 |---|---|---|---|
-| CpuStat | 5.02 µs / 0 B | | |
-| MemoryStat | 1.98 µs / 0 B | | |
-| SwapUsage | 618 ns / 0 B | | |
-| LoadAverage | 313 ns / 0 B | | |
-| Uptime | 674 ns / 0 B | | |
-| FileHandleStat | 1.65 µs / 0 B | | |
-| DiskStat | 333 µs / 0 B | | |
-| FileSystemStat | 8.51 µs / 80 B | | |
-| NetworkStat | 4.27 ms / 1,168 B | | |
-| ProcessSummary | 568 µs / 0 B | | |
-| CpuFrequency | 37.3 ms / 400 B | | |
-| GpuDevices | 29.1 µs / 0 B | | |
-| PowerStat | 39.7 ms / 22,304 B | | |
-| PowerManagementStat | 191 µs / 0 B | | |
-| BatteryDevice | 0.68 ns / 0 B（バッテリーなしで即 false。N/A） | | |
-| MainsDevice | 163 µs / 40 B | | |
-| SmcMonitor | 108.7 ms / 0 B | | |
-| **All** | **170.2 ms / 23,992 B** | | |
+| CpuStat | 5.02 µs / 0 B | 4.61 µs / 0 B | −8.2% |
+| MemoryStat | 1.98 µs / 0 B | 1.02 µs / 0 B | −48.3% |
+| SwapUsage | 618 ns / 0 B | 308 ns / 0 B | −50.1% |
+| LoadAverage | 313 ns / 0 B | 313 ns / 0 B | +0.1% |
+| Uptime | 674 ns / 0 B | 334 ns / 0 B | −50.5% |
+| FileHandleStat | 1.65 µs / 0 B | 757 ns / 0 B | −54.2% |
+| DiskStat | 333 µs / 0 B | 326 µs / 0 B | −2.4% |
+| FileSystemStat | 8.51 µs / 80 B | 8.49 µs / 80 B | −0.2% |
+| NetworkStat | 4.27 ms / 1,168 B | 4.32 ms / 1,168 B | +1.1% |
+| ProcessSummary | 568 µs / 0 B | 571 µs / 0 B | +0.4% |
+| CpuFrequency | 37.3 ms / 400 B | 1.03 ms / 0 B | −97.2% |
+| GpuDevices | 29.1 µs / 0 B | 21.9 µs / 0 B | −24.7% |
+| PowerStat | 39.7 ms / 22,304 B | 1.60 ms / 0 B | −96.0% |
+| PowerManagementStat | 191 µs / 0 B | 185 µs / 0 B | −3.2% |
+| BatteryDevice | 0.68 ns / 0 B（バッテリーなしで即 false。N/A） | 0.39 ns / 0 B（N/A） | N/A |
+| MainsDevice | 163 µs / 40 B | 163 µs / 0 B | −0.0%（割り当ては 40 B → 0 B） |
+| SmcMonitor | 108.7 ms / 0 B | 107.2 ms / 0 B | −1.3% |
+| **All** | **170.2 ms / 23,992 B** | **123.0 ms / 1,248 B** | **−27.7%（割り当ては −94.8%）** |
 
 ### リソース数（定常状態）
 
@@ -698,3 +698,16 @@ ports: start=50 end=48 returned=no
 - **C-4（Dispose）**: 17 個のオブジェクトすべてで、`Dispose()` を2回呼んでも例外にならず、Dispose 後の `Update()` は `ObjectDisposedException` になった。
   - loop の終了時、fd 数は開始時と同じ（49 → 49）。
   - port 数は 50 → 49 と1つ減った（スレッドの増減によるもので、増えてはいない）。
+
+#### Phase 4 の判定（2026-10-07）
+
+| 判定基準 | 結果 |
+|---|---|
+| 悪化なし（+5% 以内） | 満たす。悪化した最大は NetworkStat の +1.1%（ProcessSummary +0.4%、LoadAverage +0.1%）。どれも、保持の対象外（None）のクラスで、誤差の範囲 |
+| ◎クラス（30% 以上改善） | CpuFrequency −97.2%、PowerStat −96.0% は満たす。**SmcMonitor は −1.3% で未達** |
+| 割り当て（Hold / Cache は減る） | 満たす。CpuFrequency 400 B → 0 B、PowerStat 22,304 B → 0 B、MainsDevice 40 B → 0 B。ほかの Hold / Cache のクラスは変更前から 0 B で、増えていない。All は 23,992 B → 1,248 B（残りは None の FileSystemStat 80 B と NetworkStat 1,168 B） |
+| リソース（増えていない） | 満たす。計測中の AppleSMCClient は 8、Mach port は 111 で一定（変更前は 7〜8、107〜109）。保持する分だけ一定量増えるが、増え続けることはない |
+
+- **SmcMonitor が未達の理由**: `Update()` は 423 個のキーを読み、1つの読み込みに約 190 µs かかる（1回で約 107 ms）。接続を保持して減るのは開き直しの約 0.65 ms だけなので、改善は約 1% にとどまる（M0-1 の見込みどおり）。悪化はしていないので、指示書どおり採用する。大きく減らすには読むキーを絞る必要があり、ユーザーの指示で後で検討する。
+- **全体**: 1回のスクレイプに相当する All は、170.2 ms → 123.0 ms（−27.7%）、割り当ては −94.8%。loop（`--iterations 100 --interval 0`）でも、172.5 ms → 108.5 ms、25,353 B → 2,486 B。
+- ベンチマークは、Phase 1 と同じ条件（Mac mini、AC 電源、`caffeinate -i`、BenchmarkDotNet の既定のジョブ）で実行した。
