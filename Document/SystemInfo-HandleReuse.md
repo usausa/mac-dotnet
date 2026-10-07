@@ -471,6 +471,7 @@ nohup caffeinate -i dotnet ~/handle-reuse/after/monitor/WorkSystemInfoMonitor.dl
 - **CFString キーのキャッシュ**: プロセスが終わるまで解放しません（`CFSTR` と同じ扱い）。数十個程度の定数に限ります。
 - **スレッド安全性**: 非スレッドセーフです（D2）。同じインスタンスに対して `Update()` を並行して呼ばないでください。
 - **Intel Mac**: 検証の対象外です（D8）。
+- **作成時に失敗した一覧の要素**（2026-10-07 ユーザー決定。726c4b9）: 性能統計を読めない GPU デバイスと、最初の読み込みに失敗した SMC のセンサーとファンは、一覧に含めません。後から現れたものを使うには、利用側がオブジェクトを作り直します。
 
 ---
 
@@ -813,3 +814,42 @@ ports: start=50 end=48 returned=no
 - **最適化前のコードによる割り当て**: loop の 1 回あたりの割り当ては、最初の 60 回だけ 2,144 B で、61 回目から 80 B になる。
   - `FileSystemStat` の `Enum.HasFlag` は、最適化前（Tier-0）の JIT コードではボックス化する（マウント 22 個 × 2 回）。Tier-1 になると、JIT がボックス化をなくす。
   - 短い計測（0.1 秒未満で終わるもの）では 2,144 B と出るが、定常状態の問題ではない。
+
+#### 検討事項の結論（2026-10-07 ユーザー決定）
+
+**CPU Energy が powermetrics の実行中しか更新されない件**
+
+- **原因**: macOS 27 で OS の挙動が変わった。ライブラリの不具合ではない。
+  - Energy Model の mJ 単位のカウンタ（CPU Energy、クラスタごとの値、DRAM、ANE など）は、private な entitlement（`com.apple.private.pmgr.nrg.reporting` と推定）を持つ powermetrics がサンプリングしたときだけ更新される。
+  - root ではこの entitlement の代わりにならない（調査では `sudo macmon` でも更新されない）。
+  - macmon、Stats、mactop などの主なツールも、同じ問題を抱えている。（サブエージェントによる調査。出典は各プロジェクトの issue とソース）
+- **この Mac（M2 Pro、macOS 27.0.1）での確認**
+  - 購読の組み方（Energy Model だけ、CPU Stats と合わせる、すべてのチャネル）を変えても、179 チャネルのうち動くのは GPU Energy だけだった。
+  - 15 分間（14:50〜15:05）、CPU Energy は一度も更新されなかった。
+- **ほかの取り方**
+  - PMP の Energy ヒストグラム（mactop などが M5 で使う）は、この Mac にはない。PMP にあるのは、性能カウンタ（Core Block Slot、Stall）のヒストグラムだけ。
+  - AppleCLPC の隠しカウンタ（macmon。2026-10-05 に追加され、未リリース）は、チップと OS ごとに、カーネルを解析した ID 表が要るので、ライブラリには向かない。
+  - SMC の電力キーには、CPU の負荷に連動するものがある（PHPC、PSVR、PSVC、PZC0、PZC1 など）。ただし、意味が機種ごとに違い、CPU 単体の値かどうか確かめられない。
+  - 全プロセスのエネルギーの合計は、終了したプロセスの分が消えるので使えない。
+- **決定**
+  - 値が止まっていることがわかるように、`PowerStat` に `CpuChangedAt`、`GpuChangedAt`、`AneChangedAt`、`RamChangedAt`、`PciChangedAt` を追加した（コミット 26df5b1）。それぞれ、値の変化を最後に観測した時刻。
+    - Mac での確認: CPU の値が止まっている間は `CpuChangedAt` が未設定のままで、`GpuChangedAt` は毎秒更新された。
+  - powermetrics を使う方法（root のサービスで動かし続ける）は保留する。他のアプリケーションが対応したら対応する。
+
+**FileSystemStat の改善（コミット 78d607e）**
+
+- マウントポイントをバイト列のまま比べ、string は新しいエントリのときだけ作るようにした。`getfsstat` のバッファも使い回す。
+- フラグの判定は、`HasFlag`（最適化前のコードでボックス化する）をやめて、ビット演算にした。
+- Mac での確認: Tier-1 になった後の割り当ては 0 B（以前は 80 B）。エントリは再利用され、値も以前と同じ。
+
+**一覧の要素の扱い（D5 の補足）**
+
+- 必ず存在する概念は、常にインスタンスを返す。一覧の要素は、作成時に失敗したものを含めない（ユーザーの決定）。
+- Mac では `GpuDevices`（最初の更新に失敗したデバイス）と `SmcMonitor` のセンサー（最初の値の読み込みに失敗したキー）が対象。実装は別のコミットで行う。
+
+**一覧の要素の扱いの実装（コミット 726c4b9。実装は Sonnet のサブエージェントが行い、監査した）**
+
+- `GpuDevice.GetDevices()` は、作成時に `PerformanceStatistics` を辞書として読めなかったデバイスを Dispose して、一覧に入れない。以前は、値が 0 のまま一覧に出ていた。
+- `SmcMonitor` は、最初の値の読み込みに失敗したセンサー（T/V/P/I）と、4 つのキーのどれかで失敗したファンを、一覧に入れない。
+- `PlatformProvider.GetGpuDevices()` のコメントと README に追記した。
+- Mac での確認: GPU は 1 台（AGXAcceleratorG14X）、SMC は T 218、V 52、P 74、I 75、ファン 1 で、変更前と同じ。
