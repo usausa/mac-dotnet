@@ -421,7 +421,10 @@ Console.WriteLine($"ANE:   {power.Ane - prevAne:F2} W");
 Console.WriteLine($"RAM:   {power.Ram - prevRam:F2} W");
 Console.WriteLine($"PCI:   {power.Pci - prevPci:F2} W");
 Console.WriteLine($"Total: {power.Total - prevTotal:F2} W");
+Console.WriteLine($"CPU changed at: {power.CpuChangedAt}");
 ```
+
+On macOS 27, the CPU, ANE and RAM values are updated only while an entitled sampler such as `powermetrics` runs, so check `CpuChangedAt`, `AneChangedAt` and `RamChangedAt` for stale values.
 
 ### Battery
 

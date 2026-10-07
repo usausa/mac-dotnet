@@ -16,24 +16,41 @@ public sealed class PowerStat : IDisposable
 
     private double[] channelDivisors = [];
 
+    // The properties hold the values of a successful update (the first sample has nothing to compare with)
+    private bool sampled;
+
     private bool disposed;
 
     public bool Supported { get; }
 
+    // XxxChangedAt: the time of the last observed change of Xxx (default until a change is seen; the first sample is not a change).
+    // On macOS 27, the system updates the CPU, ANE and RAM energy only while an entitled sampler such as powermetrics runs,
+    // so an old time means that the value is stale (for ANE, it can also mean that the ANE was not used).
+
     // Cumulative CPU energy consumption (J)
     public double Cpu { get; private set; }
+
+    public DateTime CpuChangedAt { get; private set; }
 
     // Cumulative GPU energy consumption (J)
     public double Gpu { get; private set; }
 
+    public DateTime GpuChangedAt { get; private set; }
+
     // Cumulative ANE (Apple Neural Engine) energy consumption (J)
     public double Ane { get; private set; }
+
+    public DateTime AneChangedAt { get; private set; }
 
     // Cumulative RAM energy consumption (J)
     public double Ram { get; private set; }
 
+    public DateTime RamChangedAt { get; private set; }
+
     // Cumulative PCI energy consumption (J)
     public double Pci { get; private set; }
+
+    public DateTime PciChangedAt { get; private set; }
 
     public double Total => Cpu + Gpu + Ane + Ram + Pci;
 
@@ -144,11 +161,39 @@ public sealed class PowerStat : IDisposable
             }
         }
 
+        // Compared with the previous successful update, also after the channels were classified again (reopened sampler).
+        // Equals is an exact comparison: any update of a counter changes the value.
+        if (sampled)
+        {
+            var now = DateTime.Now;
+            if (!cpuEnergy.Equals(Cpu))
+            {
+                CpuChangedAt = now;
+            }
+            if (!gpuEnergy.Equals(Gpu))
+            {
+                GpuChangedAt = now;
+            }
+            if (!aneEnergy.Equals(Ane))
+            {
+                AneChangedAt = now;
+            }
+            if (!ramEnergy.Equals(Ram))
+            {
+                RamChangedAt = now;
+            }
+            if (!pciEnergy.Equals(Pci))
+            {
+                PciChangedAt = now;
+            }
+        }
+
         Cpu = cpuEnergy;
         Gpu = gpuEnergy;
         Ane = aneEnergy;
         Ram = ramEnergy;
         Pci = pciEnergy;
+        sampled = true;
 
         return true;
     }
