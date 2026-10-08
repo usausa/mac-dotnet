@@ -8,24 +8,17 @@ public sealed class PowerStat : IDisposable
 {
     private readonly IOReportSampler? sampler;
 
-    // Channels of the sample the classification below was built from
     private readonly IOReportChannelLayout layout = new();
 
-    // Per channel index: energy kind and the divisor that converts the value to joules
     private EnergyChannel[] channelKinds = [];
 
     private double[] channelDivisors = [];
 
-    // The properties hold the values of a successful update (the first sample has nothing to compare with)
     private bool sampled;
 
     private bool disposed;
 
     public bool Supported { get; }
-
-    // XxxChangedAt: the time of the last observed change of Xxx (default until a change is seen; the first sample is not a change).
-    // On macOS 27, the system updates the CPU, ANE and RAM energy only while an entitled sampler such as powermetrics runs,
-    // so an old time means that the value is stale (for ANE, it can also mean that the ANE was not used).
 
     // Cumulative CPU energy consumption (J)
     public double Cpu { get; private set; }
@@ -120,7 +113,6 @@ public sealed class PowerStat : IDisposable
         var count = CFArrayGetCount(channelsArray);
         if (reopened || !layout.Matches(channelsArray, count))
         {
-            // First sample, new subscription or changed channels: classify the channels again
             ClassifyChannels(channelsArray, count);
         }
 
@@ -161,8 +153,6 @@ public sealed class PowerStat : IDisposable
             }
         }
 
-        // Compared with the previous successful update, also after the channels were classified again (reopened sampler).
-        // Equals is an exact comparison: any update of a counter changes the value.
         if (sampled)
         {
             var now = DateTime.Now;
@@ -198,7 +188,6 @@ public sealed class PowerStat : IDisposable
         return true;
     }
 
-    // Same channel matching as before; the result is kept per channel index
     private void ClassifyChannels(IntPtr channelsArray, long count)
     {
         var kinds = new EnergyChannel[count];
@@ -267,7 +256,6 @@ public sealed class PowerStat : IDisposable
         return EnergyChannel.None;
     }
 
-    // Value / divisor = joules (same conversion as the former ConvertToJoules)
     private static double GetJouleDivisor(string? unit)
     {
         return unit switch

@@ -12,10 +12,8 @@ public enum MemoryPressureLevel
 
 public sealed class MemoryStat : IDisposable
 {
-    // Host port (mach_host_self), held instead of being obtained and released on every Update
     private readonly SafeMachPortHandle host;
 
-    // MIB of kern.memorystatus_vm_pressure_level
     private readonly int[] pressureLevelMib;
 
     private bool disposed;
@@ -199,7 +197,6 @@ public sealed class MemoryStat : IDisposable
         TotalUncompressedPagesInCompressor = vmStat.total_uncompressed_pages_in_compressor;
         SwappedCount = vmStat.swapped_count;
 
-        // 0 (Unknown) when the MIB could not be resolved or sysctl fails, same as before
         PressureLevel = GetSystemControlInt32(pressureLevelMib) switch
         {
             NOTE_MEMORYSTATUS_PRESSURE_NORMAL => MemoryPressureLevel.Normal,

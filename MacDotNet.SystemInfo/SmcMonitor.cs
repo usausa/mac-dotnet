@@ -185,7 +185,6 @@ public sealed class SmcMonitor : IDisposable
 
     private SmcMonitor(Func<string, bool>? filter)
     {
-        // When the connection cannot be opened, the sensor lists stay empty (Update tries to open it)
         if (connection.Open())
         {
             var conn = connection.Handle;
@@ -205,7 +204,6 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
-                // Keys not selected by the filter are neither added nor read
                 var keyStr = ToKeyString(key);
                 if ((filter is not null) && !filter(keyStr))
                 {
@@ -217,7 +215,6 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
-                // A sensor whose first read fails is not added (create the monitor again to see it later)
                 if (ReadSensorValue(conn, key, dataType, dataSize, out var value) != KERN_SUCCESS)
                 {
                     continue;
@@ -301,7 +298,6 @@ public sealed class SmcMonitor : IDisposable
                     continue;
                 }
 
-                // A fan is not added when the first read of any of its keys fails
                 if ((ReadSensorValue(conn, ac, acType, acSize, out var actualRpm) != KERN_SUCCESS) ||
                     (ReadSensorValue(conn, mn, mnType, mnSize, out var minRpm) != KERN_SUCCESS) ||
                     (ReadSensorValue(conn, mx, mxType, mxSize, out var maxRpm) != KERN_SUCCESS) ||
@@ -346,7 +342,6 @@ public sealed class SmcMonitor : IDisposable
     {
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        // Not open (open failure at creation or after a failed retry): open once per call
         var opened = false;
         if (!connection.IsOpen)
         {
@@ -360,7 +355,6 @@ public sealed class SmcMonitor : IDisposable
 
         if (!ReadSensors())
         {
-            // Connection-level error (e.g. after sleep/wake): reopen and read all sensors again once
             if (opened || !connection.Open() || !ReadSensors())
             {
                 connection.Close();
@@ -373,7 +367,6 @@ public sealed class SmcMonitor : IDisposable
         return true;
     }
 
-    // Returns false on a connection-level error; other errors set the value to 0 as before
     private bool ReadSensors()
     {
         var conn = connection.Handle;
@@ -437,11 +430,7 @@ public sealed class SmcMonitor : IDisposable
     // Helper
     //--------------------------------------------------------------------------------
 
-    // Errors that mean the connection itself is no longer usable.
-    // The connection survives sleep and wake (M0-3); these cover a connection lost in other ways, such as a driver restart.
     private static bool IsConnectionError(int kr) => kr is MACH_SEND_INVALID_DEST or kIOReturnNotOpen or kIOReturnNoDevice;
-
-    // The SMC helpers return the kern_return of the call (output values are 0 on failure)
 
     private static unsafe int SmcReadIndex(uint conn, int index, out uint key)
     {
@@ -538,7 +527,6 @@ public sealed class SmcMonitor : IDisposable
         }
         if ((dataType == DATA_TYPE_IOFT) && (dataSize == 8))
         {
-            // IOFT is a 48.16 fixed-point value; byte order matches the other little-endian native reads on Apple hardware
             return BinaryPrimitives.ReadInt64LittleEndian(new ReadOnlySpan<byte>(bytes, 8)) / 65536.0;
         }
         if ((dataType == DATA_TYPE_UI8) && (dataSize == 1))

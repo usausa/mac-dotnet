@@ -60,7 +60,7 @@ public sealed class BatteryDevice : IDisposable
     private static readonly IntPtr SourceOptimizedChargingKey = CFSTR("Optimized Battery Charging Engaged");
     // ReSharper restore StringLiteralTypo
 
-    // AppleSmartBattery service (held only when supported)
+    // AppleSmartBattery services
     private SafeIOObjectHandle? service;
 
     private bool disposed;
@@ -166,7 +166,6 @@ public sealed class BatteryDevice : IDisposable
         using var properties = new CFRef(CopyProperties(found));
         if (!properties.IsValid || (properties.ContainsKey("BatteryInstalled") && !properties.GetBoolean("BatteryInstalled")))
         {
-            // Not supported: the service is not needed
             service.Dispose();
             service = null;
             return;
@@ -221,7 +220,6 @@ public sealed class BatteryDevice : IDisposable
         return true;
     }
 
-    // Properties of the held service; on failure the service is looked up again and read once more
     private IntPtr CopyServiceProperties()
     {
         if (service is not null)
@@ -353,10 +351,8 @@ public sealed class BatteryDevice : IDisposable
     // Helper
     //--------------------------------------------------------------------------------
 
-    // ReSharper disable once StringLiteralTypo
     private static uint FindService() => IOServiceGetMatchingService(0, IOServiceMatching("AppleSmartBattery"));
 
-    // Owned property dictionary of the service (0 on failure)
     private static IntPtr CopyProperties(uint entry)
     {
         if ((IORegistryEntryCreateCFProperties(entry, out var properties, IntPtr.Zero, 0) != KERN_SUCCESS) || (properties == IntPtr.Zero))

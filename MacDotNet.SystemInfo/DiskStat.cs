@@ -93,7 +93,7 @@ public sealed class DiskStat : IDisposable
     // IOMedia
     private static readonly IntPtr WholeKey = CFSTR("Whole");
 
-    // Statistics of the parent (IOBlockStorageDriver)
+    // Statistics
     private static readonly IntPtr StatisticsKey = CFSTR("Statistics");
     private static readonly IntPtr BytesReadKey = CFSTR("Bytes (Read)");
     private static readonly IntPtr BytesWriteKey = CFSTR("Bytes (Write)");
@@ -141,7 +141,6 @@ public sealed class DiskStat : IDisposable
     // Update
     //--------------------------------------------------------------------------------
 
-    // IOMedia is enumerated on every call to detect added and removed disks
     public bool Update()
     {
         ObjectDisposedException.ThrowIf(disposed, this);

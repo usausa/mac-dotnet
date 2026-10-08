@@ -95,8 +95,8 @@ internal static partial class NativeMethods
     // IOReturn (IOKit/IOReturn.h)
     public const int kIOReturnSuccess = 0;
 
-    // Errors treated as a lost SMC connection (reopen).
-    // The connection survives sleep and wake (M0-3); these cover a connection lost in other ways, such as a driver restart.
+    // Errors treated as a lost SMC connection
+    // The connection survives sleep and wake (M0-3); these cover a connection lost in other ways, such as a driver restart
     public const int MACH_SEND_INVALID_DEST = 0x10000003;            // mach/message.h
     public const int kIOReturnNotOpen = unchecked((int)0xE00002CD);  // IOKit/IOReturn.h
     public const int kIOReturnNoDevice = unchecked((int)0xE00002C0); // IOKit/IOReturn.h
@@ -829,7 +829,6 @@ internal static partial class NativeMethods
         return sysctlbyname(name, buffer, ref len, IntPtr.Zero, 0) == 0 ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
-    // MIB of a sysctl name, resolved once and used with sysctl (empty when it cannot be resolved)
     public static unsafe int[] GetSystemControlMib(string name)
     {
         var mib = stackalloc int[CTL_MAXNAME];
@@ -842,7 +841,6 @@ internal static partial class NativeMethods
         return new ReadOnlySpan<int>(mib, (int)size).ToArray();
     }
 
-    // Same as GetSystemControlInt32(string) by a resolved MIB
     public static unsafe int GetSystemControlInt32(int[] mib)
     {
         if (mib.Length == 0)

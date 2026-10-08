@@ -44,10 +44,8 @@ public sealed class CpuFrequency : IDisposable
 
     private readonly IOReportSampler sampler;
 
-    // Channels of the sample the mapping below was built from
     private readonly IOReportChannelLayout layout = new();
 
-    // Channel index -> core (null for the other channels)
     private CpuCoreFrequency?[] channelCores = [];
 
     private bool disposed;
@@ -114,7 +112,7 @@ public sealed class CpuFrequency : IDisposable
         var count = CFArrayGetCount(items);
         if (reopened || !layout.Matches(items, count))
         {
-            // First sample, new subscription or changed channels: build the mapping again
+            // First sample
             BuildMapping(items, count, reopened);
         }
         else
@@ -192,7 +190,7 @@ public sealed class CpuFrequency : IDisposable
             }
             else if (reopened)
             {
-                // New subscription: this sample is the base like the first time (Frequency keeps the previous value)
+                // New subscription
                 var stateCount = IOReportStateGetCount(item);
                 for (var j = 0; (j < stateCount) && (j < core.PreviousResidencies.Length); j++)
                 {
@@ -233,7 +231,6 @@ public sealed class CpuFrequency : IDisposable
         var minFreq = core.FrequencyTable.Length > 0 ? core.FrequencyTable[0] : 0;
         core.Frequency = Math.Max(freq, minFreq);
 
-        // Swap current to previous for the next round
         (core.PreviousResidencies, core.CurrentResidencies) = (core.CurrentResidencies, core.PreviousResidencies);
     }
 

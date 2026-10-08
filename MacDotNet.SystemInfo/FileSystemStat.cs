@@ -39,7 +39,6 @@ public sealed class FileSystemEntry
 {
     internal bool Live { get; set; }
 
-    // UTF-8 bytes of MountPoint without the NUL (an entry is found by them without creating a string)
     internal byte[] MountPointBytes { get; }
 
     // Identity
@@ -100,7 +99,6 @@ public sealed class FileSystemStat : IDisposable
 
     private readonly List<FileSystemEntry> entries = [];
 
-    // Buffer for getfsstat (reused, grown when there are more file systems)
     private byte[] buffer = [];
 
     private bool disposed;
@@ -164,14 +162,12 @@ public sealed class FileSystemStat : IDisposable
             count = Math.Min(actual, count);
             for (var i = 0; i < count; i++)
             {
-                // Unless includeAll, only Local and not DontBrowse (bitwise operations: HasFlag boxes in unoptimized code)
                 var option = (MountOption)buf[i].f_flags;
                 if (!includeAll && (((option & MountOption.Local) == 0) || ((option & MountOption.DontBrowse) != 0)))
                 {
                     continue;
                 }
 
-                // Compared as bytes (the strings are created only for a new entry)
                 var mountPoint = GetMountPoint(buf + i);
 
                 var entry = default(FileSystemEntry);
@@ -233,7 +229,6 @@ public sealed class FileSystemStat : IDisposable
     // Helpers
     //--------------------------------------------------------------------------------
 
-    // f_mntonname up to the NUL (the whole field when there is no NUL)
     private static unsafe ReadOnlySpan<byte> GetMountPoint(statfs* fs)
     {
         var name = new ReadOnlySpan<byte>(fs->f_mntonname, MAXPATHLEN);

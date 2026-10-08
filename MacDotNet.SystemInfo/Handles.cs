@@ -36,8 +36,6 @@ internal readonly ref struct CFRef(IntPtr pointer)
     // CFDictionary
     //------------------------------------------------------------------------
 
-    // The string key overloads create the key on every call; hot paths use the IntPtr overloads with cached keys
-
     public bool ContainsKey(string key)
     {
         using var cfKey = CreateString(key);
@@ -245,8 +243,6 @@ internal readonly ref struct IOObj(uint handle)
         return IOObjectGetClass(Handle, buffer) == KERN_SUCCESS ? Marshal.PtrToStringUTF8((IntPtr)buffer) : null;
     }
 
-    // The string key overloads create the key on every call; hot paths use the IntPtr overloads with cached keys
-
     public string? GetString(string key)
     {
         using var cfKey = CFRef.CreateString(key);
@@ -393,9 +389,6 @@ internal readonly ref struct IOObj(uint handle)
     }
 }
 
-// Autorelease pool scope (objc_autoreleasePoolPush / objc_autoreleasePoolPop).
-// Frameworks such as SystemConfiguration autorelease some of the objects they create. .NET threads have no autorelease pool,
-// so without this scope those objects would be kept until the thread exits (which may never happen, e.g. the main thread).
 internal readonly ref struct AutoreleasePool(IntPtr pool)
 {
     public IntPtr Pool { get; } = pool;
@@ -412,7 +405,7 @@ internal readonly ref struct AutoreleasePool(IntPtr pool)
 }
 
 //------------------------------------------------------------------------
-// Held handles (fields of IDisposable classes; released by Dispose, or by the finalizer when not disposed)
+// Held handles
 //------------------------------------------------------------------------
 
 // io_object_t (io_service_t, io_registry_entry_t)
@@ -467,7 +460,6 @@ internal sealed class SafeCFTypeHandle : SafeHandle
     }
 }
 
-// Mach port send right (e.g. the host port from mach_host_self)
 internal sealed class SafeMachPortHandle : SafeHandle
 {
     public SafeMachPortHandle(uint value)
@@ -483,9 +475,6 @@ internal sealed class SafeMachPortHandle : SafeHandle
     protected override bool ReleaseHandle() => mach_port_deallocate(MachTask.Self, (uint)handle) == KERN_SUCCESS;
 }
 
-// Task port name of this process.
-// The exported mach_task_self() calls task_self_trap(), which adds a user reference to the task port on every call,
-// so it is called only once.
 internal static class MachTask
 {
     public static readonly uint Self = mach_task_self();

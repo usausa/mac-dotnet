@@ -179,7 +179,6 @@ public sealed class MainsDevice : IDisposable
     // Helper
     //--------------------------------------------------------------------------------
 
-    // Compared as CFString (no managed string conversion); CFEqual does not accept NULL
     private static PowerSourceType ToPowerSourceType(IntPtr type)
     {
         if (type == IntPtr.Zero)

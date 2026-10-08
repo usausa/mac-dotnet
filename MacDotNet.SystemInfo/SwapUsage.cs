@@ -4,7 +4,6 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class SwapUsage : IDisposable
 {
-    // MIB of vm.swapusage
     private readonly int[] swapUsageMib;
 
     private bool disposed;
@@ -27,7 +26,6 @@ public sealed class SwapUsage : IDisposable
 
     private SwapUsage()
     {
-        // ReSharper disable once StringLiteralTypo
         swapUsageMib = GetSystemControlMib("vm.swapusage");
         Update();
     }

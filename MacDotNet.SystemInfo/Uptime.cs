@@ -4,7 +4,6 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class Uptime : IDisposable
 {
-    // MIB of kern.boottime
     private readonly int[] bootTimeMib;
 
     private bool disposed;
@@ -19,7 +18,6 @@ public sealed class Uptime : IDisposable
 
     private Uptime()
     {
-        // ReSharper disable once StringLiteralTypo
         bootTimeMib = GetSystemControlMib("kern.boottime");
         Update();
     }

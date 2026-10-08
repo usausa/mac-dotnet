@@ -4,7 +4,6 @@ using static MacDotNet.SystemInfo.NativeMethods;
 
 public sealed class FileHandleStat : IDisposable
 {
-    // MIBs of kern.num_files and kern.num_vnodes
     private readonly int[] numFilesMib;
 
     private readonly int[] numVnodesMib;

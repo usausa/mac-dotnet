@@ -39,7 +39,6 @@ public sealed class CpuStat : IDisposable
 
     private readonly List<CpuCoreStat> performanceCores = [];
 
-    // Host port (mach_host_self), held instead of being obtained and released on every Update
     private readonly SafeMachPortHandle host;
 
     private bool disposed;

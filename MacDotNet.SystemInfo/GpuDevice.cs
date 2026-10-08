@@ -20,7 +20,6 @@ public sealed class GpuDevice : IDisposable
     private static readonly IntPtr PoweredOffByAgcKey = CFSTR("poweredOffByAGC");
     // ReSharper restore StringLiteralTypo
 
-    // IOAccelerator registry entry (looked up again by RegistryEntryId when it stops working)
     private SafeIOObjectHandle entry;
 
     private bool disposed;
@@ -91,7 +90,6 @@ public sealed class GpuDevice : IDisposable
                 continue;
             }
 
-            // The device takes over the entry
             var device = new GpuDevice(raw, entryId);
             if (device.UpdateFirst())
             {
@@ -99,7 +97,6 @@ public sealed class GpuDevice : IDisposable
             }
             else
             {
-                // Not included when the first update fails (create the devices again to see it later); disposing releases the entry
                 device.Dispose();
             }
         }
@@ -129,7 +126,6 @@ public sealed class GpuDevice : IDisposable
         var perf = IORegistryEntryCreateCFProperty(entry.Value, PerformanceStatisticsKey, IntPtr.Zero, 0);
         if (perf == IntPtr.Zero)
         {
-            // The held entry may no longer be usable: look it up again by ID once
             var found = IOServiceGetMatchingService(0, IORegistryEntryIDMatching(RegistryEntryId));
             if (found == 0)
             {
@@ -151,8 +147,6 @@ public sealed class GpuDevice : IDisposable
     // Helper
     //--------------------------------------------------------------------------------
 
-    // The first update at creation. The entry was just enumerated, so it is not looked up again (Update does that when the held entry stops working).
-    // Fails when the performance statistics cannot be read as a dictionary
     private bool UpdateFirst()
     {
         using var perfDict = new CFRef(IORegistryEntryCreateCFProperty(entry.Value, PerformanceStatisticsKey, IntPtr.Zero, 0));
@@ -166,7 +160,6 @@ public sealed class GpuDevice : IDisposable
         return true;
     }
 
-    // Reads from the held entry directly (an IOObj wrapper would release it)
     private void UpdateCore(CFRef perfDict)
     {
         if (perfDict.IsValid && (CFGetTypeID(perfDict) == CFDictionaryGetTypeID()))
