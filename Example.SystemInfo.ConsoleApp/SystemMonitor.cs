@@ -342,11 +342,9 @@ internal sealed class SystemMonitor : IDisposable
         powerManagementStat = PlatformProvider.GetPowerManagementStat();
 
         // CPU
-#pragma warning disable IDE0028
         prevAllCoreCounters = cpuStat.CpuCores.Select(c => new CpuCoreCounters(c.User, c.System, c.Idle, c.Nice)).ToArray();
         prevEfficiencyCoreCounters = cpuStat.EfficiencyCores.Select(c => new CpuCoreCounters(c.User, c.System, c.Idle, c.Nice)).ToArray();
         prevPerformanceCoreCounters = cpuStat.PerformanceCores.Select(c => new CpuCoreCounters(c.User, c.System, c.Idle, c.Nice)).ToArray();
-#pragma warning restore IDE0028
         // GPU
         gpuEntries.AddRange(PlatformProvider.GetGpuDevices().Select(d => new GpuEntry(d)));
         // Sensor
