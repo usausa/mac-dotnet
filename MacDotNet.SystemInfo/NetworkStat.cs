@@ -450,7 +450,11 @@ public sealed class NetworkStat : IDisposable
             _ => NetworkInterfaceType.Unknown
         };
 
+#if NET11_0_OR_GREATER
+    private static ReadOnlySpan<char> DecodeInterfaceName(byte* name, Span<char> buffer)
+#else
     private static unsafe ReadOnlySpan<char> DecodeInterfaceName(byte* name, Span<char> buffer)
+#endif
     {
         var bytes = new ReadOnlySpan<byte>(name, IFNAMSIZ);
         var length = bytes.IndexOf((byte)0);

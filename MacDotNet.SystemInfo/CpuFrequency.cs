@@ -289,8 +289,12 @@ public sealed class CpuFrequency : IDisposable
         return (eCore, pCore);
     }
 
+#if NET11_0_OR_GREATER
+    private static int[] ConvertToFrequencyTable(IntPtr cfData, uint multiplier)
+#else
     // ReSharper disable once RedundantUnsafeContext
     private static unsafe int[] ConvertToFrequencyTable(IntPtr cfData, uint multiplier)
+#endif
     {
         var length = (int)CFDataGetLength(cfData);
         var ptr = CFDataGetBytePtr(cfData);
